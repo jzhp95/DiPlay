@@ -1582,7 +1582,8 @@ class CarPlayHostActivity : ComponentActivity() {
                 !WheelZoomSettings.isMediaPlayPauseKey(this, WheelKey.of(event))) {
                 WheelZoomKeys.Action.PASS
             } else {
-                val sent = controller?.sendMediaButton(CarPlayMediaButton.PLAY_PAUSE) == true
+                val sent = FlymeWheelIntegration.allowHardware(CarPlayMediaButton.PLAY_PAUSE) &&
+                    controller?.sendMediaButton(CarPlayMediaButton.PLAY_PAUSE) == true
                 appendLog("Media: assigned wheel key ${event.keyCode} -> CarPlay play/pause sent=$sent")
                 WheelZoomKeys.Action.CONSUME
             }
@@ -1696,7 +1697,8 @@ class CarPlayHostActivity : ComponentActivity() {
             // on the press. The release is swallowed rather than passed on, or BYD's own player would
             // receive an unpaired key.
             if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
-                val sent = controller?.sendMediaButton(mediaPress) == true
+                val sent = FlymeWheelIntegration.allowHardware(mediaPress) &&
+                    controller?.sendMediaButton(mediaPress) == true
                 appendLog("Media: wheel key ${event.keyCode} -> CarPlay $mediaPress sent=$sent")
             }
             return true

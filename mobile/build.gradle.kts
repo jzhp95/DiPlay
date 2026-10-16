@@ -118,3 +118,5 @@ tasks.register("assembleStandaloneDebug") {
     description = "Build a standalone car-test APK with explicitly provisioned authentication."
     dependsOn(verifyStandaloneAuthentication, "assembleDebug")
 }
+
+apply(from = rootProject.file("integrations/flyme-eas/mobile.gradle.kts"))

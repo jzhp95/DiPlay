@@ -79,6 +79,7 @@ internal object CarPlayMediaKeys {
         }
         appContext = context.applicationContext
         controller = next
+        FlymeWheelIntegration.attach(context, next)
         GeelyWheelKeys.start(context)
         com.shilapi.xcertplay.media.AmbientMusicController.claimPlaybackOwner(next)
         next.playbackListener = { playing ->
@@ -96,6 +97,7 @@ internal object CarPlayMediaKeys {
     @Synchronized
     fun detach(expected: CarPlayController?) {
         if (expected == null || controller !== expected) return
+        FlymeWheelIntegration.detach(expected)
         com.shilapi.xcertplay.media.AmbientMusicController.releasePlaybackOwner(expected)
         expected.playbackListener = null
         expected.nowPlayingListener = null
@@ -126,6 +128,7 @@ internal object CarPlayMediaKeys {
                 if (controller !== expected) return@synchronized
                 // Resolve retained state at delivery: a queued callback cannot roll a replay back.
                 val update = expected.nowPlayingSnapshot()
+                FlymeWheelIntegration.update(expected)
                 val previousArtwork = artwork
                 if (albumTrackChanged(nowPlaying, update)) {
                     val previousId = nowPlaying.artworkTransferId
@@ -409,6 +412,9 @@ internal object CarPlayMediaKeys {
     }
 
     private fun send(index: Int, source: String) {
+        // Suppress competing hardware paths; explicit MediaController transport commands still work.
+        if ((source == "geely-wheel" || source.startsWith("KEYCODE_")) &&
+            !FlymeWheelIntegration.allowHardware(index)) return
         // While the car's video player is on screen the wheel drives it: a CarPlay play/pause would
         // make the iPhone end the video session.
         if (CarPlayVideo.onMediaKey(index)) {
@@ -422,7 +428,7 @@ internal object CarPlayMediaKeys {
     }
 
     /** A steering-wheel media key captured outside the Android key stream (Geely/Lynk). */
-    internal fun onExternalMediaKey(index: Int) = send(index, "geely-wheel")
+    internal fun onExternalMediaKey(index: Int, source: String = "geely-wheel") = send(index, source)
 
     /** The steering-wheel microphone key captured outside the Android key stream (Geely/Lynk). */
     internal fun onExternalSiriKey(): Boolean {

@@ -31,3 +31,6 @@ include(":maphost")
 project(":maphost").projectDir = file("samples/maphost")
 include(":home")
 project(":home").projectDir = file("samples/home")
+
+include(":flyme-eas")
+project(":flyme-eas").projectDir = file("integrations/flyme-eas")
