@@ -120,3 +120,12 @@ tasks.register("assembleStandaloneDebug") {
 }
 
 apply(from = rootProject.file("integrations/flyme-eas/mobile.gradle.kts"))
+if (providers.gradleProperty("flymeSystem").orNull == "true") {
+    val flymeManifest = checkNotNull(extra["flymeEasMainManifest"]) {
+        "Flyme EAS build script did not export its Manifest provider"
+    }
+    android {
+        defaultConfig { applicationId = "com.shihab.diplay.flyme" }
+        sourceSets.getByName("main").manifest.srcFile(flymeManifest)
+    }
+}

@@ -38,12 +38,12 @@ common/FlymeWheelIntegration.kt
 
 1. `settings.gradle.kts`：声明 `:flyme-eas` 并指向独立目录。
 2. `common/build.gradle.kts`：增加一条模块依赖。
-3. `mobile/build.gradle.kts`：最后 apply 独立 UID 构建脚本。
+3. `mobile/build.gradle.kts`：最后 apply 独立 UID 构建脚本，并在本文件的 Android 插件作用域内设置系统版包名及主 Manifest。外部脚本只生成 Manifest 并导出 Provider，不导入 AGP 类型，因为 `apply(from=...)` 不继承 Android 插件类路径。
 4. `CarPlayMediaKeys.attach/detach/onNowPlayingChanged`：分别挂接会话、释放、元数据更新；不抢占已有 listener。
 5. `CarPlayMediaKeys.send/onExternalMediaKey`：给 EAS 来源命名，对其他硬件入口做去重；明确的 MediaController 播放/暂停/切歌指令继续工作。
 6. `CarPlayHostActivity` 的两处前台媒体按键，以及 `WheelKeyService.sendMedia`：复用同一硬件去重入口。
 7. `DiPlayActivity` 既有诊断报告中追加 `FlymeWheelIntegration.report()`。
-8. CI 命令追加 `:flyme-eas:testDebugUnitTest`。
+8. CI 命令追加 `:flyme-eas:testDebugUnitTest`，另用 `-PflymeSystem=true :mobile:processDebugMainManifest` 检查系统版配置路径。
 
 不要将模块内部协议搬回 Activity，不要在 shared 层硬编码 Flyme，也不要把 UID 写进通用主 Manifest。上游若重构媒体生命周期，只需要重新挂接第 4～7 项。升级厂商 OTA 时，优先修改/验证 `EasAdapter` 的 ABI。
 
@@ -81,6 +81,21 @@ common/FlymeWheelIntegration.kt
 
 ## 构建及签名
 
+同时构建普通和 UID **debug 测试包**并使用仓库目录下本地平台证书重签名：
+
+```sh
+/Users/jzhp/Downloads/test-rea/DiPlay/integrations/flyme-eas/build-apks.sh
+```
+
+脚本默认读取 `DiPlay/AOSP-platform-signing/platform.pk8` 和 `platform.x509.pem`，输出至已忽略的 `DiPlay/build/car-test-apks/`：
+
+- `Apple-CarPlay-normal.apk`：`com.shihab.diplay.hudtest`，不声明共享 UID，不开启 EAS。
+- `Apple-CarPlay-system-uid.apk`：`com.shihab.diplay.flyme.hudtest`，声明 `android.uid.system` 并开启 EAS。
+
+两包均进行 16KB ZIP 对齐、平台签名、证书指纹及 Manifest 校验，并记录 SHA256。证书目录整体被 `.gitignore` 排除，APK 输出也被忽略。脚本实际产出 APK 后才可验证其结果；脚本准备好不表示当前受限环境已经构建成功。
+
+如果设置了 `DIPLAY_AUTH_ASSETS_DIR`，脚本会执行现有 `assembleStandaloneDebug` 验证显式认证输入；未设置则生成不含认证资源的源码测试包，不能据此测试独立 iPhone 认证连接。平台签名证书不能替代 CarPlay 认证资源。
+
 普通版保持 `com.shihab.diplay`（debug 仍加 `.hudtest`）、普通 UID，不启用 EAS：
 
 ```sh
@@ -97,8 +112,8 @@ common/FlymeWheelIntegration.kt
 
 ```sh
 "/Users/jzhp/Library/Android/sdk/build-tools/36.0.0/apksigner" sign \
-  --key "/Users/jzhp/Downloads/test-rea/AOSP-platform-signing/platform.pk8" \
-  --cert "/Users/jzhp/Downloads/test-rea/AOSP-platform-signing/platform.x509.pem" \
+  --key "/Users/jzhp/Downloads/test-rea/DiPlay/AOSP-platform-signing/platform.pk8" \
+  --cert "/Users/jzhp/Downloads/test-rea/DiPlay/AOSP-platform-signing/platform.x509.pem" \
   --out "/Users/jzhp/Downloads/test-rea/DiPlay-flyme-system-debug.apk" \
   "mobile/build/outputs/apk/debug/mobile-debug.apk"
 "/Users/jzhp/Library/Android/sdk/build-tools/36.0.0/apksigner" verify --verbose --print-certs \

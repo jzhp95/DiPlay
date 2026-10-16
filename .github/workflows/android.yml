@@ -24,6 +24,8 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - name: Unit tests, lint and source-only debug build
         run: ./gradlew :flyme-eas:testDebugUnitTest :shared:testDebugUnitTest :common:testDebugUnitTest :home:testDebugUnitTest :mobile:lintDebug :home:lintDebug :maphost:lintDebug :mobile:assembleDebug :home:assembleDebug :maphost:assembleDebug --stacktrace
+      - name: Flyme system UID Manifest configuration
+        run: ./gradlew -PflymeSystem=true :mobile:processDebugMainManifest --stacktrace
       - name: Test reports
         if: always()
         uses: actions/upload-artifact@v4

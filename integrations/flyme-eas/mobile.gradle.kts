@@ -1,4 +1,3 @@
-import com.android.build.api.dsl.ApplicationExtension
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.tasks.InputFile
@@ -35,13 +34,13 @@ abstract class GenerateFlymeManifest : DefaultTask() {
 
 // Deliberately opt-in: ordinary builds retain upstream UID and application ID.
 if (providers.gradleProperty("flymeSystem").orNull == "true") {
-    val app = extensions.getByType<ApplicationExtension>()
     val original = layout.projectDirectory.file("src/main/AndroidManifest.xml")
     val generateManifest = tasks.register<GenerateFlymeManifest>("generateFlymeMainManifest") {
         sourceManifest.set(original)
         outputManifest.set(layout.buildDirectory.file("generated/flyme-eas/AndroidManifest.xml"))
     }
-    app.defaultConfig.applicationId = "com.shihab.diplay.flyme"
-    app.sourceSets.getByName("main").manifest.srcFile(generateManifest.flatMap { it.outputManifest })
+    // Applied scripts do not inherit the Android plugin's classpath. Export only
+    // a Gradle provider; the plugin-owning mobile script configures Android.
+    extra["flymeEasMainManifest"] = generateManifest.flatMap { it.outputManifest }
     tasks.named("preBuild") { dependsOn(generateManifest) }
 }

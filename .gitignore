@@ -39,3 +39,6 @@ release-signing.properties
 *.key
 *.apk
 *.aab
+
+# Local platform signing bundle (including its documentation)
+/AOSP-platform-signing/
