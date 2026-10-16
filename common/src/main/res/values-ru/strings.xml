@@ -688,16 +688,6 @@
     <string name="settings_interface_size">Размер интерфейса</string>
     <string name="settings_interface_size_auto">Автоматически</string>
     <string name="settings_interface_size_hint">Размер текста и элементов управления на экранах Apple CarPlay. В автоматическом режиме они увеличиваются на больших экранах с низкой плотностью. CarPlay не меняется.</string>
-    <string name="update_check">Проверить обновления</string>
-    <string name="update_checking">Проверка…</string>
-    <string name="update_up_to_date">У вас последняя версия</string>
-    <string name="update_download">Скачать обновление</string>
-    <string name="update_downloading">Скачивание · %1$d%%</string>
-    <string name="update_verifying">Проверка…</string>
-    <string name="update_install">Установить %1$s</string>
-    <string name="update_failed">Не удалось обновить</string>
-    <string name="update_available_home">Доступно обновление</string>
-    <string name="update_saved_to">Сохранено в %1$s</string>
     <string name="backup_title">Резервная копия настроек</string>
     <string name="backup_open">Резервная копия на телефоне</string>
     <string name="backup_open_description">Показывает QR-код, чтобы браузер телефона в той же сети мог экспортировать или импортировать настройки Apple CarPlay. Сервис останавливается при выходе со страницы.</string>
@@ -708,8 +698,6 @@
     <string name="backup_code_entry_closed">Введено слишком много неверных кодов, код больше не действует. Закройте эту страницу и откройте её снова, чтобы получить новый. QR-код по-прежнему работает.</string>
     <string name="backup_summary">Импортировано настроек: %1$d, пропущено: %2$d.</string>
     <string name="backup_import_invalid">Этот файл не является резервной копией настроек Apple CarPlay.</string>
-    <string name="settings_background_update_checks">Проверять обновления в фоне</string>
-    <string name="settings_background_update_checks_description">Раз в сутки Apple CarPlay проверяет GitHub на новую версию и показывает её на главном экране. Загрузка начинается только после вашего нажатия.</string>
     <string name="setup_guide">Мастер настройки</string>
     <string name="setup_guide_description">Определите версию DiLink, выберите подключение и включите функции, подходящие вашему автомобилю.</string>
     <string name="setup_step_of">ШАГ %1$d ИЗ %2$d</string>

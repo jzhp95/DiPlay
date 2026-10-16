@@ -806,16 +806,6 @@
     <string name="settings_interface_size">界面大小</string>
     <string name="settings_interface_size_auto">自动</string>
     <string name="settings_interface_size_hint">Apple CarPlay 自身界面中文字和控件的大小。自动模式会在大尺寸低密度屏幕上放大它们。不影响 CarPlay。</string>
-    <string name="update_check">检查更新</string>
-    <string name="update_checking">正在检查…</string>
-    <string name="update_up_to_date">已是最新版本</string>
-    <string name="update_download">下载更新</string>
-    <string name="update_downloading">正在下载 · %1$d%%</string>
-    <string name="update_verifying">正在校验…</string>
-    <string name="update_install">安装 %1$s</string>
-    <string name="update_failed">更新失败</string>
-    <string name="update_available_home">有可用更新</string>
-    <string name="update_saved_to">已保存到 %1$s</string>
     <string name="backup_title">备份设置</string>
     <string name="backup_open">在手机上备份或恢复</string>
     <string name="backup_open_description">显示二维码，同一网络内的手机浏览器即可导出或导入 Apple CarPlay 设置。离开页面后服务自动停止。</string>
@@ -826,8 +816,6 @@
     <string name="backup_code_entry_closed">验证码输错次数过多，已停用。请离开此页面后重新打开，以取得新的验证码。扫码仍可使用。</string>
     <string name="backup_summary">已导入 %1$d 项设置，跳过 %2$d 项。</string>
     <string name="backup_import_invalid">这不是 Apple CarPlay 设置备份文件。</string>
-    <string name="settings_background_update_checks">在后台检查更新</string>
-    <string name="settings_background_update_checks_description">Apple CarPlay 每天会在 GitHub 上检查一次新版本，并显示在主屏幕上。未经你点击，绝不会下载。</string>
     <string name="setup_guide">设置向导</string>
     <string name="setup_guide_description">识别 DiLink 版本，选择连接方式，并开启适合你车辆的功能。</string>
     <string name="setup_step_of">第 %1$d 步，共 %2$d 步</string>

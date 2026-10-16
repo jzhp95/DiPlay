@@ -849,16 +849,6 @@
     <string name="settings_interface_size">Interface size</string>
     <string name="settings_interface_size_auto">Automatic</string>
     <string name="settings_interface_size_hint">Size of text and controls on Apple CarPlay\'s own screens. Automatic enlarges them on large screens with a low density. CarPlay is not affected.</string>
-    <string name="update_check">Check for updates</string>
-    <string name="update_checking">Checking…</string>
-    <string name="update_up_to_date">You\'re up to date</string>
-    <string name="update_download">Download update</string>
-    <string name="update_downloading">Downloading · %1$d%%</string>
-    <string name="update_verifying">Verifying…</string>
-    <string name="update_install">Install %1$s</string>
-    <string name="update_failed">Update failed</string>
-    <string name="update_available_home">Update available</string>
-    <string name="update_saved_to">Saved to %1$s</string>
     <string name="backup_title">Back up settings</string>
     <string name="backup_open">Back up or restore on a phone</string>
     <string name="backup_open_description">Show a QR code so a phone browser on the same network can export or import Apple CarPlay settings. The service stops when you leave the page.</string>
@@ -869,8 +859,6 @@
     <string name="backup_code_entry_closed">Too many wrong codes were entered, so the code no longer works. Leave this page and open it again for a new one. The QR code still works.</string>
     <string name="backup_summary">Imported %1$d settings, skipped %2$d.</string>
     <string name="backup_import_invalid">This file is not a Apple CarPlay settings backup.</string>
-    <string name="settings_background_update_checks">Check for updates in the background</string>
-    <string name="settings_background_update_checks_description">Once a day, Apple CarPlay checks GitHub for a new version and shows it on the home screen. It never downloads without your tap.</string>
     <string name="setup_guide">Setup guide</string>
     <string name="setup_guide_description">Find your DiLink version, choose a connection and turn on the features that suit your car.</string>
     <string name="setup_step_of">STEP %1$d OF %2$d</string>

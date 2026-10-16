@@ -688,16 +688,6 @@
     <string name="settings_interface_size">حجم الواجهة</string>
     <string name="settings_interface_size_auto">تلقائي</string>
     <string name="settings_interface_size_hint">حجم النص وعناصر التحكم في شاشات Apple CarPlay. يكبّرها الوضع التلقائي على الشاشات الكبيرة منخفضة الكثافة. لا يتأثر CarPlay.</string>
-    <string name="update_check">البحث عن تحديثات</string>
-    <string name="update_checking">جارٍ البحث…</string>
-    <string name="update_up_to_date">لديك آخر إصدار</string>
-    <string name="update_download">تنزيل التحديث</string>
-    <string name="update_downloading">جارٍ التنزيل · %1$d%%</string>
-    <string name="update_verifying">جارٍ التحقق…</string>
-    <string name="update_install">تثبيت %1$s</string>
-    <string name="update_failed">فشل التحديث</string>
-    <string name="update_available_home">يتوفر تحديث</string>
-    <string name="update_saved_to">تم الحفظ في %1$s</string>
     <string name="backup_title">نسخة احتياطية من الإعدادات</string>
     <string name="backup_open">نسخ احتياطي أو استعادة عبر هاتف</string>
     <string name="backup_open_description">يعرض رمز QR ليتمكن متصفح الهاتف في نفس الشبكة من تصدير إعدادات Apple CarPlay أو استيرادها. تتوقف الخدمة عند مغادرة الصفحة.</string>
@@ -708,8 +698,6 @@
     <string name="backup_code_entry_closed">أُدخلت رموز غير صحيحة كثيرة، فلم يعد الرمز صالحًا. غادر هذه الصفحة وافتحها مجددًا للحصول على رمز جديد. رمز QR ما زال يعمل.</string>
     <string name="backup_summary">تم استيراد %1$d من الإعدادات، وتجاهل %2$d.</string>
     <string name="backup_import_invalid">هذا الملف ليس نسخة احتياطية لإعدادات Apple CarPlay.</string>
-    <string name="settings_background_update_checks">التحقق من التحديثات في الخلفية</string>
-    <string name="settings_background_update_checks_description">مرة كل يوم، يتحقق Apple CarPlay من GitHub عن إصدار جديد ويعرضه في الشاشة الرئيسية. لا يتم التنزيل أبدًا دون نقرتك.</string>
     <string name="setup_guide">دليل الإعداد</string>
     <string name="setup_guide_description">اعرف إصدار DiLink، واختر طريقة الاتصال، وفعّل الميزات المناسبة لسيارتك.</string>
     <string name="setup_step_of">الخطوة %1$d من %2$d</string>
