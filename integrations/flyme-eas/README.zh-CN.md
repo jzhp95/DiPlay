@@ -87,6 +87,23 @@ common/FlymeWheelIntegration.kt
 /Users/jzhp/Downloads/test-rea/DiPlay/integrations/flyme-eas/build-apks.sh
 ```
 
+Windows 10/11 可用内置 Windows PowerShell 5.1 或 PowerShell 7，在仓库根目录执行：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\integrations\flyme-eas\build-apks.ps1
+```
+
+Windows 机器先安装 JDK（CI 使用 25）、Android SDK Platform 37、Build Tools 36.0.0 和完整 NDK 28.2.13676358，并单独复制未入库的 `AOSP-platform-signing` 目录。脚本优先使用 `ANDROID_HOME`，其次 `ANDROID_SDK_ROOT`，默认 `%LOCALAPPDATA%\Android\Sdk`。可用 `DIPLAY_PLATFORM_SIGNING_DIR` 指定其他签名目录；通过 .NET 计算证书指纹，不要求安装 OpenSSL。未找到完整 NDK 时会在构建前指出缺失路径，不会伪造 `source.properties`。
+
+需要独立连接 iPhone 时，同样显式设置本地认证目录，例如：
+
+```powershell
+$env:DIPLAY_AUTH_ASSETS_DIR = 'D:\private\carplay-auth-assets'
+powershell -NoProfile -ExecutionPolicy Bypass -File .\integrations\flyme-eas\build-apks.ps1
+```
+
+Windows 脚本与 shell 脚本采用同样的构建、签名和校验步骤；当前 agent 没有 PowerShell/Windows 运行环境，尚未完成 Windows 实际打包验证。
+
 脚本默认读取 `DiPlay/AOSP-platform-signing/platform.pk8` 和 `platform.x509.pem`，输出至已忽略的 `DiPlay/build/car-test-apks/`：
 
 - `Apple-CarPlay-normal.apk`：`com.shihab.diplay.hudtest`，不声明共享 UID，不开启 EAS。
