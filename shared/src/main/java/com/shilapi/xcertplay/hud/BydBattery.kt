@@ -118,7 +118,7 @@ internal object BydBattery {
  * for vehicle status; the iAP2 loop only takes the last reading, so it never waits for adb.
  */
 internal object BydBatteryStatus : VehicleStatusProvider {
-    private const val TAG = "DiPlay-BYD-Battery"
+    private const val TAG = "Apple CarPlay-BYD-Battery"
     private const val READ_MILLIS = 30_000L
     private const val IDLE_MILLIS = 2 * 60_000L
 

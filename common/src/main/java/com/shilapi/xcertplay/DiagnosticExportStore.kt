@@ -102,18 +102,18 @@ internal object DiagnosticExportStore {
 
     @Suppress("DEPRECATION")
     fun publicDownloadsDirectory(): File =
-        File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "DiPlay")
+        File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Apple CarPlay")
 
     internal fun saveToPublicDownloads(context: Context, fileName: String, report: String): SavedReport {
         val directory = publicDownloadsDirectory()
-        if (!directory.isDirectory && !directory.mkdirs()) throw IOException("Downloads/DiPlay is unavailable")
+        if (!directory.isDirectory && !directory.mkdirs()) throw IOException("Downloads/Apple CarPlay is unavailable")
         val base = fileName.removeSuffix(".txt")
         var file = File(directory, fileName)
         var copy = 1
         while (file.exists()) file = File(directory, "$base-${copy++}.txt")
         try {
             file.writeText(report, Charsets.UTF_8)
-            if (file.length() == 0L && report.isNotEmpty()) throw IOException("Downloads/DiPlay did not keep the report")
+            if (file.length() == 0L && report.isNotEmpty()) throw IOException("Downloads/Apple CarPlay did not keep the report")
         } catch (error: Exception) {
             file.delete()
             throw error
@@ -127,7 +127,7 @@ internal object DiagnosticExportStore {
         } catch (error: IllegalArgumentException) {
             // Some storage layouts resolve Downloads outside the provider's external root.
             // Share a private copy instead; the visible file in Downloads/DiPlay stays.
-            Log.w(TAG, "Downloads/DiPlay is not shareable through the provider; sharing a private copy", error)
+            Log.w(TAG, "Downloads/Apple CarPlay is not shareable through the provider; sharing a private copy", error)
             privateShareCopy(context, fileName, report)
         }
         return SavedReport(uri, savedPath = file.absolutePath)
@@ -146,7 +146,7 @@ internal object DiagnosticExportStore {
         val values = ContentValues().apply {
             put(MediaStore.Downloads.DISPLAY_NAME, fileName)
             put(MediaStore.Downloads.MIME_TYPE, "text/plain")
-            put(MediaStore.Downloads.RELATIVE_PATH, "${Environment.DIRECTORY_DOWNLOADS}/DiPlay")
+            put(MediaStore.Downloads.RELATIVE_PATH, "${Environment.DIRECTORY_DOWNLOADS}/Apple CarPlay")
             put(MediaStore.Downloads.IS_PENDING, 1)
         }
         val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)

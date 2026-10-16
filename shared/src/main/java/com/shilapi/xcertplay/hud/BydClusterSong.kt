@@ -94,7 +94,7 @@ internal class ClusterSongState {
  * appears as BYD's "other" music source; CarPlay's own source value is not drawn on this dashboard.
  */
 internal object BydClusterSong {
-    private const val TAG = "DiPlay-BYD-Song"
+    private const val TAG = "Apple CarPlay-BYD-Song"
     private const val SOURCE_OTHERS = 11
     private const val STATE_PLAYING = 1
     private const val STATE_PAUSED = 2

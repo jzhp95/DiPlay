@@ -47,7 +47,7 @@ internal object BydWheelSpeed {
  * speed four times a second and the gear once a second, only while the iPhone asks for location.
  */
 internal object BydWheelSpeedSource : VehicleSpeedSource {
-    private const val TAG = "DiPlay-BYD-Speed"
+    private const val TAG = "Apple CarPlay-BYD-Speed"
     private const val READ_MILLIS = 250L
     private const val GEAR_EVERY_READS = 4
     private const val MAX_SAMPLES = 40

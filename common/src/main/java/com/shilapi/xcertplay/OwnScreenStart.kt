@@ -13,7 +13,7 @@ import android.util.Log
  * from the application context in a task of its own; a second refusal is logged and DiPlay stays open.
  */
 internal object OwnScreenStart {
-    private const val TAG = "DiPlay"
+    private const val TAG = "Apple CarPlay"
 
     fun start(activity: Activity, intent: Intent, log: (String) -> Unit = { Log.w(TAG, it) }): Boolean {
         val screen = intent.component?.className?.substringAfterLast('.') ?: "screen"

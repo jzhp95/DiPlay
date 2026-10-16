@@ -207,7 +207,7 @@ internal class BydAmbientLightClient(context: Context) : AutoCloseable {
         keepAlive?.cancel(false); keepAlive = null
         status = Status(Phase.FAILED, ticket, reason)
         runCatching { closeTransport() }
-        Log.w("DiPlay-Ambient", "worker failed: $reason")
+        Log.w("Apple CarPlay-Ambient", "worker failed: $reason")
     }
 
     private fun closeTransport() {

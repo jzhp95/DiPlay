@@ -37,8 +37,8 @@ class DiagnosticExportFallbackTest {
     }
 
     @Test fun androidNineSavesUtf8WithoutAPickerOrStoragePermission() {
-        val report = "DiPlay · تقرير\nUSB: waiting\n"
-        val saved = DiagnosticExportStore.saveWithoutPicker(context, "DiPlay-test.txt", report)
+        val report = "Apple CarPlay · تقرير\nUSB: waiting\n"
+        val saved = DiagnosticExportStore.saveWithoutPicker(context, "Apple CarPlay-test.txt", report)
         assertFalse(saved.savedInApp)
         val file = reports.listFiles()!!.single()
         assertEquals(report, file.readText(Charsets.UTF_8))
@@ -56,7 +56,7 @@ class DiagnosticExportFallbackTest {
         val provider = MissingDownloadsProvider()
         provider.attachInfo(context, ProviderInfo().apply { authority = "media" })
         ShadowContentResolver.registerProviderInternal("media", provider)
-        val saved = DiagnosticExportStore.saveWithoutPicker(context, "DiPlay-test.txt", "report")
+        val saved = DiagnosticExportStore.saveWithoutPicker(context, "Apple CarPlay-test.txt", "report")
         assertTrue(provider.insertAttempted)
         assertFalse(saved.savedInApp)
         assertEquals("report", reports.listFiles()!!.single().readText())
@@ -64,15 +64,15 @@ class DiagnosticExportFallbackTest {
     }
 
     @Test fun publicDownloadsWriteSucceedsDirectly() {
-        val saved = DiagnosticExportStore.saveToPublicDownloads(context, "DiPlay-direct.txt", "report")
-        assertEquals("report", File(publicReports, "DiPlay-direct.txt").readText())
+        val saved = DiagnosticExportStore.saveToPublicDownloads(context, "Apple CarPlay-direct.txt", "report")
+        assertEquals("report", File(publicReports, "Apple CarPlay-direct.txt").readText())
         assertEquals("report", read(saved.uri))
     }
 
     @Test fun androidNineWithStorageAccessSavesToTheVisibleDownloadsFolder() {
         shadowOf(context).grantPermissions(Manifest.permission.WRITE_EXTERNAL_STORAGE)
-        val saved = DiagnosticExportStore.saveWithoutPicker(context, "DiPlay-test.txt", "report")
-        val file = File(publicReports, "DiPlay-test.txt")
+        val saved = DiagnosticExportStore.saveWithoutPicker(context, "Apple CarPlay-test.txt", "report")
+        val file = File(publicReports, "Apple CarPlay-test.txt")
         assertEquals("report", file.readText())
         assertEquals(file.absolutePath, saved.savedPath)
         assertFalse(saved.savedInApp)
@@ -81,10 +81,10 @@ class DiagnosticExportFallbackTest {
 
     @Test fun repeatedPublicExportsNeverOverwriteAnEarlierReport() {
         shadowOf(context).grantPermissions(Manifest.permission.WRITE_EXTERNAL_STORAGE)
-        DiagnosticExportStore.saveWithoutPicker(context, "DiPlay-test.txt", "first")
-        val second = DiagnosticExportStore.saveWithoutPicker(context, "DiPlay-test.txt", "second")
-        assertEquals("first", File(publicReports, "DiPlay-test.txt").readText())
-        assertEquals("second", File(publicReports, "DiPlay-test-1.txt").readText())
+        DiagnosticExportStore.saveWithoutPicker(context, "Apple CarPlay-test.txt", "first")
+        val second = DiagnosticExportStore.saveWithoutPicker(context, "Apple CarPlay-test.txt", "second")
+        assertEquals("first", File(publicReports, "Apple CarPlay-test.txt").readText())
+        assertEquals("second", File(publicReports, "Apple CarPlay-test-1.txt").readText())
         assertEquals("second", read(second.uri))
     }
 
@@ -92,9 +92,9 @@ class DiagnosticExportFallbackTest {
         val provider = MissingDownloadsProvider()
         provider.attachInfo(context, ProviderInfo().apply { authority = "media" })
         ShadowContentResolver.registerProviderInternal("media", provider)
-        val saved = DiagnosticExportStore.saveWithoutPicker(context, "DiPlay-test.txt", "report")
+        val saved = DiagnosticExportStore.saveWithoutPicker(context, "Apple CarPlay-test.txt", "report")
         assertTrue(provider.insertAttempted)
-        assertEquals(File(publicReports, "DiPlay-test.txt").absolutePath, saved.savedPath)
+        assertEquals(File(publicReports, "Apple CarPlay-test.txt").absolutePath, saved.savedPath)
         assertEquals("report", read(saved.uri))
     }
 
@@ -107,8 +107,8 @@ class DiagnosticExportFallbackTest {
     }
 
     @Test fun anEarlierShareUriCannotReadALaterExport() {
-        val first = DiagnosticExportStore.saveWithoutPicker(context, "DiPlay-test.txt", "first")
-        val second = DiagnosticExportStore.saveWithoutPicker(context, "DiPlay-test.txt", "second")
+        val first = DiagnosticExportStore.saveWithoutPicker(context, "Apple CarPlay-test.txt", "first")
+        val second = DiagnosticExportStore.saveWithoutPicker(context, "Apple CarPlay-test.txt", "second")
         assertNotEquals(first.uri, second.uri)
         assertEquals("first", read(first.uri))
         assertEquals("second", read(second.uri))
@@ -116,13 +116,13 @@ class DiagnosticExportFallbackTest {
 
     @Test fun onlyEightExternalExportsAreRetained() {
         var latest: Uri? = null
-        repeat(12) { latest = DiagnosticExportStore.saveWithoutPicker(context, "DiPlay-test.txt", "report $it").uri }
+        repeat(12) { latest = DiagnosticExportStore.saveWithoutPicker(context, "Apple CarPlay-test.txt", "report $it").uri }
         assertEquals(8, reports.listFiles()!!.size)
         assertEquals("report 11", read(latest!!))
     }
 
     @Test fun providerCannotExposeSessionLogsOrOtherPrivateFiles() {
-        DiagnosticExportStore.saveWithoutPicker(context, "DiPlay-test.txt", "report")
+        DiagnosticExportStore.saveWithoutPicker(context, "Apple CarPlay-test.txt", "report")
         for (path in listOf("logs/diplay.log", "other.txt")) {
             val file = File(context.filesDir, path).apply { parentFile!!.mkdirs(); writeText("private") }
             assertThrows(IllegalArgumentException::class.java) {
@@ -139,7 +139,7 @@ class DiagnosticExportFallbackTest {
         val unavailableExternal = object : ContextWrapper(context) {
             override fun getExternalFilesDir(type: String?): File? = null
         }
-        val saved = DiagnosticExportStore.saveWithoutPicker(unavailableExternal, "DiPlay-test.txt", "report")
+        val saved = DiagnosticExportStore.saveWithoutPicker(unavailableExternal, "Apple CarPlay-test.txt", "report")
         assertTrue(saved.savedInApp)
         assertNull(saved.savedPath)
         assertEquals("report", read(saved.uri))
@@ -148,7 +148,7 @@ class DiagnosticExportFallbackTest {
 
     @Test fun unwritableExternalStorageStillSavesPrivately() {
         reports.writeText("blocks directory creation")
-        val saved = DiagnosticExportStore.saveWithoutPicker(context, "DiPlay-test.txt", "report")
+        val saved = DiagnosticExportStore.saveWithoutPicker(context, "Apple CarPlay-test.txt", "report")
         assertTrue(saved.savedInApp)
         assertEquals("report", read(saved.uri))
         assertEquals("blocks directory creation", reports.readText())
@@ -158,14 +158,14 @@ class DiagnosticExportFallbackTest {
         reports.writeText("blocks directory creation")
         privateReports.writeText("blocks directory creation")
         assertThrows(IOException::class.java) {
-            DiagnosticExportStore.saveWithoutPicker(context, "DiPlay-test.txt", "report")
+            DiagnosticExportStore.saveWithoutPicker(context, "Apple CarPlay-test.txt", "report")
         }
     }
 
     @Test fun onlyEightPrivateExportsAreRetainedWhenExternalStorageIsUnavailable() {
         reports.writeText("blocks directory creation")
         var latest: Uri? = null
-        repeat(12) { latest = DiagnosticExportStore.saveWithoutPicker(context, "DiPlay-test.txt", "report $it").uri }
+        repeat(12) { latest = DiagnosticExportStore.saveWithoutPicker(context, "Apple CarPlay-test.txt", "report $it").uri }
         assertEquals(8, privateReports.listFiles()!!.size)
         assertEquals("report 11", read(latest!!))
     }

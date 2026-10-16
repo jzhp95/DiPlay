@@ -101,7 +101,7 @@ internal class PhoneAudioRouteController(
     }
 
     companion object {
-        private const val TAG = "DiPlay-PhoneAudio"
+        private const val TAG = "Apple CarPlay-PhoneAudio"
         private const val NEVER = Long.MIN_VALUE
 
         /** Bridges the gap between two calls, or a call and call waiting, without leaving and re-entering the state. */
@@ -121,7 +121,7 @@ internal class PhoneAudioRouteController(
  * [BydOutputSettings.phoneAudioRouteApps].
  */
 object PhoneAudioRoute {
-    private const val TAG = "DiPlay-PhoneAudio"
+    private const val TAG = "Apple CarPlay-PhoneAudio"
 
     private val executor: ScheduledExecutorService by lazy {
         Executors.newSingleThreadScheduledExecutor { Thread(it, "diplay-phone-audio").apply { isDaemon = true } }

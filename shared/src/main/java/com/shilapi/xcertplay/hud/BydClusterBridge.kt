@@ -13,7 +13,7 @@ import java.util.concurrent.TimeUnit
  * AMap adapter (see [BydAmapAdapter]), independently of the SOME/IP windshield HUD path.
  */
 internal object BydClusterBridge {
-    private const val TAG = "DiPlay-BYD-Cluster"
+    private const val TAG = "Apple CarPlay-BYD-Cluster"
     private const val AMAP_ACTION = "AUTONAVI_STANDARD_BROADCAST_SEND"
     private const val KEY_GUIDANCE = 10001
     private const val KEY_STATE = 10019

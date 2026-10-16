@@ -30,7 +30,7 @@ import kotlin.math.hypot
  * (SYSTEM_ALERT_WINDOW). A tap opens CarPlay, dragging moves the card and pinching resizes it.
  */
 internal object CenterMapOverlay {
-    const val TAG = "DiPlay-CenterMap"
+    const val TAG = "Apple CarPlay-CenterMap"
     private const val SHOW_DELAY_MILLIS = 600L
     private const val RELEASE_DELAY_MILLIS = 1_000L
     private const val WIDTH_FRACTION = 0.36
@@ -108,7 +108,7 @@ internal object CenterMapOverlay {
                 .coerceIn(0, (screenWidth - width).coerceAtLeast(0))
             y = prefs.getInt(KEY_Y, (96 * metrics.density).toInt())
                 .coerceIn(0, (screenHeight - height).coerceAtLeast(0))
-            title = "DiPlay centre map"
+            title = "Apple CarPlay centre map"
         }
         var surface: Surface? = null
         val video = TextureView(context).apply {

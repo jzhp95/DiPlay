@@ -49,7 +49,7 @@ internal object BydStandaloneNavigationBridge {
                 else -> output?.clear()
             }
         } catch (error: Exception) {
-            Log.w("DiPlay-Standalone", "HUD update/cleanup will retry", error)
+            Log.w("Apple CarPlay-Standalone", "HUD update/cleanup will retry", error)
         }
     }
 }

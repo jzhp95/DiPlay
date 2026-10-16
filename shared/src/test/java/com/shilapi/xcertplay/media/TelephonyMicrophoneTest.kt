@@ -58,7 +58,7 @@ class TelephonyMicrophoneTest {
         sink = AndroidMediaSink(context = context)
         for (type in listOf(AudioEffect.EFFECT_TYPE_AEC, AudioEffect.EFFECT_TYPE_NS)) {
             ShadowAudioEffect.addEffect(AudioEffect.Descriptor(type.toString(), type.toString(),
-                "Pre Processing", "Test effect", "DiPlay"))
+                "Pre Processing", "Test effect", "Apple CarPlay"))
         }
         ShadowAudioRecord.setSourceProvider { record ->
             recorder.compareAndSet(null, record)

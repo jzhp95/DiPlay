@@ -17,9 +17,9 @@ import androidx.annotation.RequiresApi
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-private const val TAG = "DiPlay-PhoneAudio"
+private const val TAG = "Apple CarPlay-PhoneAudio"
 private const val ACCOUNT_ID = "diplay-car-phone-audio"
-private const val ACCOUNT_LABEL = "DiPlay call audio"
+private const val ACCOUNT_LABEL = "Apple CarPlay call audio"
 private const val ADDRESS = "carplay@diplay"
 private const val START_TIMEOUT_MILLIS = 3_000L
 

@@ -2600,7 +2600,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                         render()
                     },
                     { failure ->
-                        Log.w("DiPlay-Update", "update check failed", failure)
+                        Log.w("Apple CarPlay-Update", "update check failed", failure)
                         updateMessage = failure.message ?: getString(R.string.update_failed)
                         updateStage = UpdateStage.FAILED
                         render()
@@ -2625,7 +2625,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
 
     private fun scheduleBackgroundUpdateChecks() {
         runCatching { BackgroundUpdateScheduler.schedule(applicationContext) }
-            .onFailure { Log.i("DiPlay-Update", "background update scheduling unavailable", it) }
+            .onFailure { Log.i("Apple CarPlay-Update", "background update scheduling unavailable", it) }
     }
 
     private fun downloadUpdate() {
@@ -2679,7 +2679,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                         render()
                     },
                     { failure ->
-                        Log.w("DiPlay-Update", "update download failed", failure)
+                        Log.w("Apple CarPlay-Update", "update download failed", failure)
                         updateMessage = failure.message ?: getString(R.string.update_failed)
                         updateStage = UpdateStage.FAILED
                         render()
@@ -2722,10 +2722,10 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         val outcome = "${if (installers > 1) "chooser" else "direct"} uri=${if (publicUri != null) "public" else "provider"} installers=$installers"
         try {
             startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            Log.i("DiPlay-Update", "install started: $outcome")
+            Log.i("Apple CarPlay-Update", "install started: $outcome")
             UpdateAvailability.recordInstall(applicationContext, System.currentTimeMillis(), outcome)
         } catch (failure: RuntimeException) {
-            Log.w("DiPlay-Update", "install failed to start: $outcome", failure)
+            Log.w("Apple CarPlay-Update", "install failed to start: $outcome", failure)
             UpdateAvailability.recordInstall(applicationContext, System.currentTimeMillis(), "$outcome failed=${failure.javaClass.simpleName}")
             updateMessage = getString(R.string.update_failed)
             render()
@@ -2783,10 +2783,10 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         if (AirPlayPersistence.loadWirelessHotspotMode(this) != WirelessHotspotMode.MANUAL) return
         if (!CarHotspotSetup.isBydHeadUnit(this)) {
             if (CarHotspotTethering.appStartSupported()) {
-                Log.i("DiPlay-Hotspot", "BYD head unit not detected: hotspot control through system settings access")
+                Log.i("Apple CarPlay-Hotspot", "BYD head unit not detected: hotspot control through system settings access")
                 systemHotspotSettings(parent)
             } else {
-                Log.i("DiPlay-Hotspot", "settings hidden: BYD head unit not detected; Android ${Build.VERSION.SDK_INT} does not let an app start tethering")
+                Log.i("Apple CarPlay-Hotspot", "settings hidden: BYD head unit not detected; Android ${Build.VERSION.SDK_INT} does not let an app start tethering")
             }
             return
         }
@@ -2804,9 +2804,9 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         parent.addView(controls)
         Thread({
             val access = runCatching { CarHotspotSetup.check(applicationContext) }
-                .onFailure { Log.w("DiPlay-Hotspot", "settings ADB check failed", it) }
+                .onFailure { Log.w("Apple CarPlay-Hotspot", "settings ADB check failed", it) }
                 .getOrDefault(LocalAdb.Access.UNREACHABLE)
-            Log.i("DiPlay-Hotspot", "settings eligibility: byd=true adb=$access visible=${CarHotspotSettings.visible(true, access)}")
+            Log.i("Apple CarPlay-Hotspot", "settings eligibility: byd=true adb=$access visible=${CarHotspotSettings.visible(true, access)}")
             runOnUiThread {
                 if (bydAdbControls !== controls || isFinishing || isDestroyed) return@runOnUiThread
                 if (CarHotspotSettings.visible(true, access)) {
@@ -2927,7 +2927,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         Thread({
             val result = CarHotspotTethering.enable(app,
                 isCancelled = { startupHotspotCancelled || !startupHotspotEligible() },
-                log = { Log.i("DiPlay-Hotspot", it) },
+                log = { Log.i("Apple CarPlay-Hotspot", it) },
             )
             runOnUiThread {
                 if (isFinishing || isDestroyed || result == CarHotspotTethering.Result.CANCELLED) return@runOnUiThread
@@ -3885,7 +3885,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         })
         body.addView(button(getString(R.string.copy_command), false) {
             getSystemService(android.content.ClipboardManager::class.java).setPrimaryClip(
-                android.content.ClipData.newPlainText("DiPlay ADB Command", adbCmd)
+                android.content.ClipData.newPlainText("Apple CarPlay ADB Command", adbCmd)
             )
             toast(getString(R.string.copied_to_the_car_clipboard_run_the_command_on_your_comput))
         }, matchButton(8, 50))
@@ -5538,7 +5538,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         }, "adb-cluster-authorize").start()
     }
 
-    private fun reportFileName() = "DiPlay-${SimpleDateFormat("yyyyMMdd-HHmmss-SSS", Locale.US).format(Date())}.txt"
+    private fun reportFileName() = "Apple CarPlay-${SimpleDateFormat("yyyyMMdd-HHmmss-SSS", Locale.US).format(Date())}.txt"
 
     private fun saveReportToDownloads() {
         if (exportInProgress) return
@@ -5580,7 +5580,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                         .setMessage(when {
                             savedReport.savedInApp -> getString(R.string.diagnostic_report_saved_in_app)
                             savedReport.savedPath != null -> getString(R.string.diagnostic_report_saved_to_path, savedReport.savedPath)
-                            uri == null -> "Downloads/DiPlay/$fileName"
+                            uri == null -> "Downloads/Apple CarPlay/$fileName"
                             else -> getString(R.string.your_report_was_saved_to_the_selected_location)
                         })
                         .setPositiveButton(getString(R.string.view_diagnostic_report)) { _, _ -> showDiagnosticReport(report) }
@@ -5606,7 +5606,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
 
     /** The text of a diagnostic report. It reads the session logs, so call it off the main thread. */
     private fun diagnosticReportText(appContext: Context): String = buildString {
-        appendLine("DiPlay ${version()} · private beta diagnostic report")
+        appendLine("Apple CarPlay ${version()} · private beta diagnostic report")
         appendLine("Android ${Build.VERSION.RELEASE} / API ${Build.VERSION.SDK_INT}")
         appendLine("Head unit: ${Build.MANUFACTURER} ${Build.MODEL}")
         appendLine("Connection: ${if (AirPlayPersistence.loadWirelessEnabled(appContext)) "wireless" else "USB"}")
@@ -5681,7 +5681,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         appendLine("--- Recent own-app process exits (Android 11+) ---")
         appendLine(ProcessExitDiagnostics.report(appContext))
         appendLine()
-        appendLine("--- Last crash recorded by DiPlay ---")
+        appendLine("--- Last crash recorded by Apple CarPlay ---")
         appendLine(CrashRecord.report(appContext))
         appendLine()
         for (name in SessionLogFile.REPORT_NAMES) {
@@ -5730,11 +5730,11 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         } catch (error: Exception) {
             val state = candidate?.state ?: AudioTrack.STATE_UNINITIALIZED
             candidate?.let { runCatching { it.release() } }
-            Log.w("DiPlay", "playTestTone streamType=$streamType unavailable", error)
+            Log.w("Apple CarPlay", "playTestTone streamType=$streamType unavailable", error)
             toast(getString(R.string.audio_stream_unavailable, streamType, state))
             return
         }
-        Log.i("DiPlay", "playTestTone streamType=$streamType state=${track.state} playState=${track.playState}")
+        Log.i("Apple CarPlay", "playTestTone streamType=$streamType state=${track.state} playState=${track.playState}")
         testToneTrack = track
         val stop = Runnable {
             track.stop()
@@ -6500,7 +6500,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             intent.action == Intent.ACTION_MAIN && intent.hasCategory(Intent.CATEGORY_LAUNCHER) &&
                 !intent.hasExtra("page")
 
-        private const val BYD_VEHICLE_TAG = "DiPlay-BYD13"
+        private const val BYD_VEHICLE_TAG = "Apple CarPlay-BYD13"
         private const val VEHICLE_VALIDATION_RETRY_MILLIS = 500L
 
         // BYD's settings app answers sixty standard android.settings actions with an activity in its
@@ -6508,7 +6508,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         // ("the multimedia system does not support this operation"), and startActivity reports success
         // when it reaches it, so reaching it cannot be told apart from a real screen by catching a throw.
         private const val BYD_SETTINGS_PACKAGE = "com.byd.vehiclesettings"
-        private const val BYD_SETTINGS_TAG = "DiPlay-Settings"
+        private const val BYD_SETTINGS_TAG = "Apple CarPlay-Settings"
 
         // BYD's own screens. An explicit component skips intent-filter matching, so the decoy cannot
         // answer one. Source: docs/BYD_SETTINGS_ENTRY_POINTS.md.

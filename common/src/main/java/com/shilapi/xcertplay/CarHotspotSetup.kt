@@ -33,15 +33,15 @@ internal object CarHotspotSetup {
     fun grant(context: Context, permissions: List<Permission>, adb: LocalAdb = LocalAdb(AdbKeys.load(context))): LocalAdb.Access =
         adb.use {
             val access = it.connect(mayAsk = true)
-            Log.i("DiPlay-ADB", "switch connection: $access")
+            Log.i("Apple CarPlay-ADB", "switch connection: $access")
             if (access == LocalAdb.Access.READY) {
                 for (permission in permissions) {
                     if (!permission.granted(context)) {
-                        Log.i("DiPlay-ADB", "request permission: ${permission.appOp}")
+                        Log.i("Apple CarPlay-ADB", "request permission: ${permission.appOp}")
                         it.shell("appops set ${context.packageName} ${permission.appOp} allow")
                     }
                     val granted = permission.granted(context)
-                    Log.i("DiPlay-ADB", "permission ${permission.appOp}: granted=$granted")
+                    Log.i("Apple CarPlay-ADB", "permission ${permission.appOp}: granted=$granted")
                     if (!granted) break
                 }
             }

@@ -18,7 +18,7 @@ import com.shilapi.xcertplay.orchestration.CarPlayController
  * wheel key service or to the CarPlay screen; the hang-up keys only as BYD's hang-up broadcast.
  */
 internal object CarPlayCallKeys {
-    private const val TAG = "DiPlay-CallKeys"
+    private const val TAG = "Apple CarPlay-CallKeys"
     // BYD's window manager opens its phone app on the call key's release; CarPlay comes back after it.
     private const val RETURN_DELAY_MILLIS = 700L
 

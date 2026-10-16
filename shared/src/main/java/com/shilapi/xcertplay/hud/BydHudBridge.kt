@@ -16,7 +16,7 @@ import java.util.concurrent.TimeUnit
 
 /** Publishes CarPlay route arrows, distance and street to BYD's native windshield HUD. */
 internal object BydHudBridge {
-    private const val TAG = "DiPlay-BYD-HUD"
+    private const val TAG = "Apple CarPlay-BYD-HUD"
     private const val SOMEIP_PACKAGE = "com.ts.car.someip.service"
     private const val SOMEIP_CLASS = "com.ts.car.someip.service.manager.SomeIpServerService"
     private const val SOMEIP_ACTION = "com.ts.car.someip.SomeIpServerService"

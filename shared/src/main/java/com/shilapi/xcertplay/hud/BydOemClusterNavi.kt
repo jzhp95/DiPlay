@@ -10,7 +10,7 @@ import java.util.concurrent.TimeUnit
 object BydOemClusterNavi {
     internal const val STOCK_MAP = "com.byd.automap"
     internal const val STOCK_MAP_CLUSTER_ACTIVITY = "$STOCK_MAP.extra.MeterActivity"
-    private const val TAG = "DiPlay-BYD-OemCluster"
+    private const val TAG = "Apple CarPlay-BYD-OemCluster"
     private const val JOURNAL = "restore_journal"
     private val shell = BydAdbShell(TAG)
     private val worker = Executors.newSingleThreadScheduledExecutor {

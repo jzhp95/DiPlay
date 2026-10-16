@@ -43,7 +43,7 @@ class CrashRecordTest {
 
         assertTrue(record.contains("  at android.app.Activity.startActivity11(Activity.java:11)"))
         assertFalse(record.contains("startActivity12"))
-        assertTrue(record.contains("  ... DiPlay frames further down:"))
+        assertTrue(record.contains("  ... Apple CarPlay frames further down:"))
         assertTrue(record.contains("  at com.shilapi.xcertplay.DiPlayActivity.open0(DiPlayActivity.kt:0)"))
         assertTrue(record.contains("  at com.shilapi.xcertplay.DiPlayActivity.open5(DiPlayActivity.kt:5)"))
         assertFalse(record.contains("open6"))

@@ -210,7 +210,7 @@ class MapEmbedService : Service() {
     }
 
     companion object {
-        private const val TAG = "DiPlay-MapEmbed"
+        private const val TAG = "Apple CarPlay-MapEmbed"
         private const val RELEASE_DELAY_MILLIS = 1_000L
 
         /** Bind to DiPlay's service with this action (the package differs between builds). */

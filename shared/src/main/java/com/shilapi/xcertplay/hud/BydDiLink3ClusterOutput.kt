@@ -8,7 +8,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 /** DiLink 3 cluster modes have their own recovery journal; OEM package holds are independent. */
 internal object BydDiLink3ClusterOutput {
-    private const val TAG = "DiPlay-BYD-DiLink3"
+    private const val TAG = "Apple CarPlay-BYD-DiLink3"
     private const val JOURNAL = "restore_stock_mode"
     private val shell = BydAdbShell(TAG)
     private val worker = Executors.newSingleThreadScheduledExecutor {

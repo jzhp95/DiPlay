@@ -483,7 +483,7 @@ class WheelKeyService : AccessibilityService() {
     }
 
     companion object {
-        internal const val TAG = "DiPlay-WheelKeys"
+        internal const val TAG = "Apple CarPlay-WheelKeys"
         private const val ZOOM_NOTE_SOURCE = 6
         private const val ELIGIBILITY_POLL_MILLIS = 250L
         private const val ROUTE_CHECK_MILLIS = 1_000L

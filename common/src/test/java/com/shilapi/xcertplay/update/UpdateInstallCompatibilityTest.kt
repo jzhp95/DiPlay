@@ -35,7 +35,7 @@ class UpdateInstallCompatibilityTest {
     private fun install(publicUriReadable: Boolean, installers: Int, publicBytes: ByteArray = byteArrayOf(1)): Intent {
         val activity = Robolectric.buildActivity(DiPlayActivity::class.java).get()
         activity.updateInstallWorker = { it.run() }
-        val apk = File(activity.cacheDir, "update/test/DiPlay.apk").apply {
+        val apk = File(activity.cacheDir, "update/test/Apple CarPlay.apk").apply {
             parentFile!!.mkdirs()
             writeBytes(byteArrayOf(1))
         }
@@ -72,7 +72,7 @@ class UpdateInstallCompatibilityTest {
 
     @Test fun providerRejectsSiblingDirectoriesWithTheSameUpdatePrefix() {
         val context = RuntimeEnvironment.getApplication()
-        val outside = File(context.cacheDir, "update-other/DiPlay.apk")
+        val outside = File(context.cacheDir, "update-other/Apple CarPlay.apk")
         assertThrows(IllegalArgumentException::class.java) {
             FileProvider.getUriForFile(context, "${context.packageName}.update-apks", outside)
         }

@@ -15,7 +15,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  * as before.
  */
 internal object BydClusterMapPause {
-    private const val TAG = "DiPlay-BYD-ClusterMap"
+    private const val TAG = "Apple CarPlay-BYD-ClusterMap"
     private const val READ_MILLIS = 1_000L
 
     private val tickerStarted = AtomicBoolean(false)

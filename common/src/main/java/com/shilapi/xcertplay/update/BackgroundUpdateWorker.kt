@@ -65,7 +65,7 @@ internal class BackgroundUpdateWorker(context: Context, parameters: WorkerParame
     }
 
     private companion object {
-        const val TAG = "DiPlay-Update"
+        const val TAG = "Apple CarPlay-Update"
         const val MAX_ATTEMPTS = 5
     }
 }

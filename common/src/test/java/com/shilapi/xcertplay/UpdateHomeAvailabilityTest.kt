@@ -63,7 +63,7 @@ class UpdateHomeAvailabilityTest {
 
     private fun release() = UpdateRelease(
         tagName = "v99.0.0",
-        apkName = "DiPlay.apk",
+        apkName = "Apple CarPlay.apk",
         apkUrl = "https://example.com/DiPlay.apk",
         checksumsUrl = "https://example.com/SHA256SUMS.txt",
     )

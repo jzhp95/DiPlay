@@ -37,7 +37,7 @@ import kotlin.math.roundToInt
  * DiPlay. Keys go to the iPhone as CarPlay media HID presses ([CarPlayMediaButton]).
  */
 internal object CarPlayMediaKeys {
-    private const val TAG = "DiPlay-MediaKeys"
+    private const val TAG = "Apple CarPlay-MediaKeys"
     private const val ACTIONS = PlaybackState.ACTION_PLAY or PlaybackState.ACTION_PAUSE or
         PlaybackState.ACTION_PLAY_PAUSE or PlaybackState.ACTION_SKIP_TO_NEXT or PlaybackState.ACTION_SKIP_TO_PREVIOUS
 
@@ -312,7 +312,7 @@ internal object CarPlayMediaKeys {
                 if (it) forwardGrantedFocusLocked()
             }
         }
-        session = MediaSession(context, "DiPlay CarPlay").apply {
+        session = MediaSession(context, "Apple CarPlay").apply {
             setCallback(callback, mainHandler)
             setMetadata(androidMetadata(nowPlaying, shownArtworkLocked()))
             isActive = true

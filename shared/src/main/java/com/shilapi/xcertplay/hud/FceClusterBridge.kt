@@ -12,7 +12,7 @@ import java.util.concurrent.TimeUnit
  * ([BydOutputSettings.enabled]) and its own opt-in ([BydOutputSettings.fceCluster]).
  */
 internal object FceClusterBridge {
-    private const val TAG = "DiPlay-FCE-Cluster"
+    private const val TAG = "Apple CarPlay-FCE-Cluster"
 
     private val lock = Any()
     private val route = BydHudRouteState()

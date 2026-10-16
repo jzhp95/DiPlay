@@ -50,7 +50,7 @@ internal class FceCarPropertyWriter : FcePropertyWriter {
         .also { if (it == null) Log.w(TAG, "$SERVICE_NAME not available on this head unit") }
 
     companion object {
-        private const val TAG = "DiPlay-FCE-Cluster"
+        private const val TAG = "Apple CarPlay-FCE-Cluster"
         private const val SERVICE_NAME = "fce_misc_service_hal_property"
         private const val DESCRIPTOR = "com.fce.misc.proxy.hardware.property.ICarProperty"
         private const val TRANSACTION_SET_PROPERTY = 5

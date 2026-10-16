@@ -46,7 +46,7 @@ class UsbAutoConfirmService : AccessibilityService() {
             if (!isTargetPrompt(texts.joinToString(" "), appLabel)) {
                 if (ignoredWindowId != usbWindowId) {
                     ignoredWindowId = usbWindowId
-                    Log.i(TAG, "System dialog does not ask for DiPlay USB access; left alone")
+                    Log.i(TAG, "System dialog does not ask for Apple CarPlay USB access; left alone")
                 }
                 return
             }
@@ -64,7 +64,7 @@ class UsbAutoConfirmService : AccessibilityService() {
             }
             if (confirmed) {
                 lastClickTime = now
-                Log.i(TAG, "Successfully auto-confirmed DiPlay USB permission dialog")
+                Log.i(TAG, "Successfully auto-confirmed Apple CarPlay USB permission dialog")
             }
         } finally {
             @Suppress("DEPRECATION")
@@ -112,9 +112,9 @@ class UsbAutoConfirmService : AccessibilityService() {
             pkg in SYSTEM_PACKAGES && (className in USB_ACTIVITIES || className == ALERT_ACTIVITY_CLASS)
 
         /**
-         * The prompt must name this app and a USB device. Android 10+ words it "Allow DiPlay to
+         * The prompt must name this app and a USB device. Android 10+ words it "Allow Apple CarPlay to
          * access iPhone?" with no "USB", Android 7.1 names "the USB device" instead of the phone,
-         * and Chinese puts the name between letters ("要允许DiPlay访问iPhone吗？"), so only ASCII
+         * and Chinese puts the name between letters ("要允许Apple CarPlay访问iPhone吗？"), so only ASCII
          * word characters count as part of a longer name such as "FakeDiPlay".
          */
         internal fun isTargetPrompt(text: String, appLabel: String): Boolean =

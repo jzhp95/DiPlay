@@ -45,7 +45,7 @@ internal object BydTyres {
  * On a head unit without BYD's autoservice it stops after the first reply and does not start again.
  */
 object BydTyreStatus {
-    private const val TAG = "DiPlay-BYD-Tyres"
+    private const val TAG = "Apple CarPlay-BYD-Tyres"
     private const val READ_MILLIS = 10_000L
     private const val STALE_MILLIS = 60_000L
 

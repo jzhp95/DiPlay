@@ -132,7 +132,7 @@ class PhoneAudioRouteControllerTest {
         val route = controller()
         route.setWanted(PhoneAudioReason.VOIP_APP, true)
         assertEquals(1, backend.starts)
-        assertFalse("DiPlay's own canceller stays in charge of CarPlay calls", route.carPlayCallsUseCarAudio())
+        assertFalse("Apple CarPlay's own canceller stays in charge of CarPlay calls", route.carPlayCallsUseCarAudio())
     }
 
     @Test fun aRefusedCallLeavesCarPlayCallsToDiPlaysOwnCancellerForAWhile() {

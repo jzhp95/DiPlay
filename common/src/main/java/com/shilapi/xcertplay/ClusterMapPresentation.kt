@@ -198,7 +198,7 @@ internal class ClusterMapPresentation(
     }
 
     companion object {
-        const val TAG = "DiPlay-Cluster"
+        const val TAG = "Apple CarPlay-Cluster"
 
         /** Keep the 5/5.1 selection order, then try the measured DiLink 4 projection display. */
         fun findDisplay(context: Context, theme: DiLink51ClusterLayout.Theme = DiLink51ClusterLayout.theme(context)): Display? {

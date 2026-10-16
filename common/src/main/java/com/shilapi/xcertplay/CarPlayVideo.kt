@@ -24,7 +24,7 @@ import java.util.concurrent.atomic.AtomicLong
  * as the iPhone starts the item (or sends requestUI "videoplayback:") and only while the car is in P.
  */
 internal object CarPlayVideo : CarPlayVideoListener {
-    private const val TAG = "DiPlay-Video"
+    private const val TAG = "Apple CarPlay-Video"
     const val SKIP_MILLIS = 10_000
     private const val URL_TIMEOUT_SECONDS = 10L
 

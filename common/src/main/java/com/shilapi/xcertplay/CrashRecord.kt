@@ -51,7 +51,7 @@ internal object CrashRecord {
             val rest = frames.drop(MAX_FRAMES)
             val own = rest.filter(::ownFrame).take(MAX_OWN_FRAMES)
             if (own.isNotEmpty()) {
-                appendLine("  ... DiPlay frames further down:")
+                appendLine("  ... Apple CarPlay frames further down:")
                 own.forEach { appendLine("  at $it") }
             }
             if (rest.size > own.size) appendLine("  ... ${rest.size - own.size} more")

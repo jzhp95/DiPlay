@@ -61,7 +61,7 @@ internal class VoipCallWatcher(context: Context, private val onChange: (Boolean)
     }
 
     companion object {
-        private const val TAG = "DiPlay-PhoneAudio"
+        private const val TAG = "Apple CarPlay-PhoneAudio"
 
         fun voipActive(recordingSources: List<Int>, playbackUsages: List<Int>): Boolean =
             recordingSources.any { it == MediaRecorder.AudioSource.VOICE_COMMUNICATION } &&

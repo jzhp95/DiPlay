@@ -10,7 +10,7 @@ import kotlin.math.roundToInt
 object BydClusterSpeedReader {
     fun observe(context: Context, changed: (Int?) -> Unit): () -> Unit {
         val app = context.applicationContext
-        val shell = BydAdbShell("DiPlay-Cluster-Speed")
+        val shell = BydAdbShell("Apple CarPlay-Cluster-Speed")
         val executor = Executors.newSingleThreadScheduledExecutor { task ->
             Thread(task, "diplay-cluster-speed").apply { isDaemon = true }
         }
