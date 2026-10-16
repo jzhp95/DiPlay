@@ -3,3 +3,15 @@ plugins {
     alias(libs.plugins.android.application) apply false
     alias(libs.plugins.kotlin.compose) apply false
 }
+
+// Use the same Build Tools for Android compilation, CI and APK packaging.
+subprojects {
+    val androidProject = this
+    listOf("com.android.application", "com.android.library").forEach { pluginId ->
+        pluginManager.withPlugin(pluginId) {
+            androidProject.extensions.configure<com.android.build.api.dsl.CommonExtension> {
+                buildToolsVersion = "36.1.0"
+            }
+        }
+    }
+}

@@ -8,7 +8,7 @@ if [[ -z "${JAVA_HOME:-}" ]]; then
     export JAVA_HOME=$(/usr/libexec/java_home -v 25)
 fi
 signing_dir="${DIPLAY_PLATFORM_SIGNING_DIR:-$repo/AOSP-platform-signing}"
-tools="$ANDROID_HOME/build-tools/36.0.0"
+tools="$ANDROID_HOME/build-tools/36.1.0"
 output="$repo/build/car-test-apks"
 key="$signing_dir/platform.pk8"
 cert="$signing_dir/platform.x509.pem"

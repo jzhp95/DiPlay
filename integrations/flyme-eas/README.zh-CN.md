@@ -93,7 +93,7 @@ Windows 10/11 可用内置 Windows PowerShell 5.1 或 PowerShell 7，在仓库�
 powershell -NoProfile -ExecutionPolicy Bypass -File .\integrations\flyme-eas\build-apks.ps1
 ```
 
-Windows 机器先安装 JDK（CI 使用 25）、Android SDK Platform 37、Build Tools 36.0.0 和完整 NDK 28.2.13676358，并单独复制未入库的 `AOSP-platform-signing` 目录。脚本优先使用 `ANDROID_HOME`，其次 `ANDROID_SDK_ROOT`，默认 `%LOCALAPPDATA%\Android\Sdk`。可用 `DIPLAY_PLATFORM_SIGNING_DIR` 指定其他签名目录；通过 .NET 计算证书指纹，不要求安装 OpenSSL。未找到完整 NDK 时会在构建前指出缺失路径，不会伪造 `source.properties`。
+Windows 机器先安装 JDK（CI 使用 25）、Android SDK Platform 37、Build Tools 36.1.0 和完整 NDK 28.2.13676358，并单独复制未入库的 `AOSP-platform-signing` 目录。脚本优先使用 `ANDROID_HOME`，其次 `ANDROID_SDK_ROOT`，默认 `%LOCALAPPDATA%\Android\Sdk`。可用 `DIPLAY_PLATFORM_SIGNING_DIR` 指定其他签名目录；通过 .NET 计算证书指纹，不要求安装 OpenSSL。未找到完整 NDK 时会在构建前指出缺失路径，不会伪造 `source.properties`。
 
 需要独立连接 iPhone 时，同样显式设置本地认证目录，例如：
 
@@ -128,12 +128,12 @@ Windows 脚本与 shell 脚本采用同样的构建、签名和校验步骤；�
 这个输出仍是 Gradle 的调试签名，**不能直接作为 system UID 包安装**。使用明确提供的平台密钥重新签名，输出到仓库外测试目录：
 
 ```sh
-"/Users/jzhp/Library/Android/sdk/build-tools/36.0.0/apksigner" sign \
+"/Users/jzhp/Library/Android/sdk/build-tools/36.1.0/apksigner" sign \
   --key "/Users/jzhp/Downloads/test-rea/DiPlay/AOSP-platform-signing/platform.pk8" \
   --cert "/Users/jzhp/Downloads/test-rea/DiPlay/AOSP-platform-signing/platform.x509.pem" \
   --out "/Users/jzhp/Downloads/test-rea/DiPlay-flyme-system-debug.apk" \
   "mobile/build/outputs/apk/debug/mobile-debug.apk"
-"/Users/jzhp/Library/Android/sdk/build-tools/36.0.0/apksigner" verify --verbose --print-certs \
+"/Users/jzhp/Library/Android/sdk/build-tools/36.1.0/apksigner" verify --verbose --print-certs \
   "/Users/jzhp/Downloads/test-rea/DiPlay-flyme-system-debug.apk"
 ```
 

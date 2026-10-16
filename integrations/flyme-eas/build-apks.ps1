@@ -31,7 +31,7 @@ if (-not $androidSdk) {
 $env:ANDROID_HOME = $androidSdk
 $signingDir = $env:DIPLAY_PLATFORM_SIGNING_DIR
 if (-not $signingDir) { $signingDir = Join-Path $repoRoot 'AOSP-platform-signing' }
-$buildTools = Join-Path $androidSdk 'build-tools\36.0.0'
+$buildTools = Join-Path $androidSdk 'build-tools\36.1.0'
 $apkOutputDir = Join-Path $repoRoot 'build\car-test-apks'
 $privateKey = Join-Path $signingDir 'platform.pk8'
 $certificate = Join-Path $signingDir 'platform.x509.pem'

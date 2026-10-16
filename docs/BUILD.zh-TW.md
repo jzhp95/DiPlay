@@ -19,7 +19,7 @@
 
 - JDK 25。
 - Android SDK Platform 37（`platforms;android-37.0`）。
-- Android SDK Build-Tools 36.0.0。
+- Android SDK Build-Tools 36.1.0。
 - Android SDK Platform-Tools。
 - Android NDK 28.2.13676358。
 
