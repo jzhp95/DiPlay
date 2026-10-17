@@ -60,9 +60,14 @@ class CarPlayHomeScreenshotsTest {
                 addView(layout.cards({}, {}, "Bluetooth · Wi-Fi", "1.4.0").root)
             }
             val width = (widthDp * localized.resources.displayMetrics.density).toInt()
-            root.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
-                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
-            root.layout(0, 0, width, root.measuredHeight)
+            val viewportHeight = (700 * localized.resources.displayMetrics.density).toInt()
+            val scroll = android.widget.ScrollView(localized).apply {
+                isFillViewport = true
+                addView(root)
+            }
+            scroll.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(viewportHeight, View.MeasureSpec.EXACTLY))
+            scroll.layout(0, 0, width, viewportHeight)
             descendants(root).filterIsInstance<TextView>().forEach { text ->
                 val bounds = android.graphics.Rect(0, 0, text.width, text.height)
                 root.offsetDescendantRectToMyCoords(text, bounds)
@@ -77,9 +82,9 @@ class CarPlayHomeScreenshotsTest {
                         lines.height <= text.height - text.compoundPaddingTop - text.compoundPaddingBottom)
                 }
             }
-            val bitmap = Bitmap.createBitmap(width, root.measuredHeight, Bitmap.Config.ARGB_8888)
+            val bitmap = Bitmap.createBitmap(width, viewportHeight, Bitmap.Config.ARGB_8888)
             try {
-                root.draw(Canvas(bitmap))
+                scroll.draw(Canvas(bitmap))
                 val output = File("build/reports/carplay-home-ui").apply { mkdirs() }
                 File(output, "$name-$fontScale-${if (night) "night" else "day"}.png").outputStream().use {
                     assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it))

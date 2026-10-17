@@ -55,6 +55,65 @@ class CarPlayHomeLayoutTest {
         assertEquals(listOf("wireless", "usb", "disconnect", "phone", "settings", "home"), calls)
     }
 
+    @Test @Config(qualifiers = "zh-rCN-w1100dp-h700dp-land")
+    fun bothCardsRemainVisibleInsideTheActivityScrollContainer() = verifyScrollContainer(1100, 700)
+
+    @Test @Config(qualifiers = "zh-rCN-w900dp-h400dp-land")
+    fun shortCarScreenKeepsBothCardsMeasurableAndScrollable() = verifyScrollContainer(900, 400)
+
+    @Test @Config(qualifiers = "zh-rCN-w400dp-h700dp-port")
+    fun stackedUsbCardCanBeReachedByScrolling() = verifyScrollContainer(400, 700)
+
+    private fun verifyScrollContainer(widthDp: Int, heightDp: Int) {
+        val context = RuntimeEnvironment.getApplication()
+        val density = context.resources.displayMetrics.density
+        val width = (widthDp * density).toInt()
+        val height = (heightDp * density).toInt()
+        val layout = CarPlayHomeLayout(context, DiPlayPalette.LIGHT,
+            makeButton = { title, _, click -> Button(context).apply {
+                text = title; setOnClickListener { click() }
+            } },
+            makeLabel = { title, size, color, _ -> TextView(context).apply {
+                text = title; textSize = size.toFloat(); setTextColor(color)
+            } })
+        val cards = layout.cards({}, {}, "hint", "version")
+        val content = android.widget.LinearLayout(context).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            layoutParams = android.widget.LinearLayout.LayoutParams(-1, -2)
+            setPadding(32, 24, 32, 32)
+            addView(layout.header(View(context), {}, {}, {}, {}).root)
+            addView(View(context), android.widget.LinearLayout.LayoutParams(-1, 24))
+            addView(cards.root)
+        }
+        val scroll = android.widget.ScrollView(context).apply {
+            isFillViewport = true
+            addView(content)
+        }
+        for (viewport in listOf(height, maxOf(height - (100 * density).toInt(), 300), height)) {
+            scroll.scrollTo(0, 0)
+            scroll.requestLayout()
+            scroll.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(viewport, View.MeasureSpec.EXACTLY))
+            scroll.layout(0, 0, width, viewport)
+            assertTrue("wireless height=${cards.wireless.height}", cards.wireless.height > 100)
+            assertTrue("usb height=${cards.usb.height}", cards.usb.height > 100)
+            assertTrue("connect height=${cards.connect.height}", cards.connect.height > 0)
+            val cardBounds = android.graphics.Rect(0, 0, cards.wireless.width, cards.wireless.height)
+            content.offsetDescendantRectToMyCoords(cards.wireless, cardBounds)
+            assertTrue("card starts below viewport: $cardBounds", cardBounds.top < viewport)
+            for (button in listOf(cards.connect, cards.usbConnect)) {
+                assertTrue("empty button: ${button.text}", button.width > 0 && button.height > 0)
+                val bounds = android.graphics.Rect(0, 0, button.width, button.height)
+                content.offsetDescendantRectToMyCoords(button, bounds)
+                assertTrue("button outside content: $bounds", bounds.top >= 0 && bounds.bottom <= content.height)
+                scroll.scrollTo(0, maxOf(0, bounds.bottom - viewport))
+                assertTrue("button cannot scroll into view: $bounds", bounds.bottom - scroll.scrollY <= viewport &&
+                    bounds.top - scroll.scrollY >= 0)
+            }
+
+        }
+    }
+
     private fun descendants(view: View): Sequence<View> = sequence {
         yield(view)
         if (view is ViewGroup) for (i in 0 until view.childCount) yieldAll(descendants(view.getChildAt(i)))

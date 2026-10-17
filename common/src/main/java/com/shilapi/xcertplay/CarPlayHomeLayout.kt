@@ -41,7 +41,11 @@ internal class CarPlayHomeLayout(
     private fun dp(value: Int) = (value * context.resources.displayMetrics.density).roundToInt()
     private fun column() = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
     private fun row() = LinearLayout(context).apply { gravity = Gravity.CENTER_VERTICAL }
-    private fun space(size: Int) = View(context).apply { minimumHeight = dp(size) }
+    private fun space(size: Int) = View(context).apply {
+        // A bare WRAP_CONTENT View fills an AT_MOST height during ScrollView's
+        // fillViewport pass. Give spacers an exact height so they cannot consume the cards.
+        layoutParams = LinearLayout.LayoutParams(1, dp(size))
+    }
     private fun params(top: Int = 0, height: Int = -2) = LinearLayout.LayoutParams(-1, height).apply {
         topMargin = dp(top)
     }
