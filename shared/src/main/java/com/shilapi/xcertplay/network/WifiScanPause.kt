@@ -10,6 +10,11 @@ import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 
+/** Recover an interrupted scan pause at app startup without exposing the controller's internal API. */
+fun restoreWifiScanAfterInterruptedSession(context: Context) {
+    WifiScanPause.restoreIfNeeded(context)
+}
+
 /**
  * Pauses the head unit's automatic Wi-Fi network search while a Wi-Fi Direct CarPlay session runs.
  *

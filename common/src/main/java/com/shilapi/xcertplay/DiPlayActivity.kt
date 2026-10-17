@@ -277,7 +277,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         rememberLaunchAppearance()
         languagePreferenceAtCreate = AppLocale.preference(this)
         if (!CarPlayBackgroundSession.hasSession()) {
-            com.shilapi.xcertplay.network.WifiScanPause.restoreIfNeeded(applicationContext)
+            com.shilapi.xcertplay.network.restoreWifiScanAfterInterruptedSession(applicationContext)
         }
         WindowCompat.setDecorFitsSystemWindows(window, false)
         if (Build.VERSION.SDK_INT >= 28) {

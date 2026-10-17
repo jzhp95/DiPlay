@@ -5273,7 +5273,6 @@ class CarPlayHostActivity : ComponentActivity() {
             // unused strip instead of leaving a blank third when a new host adopts the session.
             sidePanelShown = true
             sidePanel?.visibility = View.VISIBLE
-            startSidePanelTyres()
             sidePanelTick.run()
             showSidePanelGripHint()
         }
