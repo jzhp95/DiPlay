@@ -936,16 +936,14 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                 !CarHotspotSetup.isBydHeadUnit(this) && CarHotspotTethering.appStartSupported()
             cards.wireless.addView(label(if (allowOnSystemScreen) getString(R.string.settings_write_settings_missing)
                 else hotspotResultText(startupProblem), 15, WARNING))
-            if (!compact) cards.wireless.addView(
-                if (allowOnSystemScreen) homeButton(getString(R.string.settings_write_settings_allow), false) { openWriteSettingsAccess() }
-                else homeButton(getString(R.string.open_car_hotspot_settings), false) { openCarWifiSettings() },
+            if (!compact && allowOnSystemScreen) cards.wireless.addView(
+                homeButton(getString(R.string.settings_write_settings_allow), false) { openWriteSettingsAccess() },
                 matchButton(CONTROL_GAP_DP, 56))
         } else if (carHotspotOff()) {
             // No name is saved before Connection setup, and the sentence that quotes it would show “”.
             val name = AirPlayPersistence.loadManualHotspotSsid(this)
             val off = if (name.isBlank()) getString(R.string.hotspot_details_off) else getString(R.string.msg_car_hotspot_off, name)
             cards.wireless.addView(label(off, 15, WARNING).apply { setPadding(0, dp(14), 0, 0) })
-            if (!compact) cards.wireless.addView(homeButton(getString(R.string.open_car_hotspot_settings), false) { openCarWifiSettings() }, matchButton(CONTROL_GAP_DP, 56))
         }
         setupError?.let { cards.root.addView(label(it, 16, WARNING).apply { setPadding(0, dp(16), 0, 0) }) }
         content.addView(cards.root)
