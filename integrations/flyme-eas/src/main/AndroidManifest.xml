@@ -4,4 +4,9 @@
         <package android:name="com.ecarx.sdk.openapi" />
         <package android:name="ecarx.xsf.mediacenter" />
     </queries>
+    <application>
+        <provider android:name="com.shilapi.flymeeas.FlymeArtworkProvider"
+            android:authorities="${applicationId}.flyme-artwork"
+            android:exported="true" android:grantUriPermissions="true" />
+    </application>
 </manifest>

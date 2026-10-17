@@ -148,7 +148,8 @@ class WheelTestActivity : Activity(), AppAppearanceOwner {
                 3 -> getString(R.string.wheel_test_toggle_label)
                 4 -> getString(R.string.wheel_test_next_label)
                 5 -> getString(R.string.wheel_test_previous_label)
-                6 -> getString(R.string.wheel_test_siri_label)
+                6 -> if (event.raw != null) getString(R.string.wheel_test_voice_key_code, event.raw)
+                    else getString(R.string.wheel_test_siri_label)
                 else -> getString(R.string.wheel_test_raw_label, event.raw ?: -1)
             }
             views.event.text = getString(R.string.wheel_test_event, title,

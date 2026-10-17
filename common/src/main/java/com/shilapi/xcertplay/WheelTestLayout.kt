@@ -69,6 +69,7 @@ internal class WheelTestLayout(private val context: Context, private val palette
         row(button(R.string.wheel_test_toggle, Action.TOGGLE), button(R.string.wheel_test_siri, Action.SIRI))
         val counts = text(R.string.wheel_test_waiting, 16f)
         feedback.addView(counts)
+        feedback.addView(text(R.string.wheel_test_voice_capture_hint, FlymeAutoStyle.SECONDARY_TEXT_SP).apply { setTextColor(palette.secondaryText) })
         if (wide) {
             content.addView(LinearLayout(context).apply {
                 gravity = Gravity.TOP

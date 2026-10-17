@@ -30,6 +30,7 @@ public final class FlymeWheelBridge implements AutoCloseable {
  private EasAdapter adapter;
  private boolean attempted;
  private boolean eligible;
+ private long lastMetadataPoll;
  private final Runnable tick=new Runnable(){public void run(){
   if(closed)return;
   if(!host.ready()) {
@@ -37,6 +38,10 @@ public final class FlymeWheelBridge implements AutoCloseable {
    if(adapter!=null){close();return;}
   }else if(!attempted){
    attempted=true;gate.start();connect();
+  }
+  if(!closed&&adapter!=null&&host.ready()&&owned){
+   long now=android.os.SystemClock.elapsedRealtime();
+   if(now-lastMetadataPoll>=5000){lastMetadataPoll=now;adapter.updatePlayback(host.playback());}
   }
   if(!closed)main.postDelayed(this,1000);
  }};

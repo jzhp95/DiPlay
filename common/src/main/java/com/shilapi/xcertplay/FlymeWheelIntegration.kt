@@ -23,7 +23,7 @@ internal object FlymeWheelIntegration {
                 override fun playback(): PlaybackSnapshot {
                     val p = controller.nowPlayingSnapshot()
                     return PlaybackSnapshot(p.title, p.artist, p.album, p.durationMillis ?: 0L,
-                        p.elapsedMillis ?: 0L, p.playing)
+                        p.elapsedMillis ?: 0L, p.playing, controller.matchingArtworkSnapshot(p.artworkTransferId)?.bytes)
                 }
             })
     }

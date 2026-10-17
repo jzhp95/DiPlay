@@ -17,6 +17,8 @@
     <string name="wheel_test_next_label">下一曲</string>
     <string name="wheel_test_previous_label">上一曲</string>
     <string name="wheel_test_siri_label">语音键</string>
+    <string name="wheel_test_voice_key_code">语音键 · 键码 %1$d</string>
+    <string name="wheel_test_voice_capture_hint">语音键捕获清单：231（标准）、200231（Flyme 候选）。需车机实际派发到本页；这里只显示和记录，不唤醒 Siri。</string>
     <string name="wheel_test_raw_label">按键码 %1$d</string>
     <string name="wheel_test_event">%1$s · %2$s（%3$d）</string>
     <string name="wheel_test_real">接口接收</string>

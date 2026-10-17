@@ -71,6 +71,25 @@ class WheelTestControllerTest {
         assertEquals(before, controller.snapshot().received)
     }
 
+    @Test fun standardAndFlymeVoiceKeysAreCapturedOncePerPressAndStopWithTheProbe() {
+        for (code in listOf(231, 200231)) {
+            val before = controller.snapshot().received
+            assertFalse(controller.key(KeyEvent(KeyEvent.ACTION_DOWN, code), "window"))
+            assertEquals(before, controller.snapshot().received)
+            controller.start()
+            assertTrue("voice key $code must be captured", controller.key(KeyEvent(0, 0, KeyEvent.ACTION_DOWN, code, 0), "window"))
+            assertTrue(controller.key(KeyEvent(0, 0, KeyEvent.ACTION_DOWN, code, 1), "window"))
+            assertTrue(controller.key(KeyEvent(KeyEvent.ACTION_UP, code), "window"))
+            assertEquals(before + 1, controller.snapshot().received)
+            assertEquals(6, controller.snapshot().event?.media)
+            assertEquals(code, controller.snapshot().event?.raw)
+            assertFalse(controller.snapshot().event!!.simulated)
+            controller.stop()
+            assertFalse(controller.key(KeyEvent(KeyEvent.ACTION_DOWN, code), "window"))
+            assertEquals(before + 1, controller.snapshot().received)
+        }
+    }
+
     @Test fun owningEasFocusKeepsVoiceInputAndPairsToggleWithEasPlayback() {
         controller.start()
         val bridge = org.robolectric.util.ReflectionHelpers.getField<Any>(controller, "bridge")

@@ -1,5 +1,7 @@
 package com.shilapi.flymeeas;
 
+import android.app.PendingIntent;
+import android.net.Uri;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
@@ -49,7 +51,8 @@ public final class EasAdapter implements AutoCloseable {
  private final List<ServiceConnection> bound=new ArrayList<>();
  private volatile boolean closed;
  private volatile PlaybackSnapshot playback=PlaybackSnapshot.EMPTY;
- private PlaybackInfo playbackInfo;
+ private volatile PlaybackInfo playbackInfo;
+ private volatile String lastFocusPackage;
  private IBinder media,token;
  private IBinder.DeathRecipient death;
  private int sourceType=6;
@@ -70,12 +73,18 @@ public final class EasAdapter implements AutoCloseable {
   });
  }
  public void updatePlayback(PlaybackSnapshot snapshot){
-  playback=snapshot;int g=generation.get();worker.post(()->{
-   if(!current(g)||media==null||token==null||playbackInfo==null)return;
-   try{call(g,media,MEDIA,6,p->{p.writeStrongBinder(token);p.writeStrongBinder(playbackInfo);},p->p.readInt()!=0);
-    call(g,media,MEDIA,10,p->{p.writeStrongBinder(token);p.writeLong(playback.position);},p->null);
-   }catch(Exception e){if(current(g))error("playback update",e);}
-  });
+  if(closed)return;
+  playback=snapshot;int g=generation.get();worker.post(()->publishPlayback(g,"iphone-update"));
+ }
+ private void publishPlayback(int g,String reason){
+  if(!current(g)||media==null||token==null)return;
+  PlaybackInfo info=new PlaybackInfo(sourceType);playbackInfo=info;
+  try{
+   Boolean accepted=call(g,media,MEDIA,6,p->{p.writeStrongBinder(token);p.writeStrongBinder(info);},p->p.readInt()!=0);
+   call(g,media,MEDIA,10,p->{p.writeStrongBinder(token);p.writeLong(info.snapshot.position);},p->null);
+   sink.status("eas_metadata","accepted="+accepted+" reason="+reason+" title="+safe(info.snapshot.title)+" artist="+safe(info.snapshot.artist)+" playing="+info.snapshot.playing+" artwork="+(info.artwork!=null)+" launch="+(info.launch!=null));
+   log("metadata update accepted="+accepted+" reason="+reason+" track="+info.snapshot.trackId()+" title="+safe(info.snapshot.title)+" duration="+info.snapshot.duration+" position="+info.snapshot.position+" playing="+info.snapshot.playing);
+  }catch(Exception e){error("playback update "+reason,e);}
  }
  public void requestFocus(){int g=generation.get();worker.post(()->{try{request(g);}finally{sink.requestFinished();}});}
  public void queryFocus(){int g=generation.get();worker.post(()->query(g));}
@@ -165,7 +174,7 @@ public final class EasAdapter implements AutoCloseable {
   if(!MEDIA.equals(descriptor))throw new RemoteException("主Binder descriptor不匹配: "+descriptor);
   media=binder;death=()->lost(g,"主Binder死亡");media.linkToDeath(death,0);
   sink.status("eas_connection","已连接："+descriptor);stage="音乐源注册";
-  MusicCallback callback=new MusicCallback(g,sourceType);playbackInfo=callback.info;
+  MusicCallback callback=new MusicCallback(g,sourceType);playbackInfo=new PlaybackInfo(sourceType);
   token=call(g,media,MEDIA,19,p->{p.writeString(context.getPackageName());p.writeStrongBinder(callback);},Parcel::readStrongBinder);
   if(!current(g))return;
   if(token==null){
@@ -179,7 +188,7 @@ public final class EasAdapter implements AutoCloseable {
    call(g,media,MEDIA,7,p->{p.writeStrongBinder(token);p.writeIntArray(new int[]{sourceType});},p->null);
    call(g,media,MEDIA,8,p->{p.writeStrongBinder(token);p.writeInt(sourceType);},p->null);
    call(g,media,MEDIA,30,p->{p.writeStrongBinder(token);p.writeIntArray(new int[]{0,2,3});},p->null);
-   Boolean updated=call(g,media,MEDIA,6,p->{p.writeStrongBinder(token);p.writeStrongBinder(callback.info);},p->p.readInt()!=0);
+   Boolean updated=call(g,media,MEDIA,6,p->{p.writeStrongBinder(token);p.writeStrongBinder(playbackInfo);},p->p.readInt()!=0);
    log("source list/current/capabilities声明完成; neutral playback update="+updated);
   }catch(Exception e){error("注册后配置",e);}
   query(g);if(selectAfterRegister)request(g);
@@ -202,7 +211,16 @@ public final class EasAdapter implements AutoCloseable {
   stage="queryCurrentFocusClient";
   try{
    String pkg=call(g,media,MEDIA,42,p->p.writeStrongBinder(token),Parcel::readString);
-   if(current(g)){sink.focus(pkg);sink.status("eas_focus",pkg==null||pkg.trim().isEmpty()?"未知：厂商返回空焦点":pkg);log("focus query package="+safe(pkg));}
+   if(current(g)){
+    boolean becameOurs=context.getPackageName().equals(pkg)&&!context.getPackageName().equals(lastFocusPackage);
+    lastFocusPackage=pkg;
+    sink.focus(pkg);sink.status("eas_focus",pkg==null||pkg.trim().isEmpty()?"未知：厂商返回空焦点":pkg);log("focus query package="+safe(pkg));
+    if(becameOurs){
+     publishPlayback(g,"focus-confirmed");
+     // OEM requestPlay/metadata work can still be queued after the Binder reply.
+     for(long delay:new long[]{500,1500})worker.postDelayed(()->{if(current(g)&&context.getPackageName().equals(lastFocusPackage))publishPlayback(g,"focus-settled");},delay);
+    }
+   }
   }catch(Exception e){if(current(g)){sink.status("eas_focus","未知：查询失败 "+e.getClass().getSimpleName());error("焦点查询",e);}}
  }
  private void lost(int g,String reason){
@@ -243,7 +261,7 @@ public final class EasAdapter implements AutoCloseable {
   }
  }
  private void release(){
-  IBinder old=media,oldToken=token;media=null;token=null;
+  IBinder old=media,oldToken=token;media=null;token=null;lastFocusPackage=null;playbackInfo=null;
   if(old!=null&&death!=null){try{old.unlinkToDeath(death,0);}catch(Exception ignored){}death=null;}
   // Release local bindings before a remote unregister which Android cannot cancel.
   unbindAll();
@@ -260,13 +278,13 @@ public final class EasAdapter implements AutoCloseable {
  }
 
  private void unbindAll(){List<ServiceConnection> copy;synchronized(bound){copy=new ArrayList<>(bound);bound.clear();}for(ServiceConnection c:copy){try{context.unbindService(c);}catch(Exception e){log("unbind "+e.getClass().getSimpleName());}}}
- @Override public void close(){if(closed)return;closed=true;generation.incrementAndGet();unbindAll();worker.post(()->{release();thread.quitSafely();});}
+ @Override public void close(){if(closed)return;closed=true;playback=PlaybackSnapshot.EMPTY;generation.incrementAndGet();unbindAll();worker.post(()->{release();thread.quitSafely();});}
  private static int actionFor(int raw){switch(raw){case 1:case 30:return 1;case 2:case 31:return 2;case 3:return 4;case 4:return 5;default:return -1;}}
  private static String safe(String s){return s==null?"<null>":s.length()>300?s.substring(0,300):s;}
 
  private final class MusicCallback extends Binder {
-  final int g,type;final PlaybackInfo info;
-  MusicCallback(int g,int type){this.g=g;this.type=type;info=new PlaybackInfo(type);attachInterface(null,MUSIC);}
+  final int g,type;
+  MusicCallback(int g,int type){this.g=g;this.type=type;attachInterface(null,MUSIC);}
   @Override protected boolean onTransact(int code,Parcel data,Parcel reply,int flags)throws RemoteException{
    if(code==IBinder.INTERFACE_TRANSACTION){if(reply!=null)reply.writeString(MUSIC);return true;}
    if(code<1||code>36)return super.onTransact(code,data,reply,flags);
@@ -283,7 +301,7 @@ public final class EasAdapter implements AutoCloseable {
    }
    if(reply!=null)reply.writeNoException();
    switch(code){
-    case 10: if(reply!=null)reply.writeStrongBinder(info);break;
+    case 10: if(reply!=null)reply.writeStrongBinder(playbackInfo);break;
     case 11: if(reply!=null)reply.writeIntArray(new int[]{type});break;
     case 12: if(reply!=null)reply.writeInt(type);break;
     case 13: if(reply!=null)reply.writeLong(playback.position);break;
@@ -308,23 +326,44 @@ public final class EasAdapter implements AutoCloseable {
  }
  private final class PlaybackInfo extends Binder {
   final int type;
-  PlaybackInfo(int type){this.type=type;attachInterface(null,INFO);}
+  final PlaybackSnapshot snapshot;
+  final Uri artwork;
+  final PendingIntent launch;
+  PlaybackInfo(int type){
+   this.type=type;snapshot=playback;
+   Uri cover=null;
+   try{cover=FlymeArtworkProvider.publish(context,snapshot.artwork);}catch(Exception e){error("artwork publish",e);}
+   artwork=cover;
+   PendingIntent intent=null;
+   try{Intent open=context.getPackageManager().getLaunchIntentForPackage(context.getPackageName());
+    if(open!=null)intent=PendingIntent.getActivity(context,0,open,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
+   }catch(Exception e){error("media launch intent",e);}
+   launch=intent;
+   attachInterface(null,INFO);
+  }
+  private void parcelable(Parcel r,android.os.Parcelable value){r.writeInt(value==null?0:1);if(value!=null)value.writeToParcel(r,1);}
   @Override protected boolean onTransact(int code,Parcel d,Parcel r,int flags)throws RemoteException{
    if(code==IBinder.INTERFACE_TRANSACTION){if(r!=null)r.writeString(INFO);return true;}
    if(code<1||code>35)return super.onTransact(code,d,r,flags);
    d.enforceInterface(INFO);if(r==null)return true;r.writeNoException();
    switch(code){
-    case 1:case 10:case 13:case 15:case 16:case 17:case 33:r.writeInt(0);break;
-    case 7:r.writeLong(playback.duration);break;
-    case 11:r.writeInt(!closed&&playback.playing?1:0);break;
-    case 2:r.writeString(playback.title);break;
+    case 1:case 33:parcelable(r,closed?null:launch);break;
+    case 10:case 13:case 15:case 17:parcelable(r,null);break;
+    case 16:parcelable(r,closed?null:artwork);break;
+    case 7:r.writeLong(closed?0:snapshot.duration);break;
+    case 8:case 32:r.writeInt(-1);break;
+    case 34:r.writeInt(0);break;
+    case 11:r.writeInt(!closed&&snapshot.playing?1:0);break;
+    case 2:r.writeString(closed?"":snapshot.title);break;
     case 25:r.writeString("Apple CarPlay");break;
     case 27:r.writeString(context.getPackageName());break;
-    case 3:r.writeString(playback.artist);break;
-    case 4:r.writeString(playback.album);break;
-    case 5:case 6:case 12:case 14:case 24:case 26:case 30:case 35:r.writeString("");break;
+    case 3:r.writeString(closed?"":snapshot.artist);break;
+    case 4:r.writeString(closed?"":snapshot.album);break;
+    case 24:r.writeString(closed?"":snapshot.trackId());break;
+    case 26:{Uri icon=FlymeArtworkProvider.icon(context);r.writeString(icon==null?"":icon.toString());break;}
+    case 5:case 6:case 12:case 14:case 30:case 35:r.writeString("");break;
     case 9:r.writeInt(type);break;
-    default:r.writeInt(0); // OTA playback paused=0; all optional capabilities false.
+    default:r.writeInt(0); // All unimplemented optional capabilities remain false.
    }
    return true;
   }

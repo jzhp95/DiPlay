@@ -98,6 +98,23 @@ class WheelTestActivityTest {
         }
     }
 
+    @Test fun deliveredFlymeVoiceKeyShowsItsRawCodeAsRealInput() {
+        val activity = Robolectric.buildActivity(WheelTestActivity::class.java).setup()
+        try {
+            val screen = activity.get()
+            val probe = ReflectionHelpers.getField<WheelTestController>(screen, "controller")
+            probe.start()
+            assertTrue(screen.dispatchKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, 200231)))
+            assertTrue(screen.dispatchKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, 200231)))
+            val views = ReflectionHelpers.getField<WheelTestLayout.Views>(screen, "views")
+            assertTrue(views.event.text.contains("200231"))
+            assertTrue(views.event.text.contains(screen.getString(R.string.wheel_test_real)))
+            assertEquals(1, probe.snapshot().received)
+            assertEquals(0, probe.snapshot().simulated)
+            assertFalse(probe.snapshot().event!!.simulated)
+        } finally { activity.pause().stop().destroy() }
+    }
+
     private fun descendants(view: View): Sequence<View> = sequence {
         yield(view)
         if (view is ViewGroup) for (i in 0 until view.childCount) yieldAll(descendants(view.getChildAt(i)))
