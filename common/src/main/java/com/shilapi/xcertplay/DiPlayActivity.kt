@@ -81,7 +81,6 @@ import com.shilapi.xcertplay.orchestration.WirelessHotspotMode
 import com.shilapi.xcertplay.settings.SettingsTheme
 import com.shilapi.xcertplay.settings.SettingsWidgets
 import com.shilapi.xcertplay.setup.DiLinkGeneration
-import com.shilapi.xcertplay.setup.SetupGuide
 import com.shilapi.xcertplay.transport.EvChargingConnectors
 import com.shilapi.xcertplay.update.BackgroundUpdateScheduler
 import java.io.File
@@ -161,8 +160,6 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
     internal var ambientSupportCheck: (Context) -> java.util.concurrent.CompletableFuture<Boolean> = AmbientMusicController::checkSupport
     private var settingsCategory = SettingsCategory.OVERVIEW
     private var connectionSettingsReturnCategory: SettingsCategory? = null
-    private var setupStep = SetupGuide.STEP_CAR
-    private var setupFromSettings = false
     private var settingsSectionFilter: Set<SettingsSection>? = null
     private var clusterSafeAreaDialog: Dialog? = null
     private var clusterContentRequestVersion = 0L
@@ -375,11 +372,8 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             ?: SettingsCategory.OVERVIEW
         connectionSettingsReturnCategory = savedInstanceState?.getString("connection_settings_return_category")
             ?.let { runCatching { SettingsCategory.valueOf(it) }.getOrNull() }
-        setupStep = savedInstanceState?.getInt("setup_step") ?: SetupGuide.STEP_CAR
-        setupFromSettings = savedInstanceState?.getBoolean("setup_from_settings") ?: false
         page = if (returningToSession) "home" else savedInstanceState?.getString("page") ?: intent.getStringExtra("page")
-            ?: if (setupError == null && SetupGuide.shouldOpenOnLaunch(SetupGuide.seen(this),
-                    DiPlayPreferences.phoneAddress(this) != null)) "setup" else "home"
+            ?: "home"
         render()
         scheduleAutomaticVehicleValidation()
         handleWirelessRecovery()
@@ -434,8 +428,6 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         connectionSettingsReturnCategory?.let { outState.putString("connection_settings_return_category", it.name) }
         outState.putBoolean("pending_car_hotspot", pendingCarHotspotSetup)
         outState.putBoolean("byd_vehicle_advanced", bydVehicleAdvancedExpanded)
-        outState.putInt("setup_step", setupStep)
-        outState.putBoolean("setup_from_settings", setupFromSettings)
         super.onSaveInstanceState(outState)
     }
     override fun onConfigurationChanged(newConfig: Configuration) {
@@ -504,14 +496,14 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         }
         // Back from the car settings: refresh the car hotspot reminder on the home page.
         if (!initialLaunch && !adbSwitchChangePending && !pausedForAdbSwitchChange &&
-            (page == "home" || page == "settings" || page == "connection" || page == "setup")) render()
+            (page == "home" || page == "settings" || page == "connection")) render()
         startAppearanceUpdates()
         pausedForAdbSwitchChange = false
         if (initialLaunch) {
             initialLaunch = false
             startCarHotspotOnLaunch()
             if (setupError == null && !CarPlayBackgroundSession.hasSession() &&
-                DiPlayPreferences.autoConnect(this) && intent.getStringExtra("page") == null && page != "setup") {
+                DiPlayPreferences.autoConnect(this) && intent.getStringExtra("page") == null) {
                 handler.post { connect(DiPlayPreferences.autoConnectWireless(this)) }
             }
         }
@@ -613,6 +605,8 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
     private fun render() = render(appearanceOnly = false)
 
     private fun render(appearanceOnly: Boolean, preferredFocusTag: Any? = null) {
+        // Older saved state or launch intents may still point at the removed guide.
+        if (page == "setup") page = "home"
         enforceInterfaceSize()
         refreshAppearance()
         applyWindowAppearance()
@@ -688,7 +682,6 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             })
             when (page) {
                 "connection" -> connectionSetup(content)
-                "setup" -> setupGuide(content)
                 "settings" -> settingsCategoryContent(content)
                 "backup" -> backup(content)
                 else -> home(content)
@@ -790,11 +783,6 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                 stopBackupServer()
                 page = "settings"
                 settingsCategory = backupOpenedFrom
-            }
-            page == "setup" && setupStep > SetupGuide.STEP_CAR -> setupStep--
-            page == "setup" -> {
-                closeSetupGuide()
-                return
             }
             page == "connection" && returnCategory != null -> {
                 page = "settings"
@@ -1083,12 +1071,6 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         renderedReadiness = null
         refreshReadiness()
         content.addView(readiness, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(SETTINGS_BLOCK_GAP_DP) })
-        content.addView(button(getString(R.string.setup_guide), false) { openSetupGuide(fromSettings = true) },
-            LinearLayout.LayoutParams(-1, dp(56)).apply { bottomMargin = dp(6) })
-        content.addView(label(getString(R.string.setup_guide_description), 14, MUTED).apply {
-            setPadding(0, 0, 0, dp(20))
-        })
-
         val destinations = listOf(
             SettingsCategory.CONNECTION to R.string.settings_connection_summary,
             SettingsCategory.DISPLAY to R.string.settings_display_summary,
@@ -2027,7 +2009,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         filteredSection(content, SettingsSection.CLUSTER_MAP,
             getString(R.string.carplay_map_on_instrument_cluster_experimental), R.drawable.ic_dp_dashboard) { card ->
             // DiLink 3 makes its own dashboard display; either DiLink 4 route stops that, so offer them only to
-            // turn off, as the setup guide does (#722).
+            // turn off (#722).
             val diLink3 = DiLinkGeneration.current(this) == DiLinkGeneration.DILINK_3
             if (diLink3) {
                 if (AirPlayPersistence.loadDiLink4ClusterRouteEnabled(this)) clusterRouteConflict(card)
@@ -2806,123 +2788,10 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         openSystem(wifi)
     }
 
-    private fun openSetupGuide(fromSettings: Boolean) {
-        setupFromSettings = fromSettings
-        setupStep = SetupGuide.STEP_CAR
-        page = "setup"
-        render()
-    }
-
-    private fun closeSetupGuide(connectNow: Boolean = false) {
-        SetupGuide.markSeen(this)
-        page = if (setupFromSettings) "settings" else "home"
-        setupFromSettings = false
-        setupStep = SetupGuide.STEP_CAR
-        render()
-        if (connectNow) connect(AirPlayPersistence.loadWirelessEnabled(this))
-    }
-
-    private fun dilinkLabel(generation: DiLinkGeneration) = getString(when (generation) {
-        DiLinkGeneration.DILINK_3 -> R.string.dilink_3
-        DiLinkGeneration.DILINK_4 -> R.string.dilink_4
-        DiLinkGeneration.DILINK_5 -> R.string.dilink_5
-        DiLinkGeneration.UNKNOWN -> R.string.dilink_not_sure
-    })
-
-    private fun setupGuide(content: LinearLayout) {
-        val step = setupStep.coerceIn(SetupGuide.STEP_CAR, SetupGuide.STEP_DONE)
-        content.addView(label(getString(R.string.setup_step_of, step + 1, SetupGuide.STEP_COUNT), 13, ACCENT, true)
-            .apply { letterSpacing = .12f })
-        val progress = row().apply { setPadding(0, dp(10), 0, dp(20)) }
-        repeat(SetupGuide.STEP_COUNT) { index ->
-            progress.addView(View(this).apply {
-                background = GradientDrawable().apply {
-                    setColor(if (index <= step) ACCENT else BUTTON); cornerRadius = dp(3).toFloat()
-                }
-            }, LinearLayout.LayoutParams(0, dp(6), 1f).apply { if (index > 0) marginStart = dp(8) })
-        }
-        content.addView(progress)
-        when (step) {
-            SetupGuide.STEP_CAR -> setupCarStep(content)
-            SetupGuide.STEP_CONNECTION -> setupConnectionStep(content)
-            SetupGuide.STEP_IPHONE -> setupIphoneStep(content)
-            SetupGuide.STEP_FEATURES -> setupFeaturesStep(content)
-            else -> setupDoneStep(content)
-        }
-        if (step == SetupGuide.STEP_DONE) return
-        val footer = row().apply { gravity = Gravity.CENTER_VERTICAL; setPadding(0, dp(6), 0, 0) }
-        footer.addView(button(getString(R.string.setup_skip), false) { closeSetupGuide() },
-            LinearLayout.LayoutParams(0, dp(60), 1f))
-        footer.addView(space(16), LinearLayout.LayoutParams(dp(16), 1))
-        footer.addView(button(getString(R.string.setup_next), true) {
-            if (step == SetupGuide.STEP_CAR && SetupGuide.applyFirstSetupDefaults(this,
-                    DiLinkGeneration.confirmed(this) ?: DiLinkGeneration.detect().generation,
-                    phoneChosen = DiPlayPreferences.phoneAddress(this) != null)) markReconnectNeeded()
-            setupStep = step + 1; render()
-        },
-            LinearLayout.LayoutParams(0, dp(60), 1f))
-        content.addView(footer)
-    }
-
-    private fun setupTitle(content: LinearLayout, title: Int, description: String) {
-        content.addView(label(getString(title), 34, TEXT, true))
-        content.addView(label(description, 17, MUTED).apply { setPadding(0, dp(8), 0, dp(24)) })
-    }
-
-    private fun setupCarStep(content: LinearLayout) {
-        val detection = DiLinkGeneration.detect()
-        val selected = DiLinkGeneration.confirmed(this) ?: detection.generation
-        setupTitle(content, R.string.setup_car_title, when (detection.source) {
-            DiLinkGeneration.Source.SYSTEM_VERSION -> getString(R.string.setup_car_detected, dilinkLabel(detection.generation))
-            DiLinkGeneration.Source.LIKELY -> getString(R.string.setup_car_likely, dilinkLabel(detection.generation))
-            DiLinkGeneration.Source.NONE -> getString(R.string.setup_car_unknown)
-        })
-        val card = card()
-        card.addView(label(getString(R.string.setup_car_choose), 22, TEXT, true))
-        val wide = resources.configuration.screenWidthDp >= 850
-        val choices = if (wide) row() else column()
-        DiLinkGeneration.entries.forEachIndexed { index, generation ->
-            val chosen = generation == selected
-            choices.addView(button("${if (chosen) "✓  " else ""}${dilinkLabel(generation)}", chosen) {
-                DiLinkGeneration.save(this, generation)
-                render()
-            }, if (wide) LinearLayout.LayoutParams(0, dp(60), 1f).apply {
-                topMargin = dp(12); if (index > 0) marginStart = dp(12)
-            } else matchButton(12, 60))
-        }
-        card.addView(choices)
-        detection.evidence?.let {
-            card.addView(label(getString(R.string.setup_car_evidence, it), 13, MUTED).apply { setPadding(0, dp(16), 0, 0) })
-        }
-        content.addView(card, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(SETTINGS_BLOCK_GAP_DP) })
-    }
-
-    private fun setupConnectionStep(content: LinearLayout) {
-        setupTitle(content, R.string.setup_connection_title, getString(R.string.setup_connection_description))
-        val card = card()
-        wirelessLinkControls(card)
-        content.addView(card, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(SETTINGS_BLOCK_GAP_DP) })
-    }
-
     /** "Choose iPhone · <name>" once an iPhone is chosen. Before that there is no name to show, only "Choose iPhone". */
     private fun chooseIphoneTitle(): String =
         if (DiPlayPreferences.phoneAddress(this) == null) getString(R.string.choose_iphone)
         else "${getString(R.string.choose_iphone_prefix)}${DiPlayPreferences.phoneName(this)}"
-
-    private fun setupIphoneStep(content: LinearLayout) {
-        setupTitle(content, R.string.setup_iphone_title, getString(R.string.keep_bluetooth_and_wi_fi_on_your_iphone_pair_with_the_car))
-        val card = card()
-        val chosen = DiPlayPreferences.phoneAddress(this) != null
-        card.addView(label(if (chosen) DiPlayPreferences.phoneName(this) else getString(R.string.setup_iphone_none), 22,
-            if (chosen) READY else TEXT, true))
-        card.addView(button(chooseIphoneTitle(), !chosen) {
-            choosePhone()
-        }, matchButton(16, 60))
-        card.addView(button(getString(R.string.review_app_permissions), false) {
-            openSystem(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
-        }, matchButton(12, 60))
-        content.addView(card, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(SETTINGS_BLOCK_GAP_DP) })
-    }
 
     /** The warning and the button that turn both DiLink 4 cluster routes off (saving the ADB route clears both). */
     private fun clusterRouteConflict(parent: LinearLayout) {
@@ -2933,87 +2802,6 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             markReconnectNeeded()
             render()
         }, matchButton(12, 56))
-    }
-
-    private fun setupFeaturesStep(content: LinearLayout) {
-        val generation = DiLinkGeneration.current(this)
-        setupTitle(content, R.string.setup_features_title, getString(R.string.setup_features_description,
-            dilinkLabel(generation)))
-        if (SetupGuide.hasConflictingClusterRoute(generation, AirPlayPersistence.loadDiLink4ClusterRouteEnabled(this))) {
-            val warning = card()
-            clusterRouteConflict(warning)
-            content.addView(warning, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(SETTINGS_BLOCK_GAP_DP) })
-        }
-        val card = card()
-        SetupGuide.features(generation).forEach { entry ->
-            val before = card.childCount
-            when (entry.feature) {
-                SetupGuide.Feature.AUTO_CONNECT -> toggle(card, getString(R.string.connect_when_diplay_opens),
-                    getString(R.string.default_connection_description), DiPlayPreferences.autoConnect(this)) {
-                    DiPlayPreferences.saveAutoConnect(this, it)
-                }
-                SetupGuide.Feature.LOCATION -> toggle(card, getString(R.string.report_location_to_iphone),
-                    getString(R.string.sends_precise_android_location_as_carplay_gps_data_when_th),
-                    AirPlayPersistence.loadLocationReportingEnabled(this), save = ::onLocationReportingChanged)
-                SetupGuide.Feature.CLUSTER_MAP -> reconnectingToggle(card,
-                    getString(R.string.carplay_map_on_instrument_cluster_experimental),
-                    getString(R.string.shows_the_iphone_s_cluster_map_on_the_instrument_cluster_c),
-                    AirPlayPersistence.loadClusterMapEnabled(this)) {
-                    AirPlayPersistence.saveClusterMapEnabled(this, it)
-                    render()
-                }
-                SetupGuide.Feature.DILINK4_ADB_CLUSTER -> reconnectingToggle(card,
-                    getString(R.string.adb_cluster_activity_mode), getString(R.string.adb_cluster_activity_description),
-                    AirPlayPersistence.loadAdbClusterEnabled(this)) {
-                    AirPlayPersistence.saveAdbClusterEnabled(this, it)
-                    ClusterActivityOutput.stopForSettings()
-                    render()
-                }
-                SetupGuide.Feature.BYD_NAVIGATION -> if (BydOutputSettings.available(this)) {
-                    toggle(card, getString(R.string.navigation_on_hud_and_instrument_cluster),
-                        getString(R.string.show_phone_navigation_arrows_distance_and_street_names_on),
-                        BydOutputSettings.enabled(this)) { BydOutputSettings.setEnabled(this, it) }
-                }
-                SetupGuide.Feature.CALLS_ON_DASHBOARD -> toggle(card, getString(R.string.carplay_calls_on_dashboard),
-                    getString(R.string.carplay_calls_on_dashboard_description),
-                    BydOutputSettings.carPlayCalls(this), enabled = !adbSwitchChangePending) { applyCarPlayCalls(it) }
-                SetupGuide.Feature.CALL_KEYS -> toggle(card, getString(R.string.carplay_call_controls_experimental),
-                    getString(R.string.carplay_call_controls_experimental_description),
-                    BydOutputSettings.carPlayCallControls(this)) { applyCallKeys(it) }
-            }
-            if (card.childCount > before) card.addView(setupBadges(entry))
-        }
-        content.addView(card, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(SETTINGS_BLOCK_GAP_DP) })
-    }
-
-    private fun setupBadges(entry: SetupGuide.Entry): LinearLayout = row().apply {
-        setPadding(0, dp(2), 0, dp(14))
-        fun badge(text: String, color: Int) = label(text, 12, color, true).apply {
-            background = GradientDrawable().apply {
-                setColor(Color.TRANSPARENT); cornerRadius = dp(10).toFloat(); setStroke(dp(1), color)
-            }
-            setPadding(dp(10), dp(3), dp(10), dp(3))
-        }
-        val tested = entry.status == SetupGuide.Status.TESTED
-        addView(badge(getString(if (tested) R.string.setup_badge_tested else R.string.setup_badge_experimental),
-            if (tested) READY else WARNING), LinearLayout.LayoutParams(-2, -2))
-        if (entry.needsAdb) addView(badge(getString(R.string.setup_badge_adb), ACCENT),
-            LinearLayout.LayoutParams(-2, -2).apply { marginStart = dp(8) })
-    }
-
-    private fun setupDoneStep(content: LinearLayout) {
-        setupTitle(content, R.string.setup_done_title, getString(R.string.setup_done_description))
-        val card = card()
-        card.addView(button(getString(R.string.connect_phone), true) { closeSetupGuide(connectNow = true) }, matchButton(0, 60))
-        card.addView(button(getString(R.string.settings), false) {
-            SetupGuide.markSeen(this)
-            setupFromSettings = false
-            setupStep = SetupGuide.STEP_CAR
-            page = "settings"
-            render()
-        }, matchButton(12, 60))
-        card.addView(button(getString(R.string.done), false) { closeSetupGuide() }, matchButton(12, 60))
-        content.addView(card, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(SETTINGS_BLOCK_GAP_DP) })
     }
 
     private fun connectionSetup(content: LinearLayout) {

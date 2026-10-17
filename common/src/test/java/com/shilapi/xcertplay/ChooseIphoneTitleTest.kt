@@ -6,11 +6,9 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
 import com.shilapi.xcertplay.host.R
-import com.shilapi.xcertplay.setup.SetupGuide
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -45,13 +43,9 @@ class ChooseIphoneTitleTest {
         Intent(context, DiPlayActivity::class.java).putExtra("page", page),
     ).setup().get().also { opened += it }
 
-    /** Connection setup, the setup guide's iPhone step, and Settings → Connection: each has the button. */
+    /** Connection setup and Settings → Connection both retain the iPhone picker. */
     private fun pages(): List<Pair<String, DiPlayActivity>> = listOf(
         "connection setup" to open("connection"),
-        "setup guide" to open("setup").also {
-            ReflectionHelpers.setField(it, "setupStep", SetupGuide.STEP_IPHONE)
-            ReflectionHelpers.callInstanceMethod<Unit>(it, "render")
-        },
         "settings" to open("settings").also {
             ReflectionHelpers.setField(it, "settingsCategory", SettingsCategory.CONNECTION)
             ReflectionHelpers.callInstanceMethod<Unit>(it, "render")
@@ -77,12 +71,16 @@ class ChooseIphoneTitleTest {
         }
     }
 
-    @Test fun theSetupGuideNoLongerNamesAnIphoneUnderNoIphoneChosenYet() {
-        val (_, guide) = pages()[1]
-        val shown = texts(guide)
-        val none = shown.indexOf(guide.getString(R.string.setup_iphone_none))
-        assertTrue(shown.toString(), none >= 0)
-        assertEquals(guide.getString(R.string.choose_iphone), shown[none + 1])
+    @Test fun aLegacyGuideIntentReturnsHomeWithoutShowingTheWizard() {
+        val screen = open("setup")
+        assertEquals("home", ReflectionHelpers.getField<String>(screen, "page"))
+        assertFalse(texts(screen).contains(screen.getString(R.string.setup_car_title)))
+    }
+
+    @Test fun settingsOverviewDoesNotOfferTheRemovedGuide() {
+        val screen = open("settings")
+        assertFalse(texts(screen).contains(screen.getString(R.string.setup_guide)))
+        assertFalse(texts(screen).contains(screen.getString(R.string.setup_guide_description)))
     }
 
     @Test fun aChosenIphoneIsNamedOnTheButton() {
