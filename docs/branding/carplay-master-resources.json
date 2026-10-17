@@ -1,0 +1,163 @@
+{
+  "apk": "Apple CarPlay_master_20251010_1554.apk.1",
+  "apk_sha256": "fcd4bb55dfbb1ee928ec34803a747f9f35f630ff495cf1b92242474a15e58a72",
+  "package": "com.ts.carplaypermission",
+  "version_name": "master_20251010_1554",
+  "resources": [
+    {
+      "source": "drawable/allmenu_carplay.png",
+      "source_sha256": "83ee75ff625b6291609d499ece702c76e6e4c76cf4a45444cf847e190ac9b624",
+      "destination": "common/src/main/res/drawable/ic_carplay.png",
+      "sha256": "83ee75ff625b6291609d499ece702c76e6e4c76cf4a45444cf847e190ac9b624",
+      "adaptation": "byte-identical"
+    },
+    {
+      "source": "drawable/allmenu_carplay.png",
+      "source_sha256": "83ee75ff625b6291609d499ece702c76e6e4c76cf4a45444cf847e190ac9b624",
+      "destination": "shared/src/main/res/drawable/ic_carplay_launcher.png",
+      "sha256": "83ee75ff625b6291609d499ece702c76e6e4c76cf4a45444cf847e190ac9b624",
+      "adaptation": "byte-identical"
+    },
+    {
+      "source": "drawable/fa_ic_common_wifi.xml",
+      "source_sha256": "b1a954760f3c3a550783ba2c4f020648e7aaadd992d16844ee4b6f12990d2e93",
+      "destination": "common/src/main/res/drawable/ic_home_wifi.xml",
+      "sha256": "8363a4f8c94b74e8649964ae6cede6edbd6f7af2697c7bc43b3a6743c7c1f97f",
+      "adaptation": "24dp intrinsic size; white base fill for existing caller tint; preserve viewport, geometry and alpha"
+    },
+    {
+      "source": "drawable/fa_ic_common_link.xml",
+      "source_sha256": "6140502271cc6058270a1801cc4ac63ecb88e19422868fdef4209bf90c22df94",
+      "destination": "common/src/main/res/drawable/ic_home_link.xml",
+      "sha256": "edd2f2756632f3f7a14ffd4c16967f12c4b64c4bdb541d45032f048619ad1c44",
+      "adaptation": "24dp intrinsic size; white base fill for existing caller tint; preserve viewport, geometry and alpha"
+    },
+    {
+      "source": "drawable/fa_ic_common_volume_high.xml",
+      "source_sha256": "26278ac0e62d9a1826e0e14d873e446b2cba1451fe378c9a83578ba06512143b",
+      "destination": "common/src/main/res/drawable/ic_dp_audio.xml",
+      "sha256": "a5a9cd8d43d185fefe38c720ab21ebf15ec11e29e38510cfaa22bd0f59bf5c04",
+      "adaptation": "24dp intrinsic size; white base fill for existing caller tint; preserve viewport, geometry and alpha"
+    },
+    {
+      "source": "drawable/fa_ic_common_display.xml",
+      "source_sha256": "87edb38b81d15ec41548f1160a7d9456e656579003a98a1e2096a628efc1b4d3",
+      "destination": "common/src/main/res/drawable/ic_dp_display.xml",
+      "sha256": "63316614043016f794d8d1ca92511003958da864095ddb210a1cb13e51d433bc",
+      "adaptation": "24dp intrinsic size; white base fill for existing caller tint; preserve viewport, geometry and alpha"
+    },
+    {
+      "source": "drawable/fa_ic_common_home.xml",
+      "source_sha256": "af1a3f4d299dcbd2cf7f9eb35c3b503965ffa7c23857c0330f6f00c5b0499504",
+      "destination": "common/src/main/res/drawable/ic_dp_home.xml",
+      "sha256": "6fc38b49485f39cc3254712565164f0a3dca6663f4cbe8d75033cefd88624c21",
+      "adaptation": "24dp intrinsic size; white base fill for existing caller tint; preserve viewport, geometry and alpha"
+    },
+    {
+      "source": "drawable/fa_ic_common_info.xml",
+      "source_sha256": "f975509d7b39f2559b7885a9a52959af327b251318ae747b75b4e7a3c41f2a3f",
+      "destination": "common/src/main/res/drawable/ic_dp_about.xml",
+      "sha256": "840f44ffedc273f3deccf9822cd4260eec473ff3005f104ac8bcdf4025c01816",
+      "adaptation": "24dp intrinsic size; white base fill for existing caller tint; preserve viewport, geometry and alpha"
+    },
+    {
+      "source": "drawable/fa_ic_common_brightness_fill.xml",
+      "source_sha256": "5580d0d88fe8748fc2fdd1c4f50cd429ec2c4ae9619942641f714aaedb28168f",
+      "destination": "common/src/main/res/drawable/ic_dp_day.xml",
+      "sha256": "32f41c97f661e99813bf9afb59bae7aae9ce2349ef330804afd8a03375e5fb3a",
+      "adaptation": "24dp intrinsic size; white base fill for existing caller tint; preserve viewport, geometry and alpha"
+    },
+    {
+      "source": "drawable/fa_ic_common_lock.xml",
+      "source_sha256": "1349bc041d0c0c40395e7d0ee3cd55cd9185096bb21ebda6f5b09b8b0c0983a0",
+      "destination": "common/src/main/res/drawable/ic_dp_permissions.xml",
+      "sha256": "86ac73ac5eea654cd6e2d3564208159b8289b3bbc61435bffca1ffcd99a94e46",
+      "adaptation": "24dp intrinsic size; white base fill for existing caller tint; preserve viewport, geometry and alpha"
+    },
+    {
+      "source": "drawable/fa_ic_common_navigation_fill.xml",
+      "source_sha256": "74d525276b50e62a5da5b3241b6bc24a74b238fa1e70f74079d13e54e6c8ff8e",
+      "destination": "common/src/main/res/drawable/ic_dp_navigation.xml",
+      "sha256": "57133f311fea72ddbf0f7ff6c05ce512878c4d5590b1e7843e3ce85e235e4cec",
+      "adaptation": "24dp intrinsic size; white base fill for existing caller tint; preserve viewport, geometry and alpha"
+    },
+    {
+      "source": "drawable/fa_ic_common_search.xml",
+      "source_sha256": "70865e223dc5bc0a0a5d0a31a756344b23513325e5652de673a1fc5a251ad9c5",
+      "destination": "common/src/main/res/drawable/ic_dp_search.xml",
+      "sha256": "8a1cf988155805cd1c448da2d22bdbba414f59781ccbdd51904665f3f363ddf9",
+      "adaptation": "24dp intrinsic size; white base fill for existing caller tint; preserve viewport, geometry and alpha"
+    },
+    {
+      "source": "drawable/fa_ic_common_arrow_line_left.xml",
+      "source_sha256": "cff8f5d8a65c832d333f8f3669795a716ecf5c43ecc9fa9c8b1c6ff2d4e30efe",
+      "destination": "common/src/main/res/drawable/ic_dp_back.xml",
+      "sha256": "380a3b270d7154d898b4fc6786a495db6ec2603ceee1fc20bebc6ad0e3d9655a",
+      "adaptation": "24dp intrinsic size; white base fill for existing caller tint; preserve viewport, geometry and alpha"
+    },
+    {
+      "source": "drawable/fa_ic_common_arrow_line_right.xml",
+      "source_sha256": "7300c8afe7eeb82c1df684f5679964abd566c3ff3de527b1d82d1d55c51bb037",
+      "destination": "common/src/main/res/drawable/ic_dp_chevron.xml",
+      "sha256": "36c0fe9b0cb6f32e24b90bdd95ccfe0411380baddd47beb5d7c244fd6ad2fbda",
+      "adaptation": "24dp intrinsic size; white base fill for existing caller tint; preserve viewport, geometry and alpha"
+    },
+    {
+      "source": "drawable/fa_ic_common_setting.xml",
+      "source_sha256": "cdbb826ebdf9287fc275ed5f8d2eb8f3f3a0eb1f505708fc5c13db5fd44f9d44",
+      "destination": "common/src/main/res/drawable/ic_dp_advanced.xml",
+      "sha256": "f68b92a758934e4c7790f200b7ea413cf89ba2ad05a1e9815f06246d84830a85",
+      "adaptation": "24dp intrinsic size; white base fill for existing caller tint; preserve viewport, geometry and alpha"
+    },
+    {
+      "source": "drawable/fa_ic_common_apps.xml",
+      "source_sha256": "f4dfa43ddfda253ab68cb1a0556236b725aeefc2969de59f7bc830c7711964fa",
+      "destination": "common/src/main/res/drawable/ic_dp_overview.xml",
+      "sha256": "b0553ac57aec2279f25c77562d71b5bf7d4aa3f0cb109806e2495fdda8dba858",
+      "adaptation": "24dp intrinsic size; white base fill for existing caller tint; preserve viewport, geometry and alpha"
+    },
+    {
+      "source": "drawable/fa_ic_common_warning.xml",
+      "source_sha256": "0ec9d37caceeaaf92992bc473879ecb3ab4320cba43d265a09be5aaaf00c0c6a",
+      "destination": "common/src/main/res/drawable/ic_dp_diagnostics.xml",
+      "sha256": "c52f6a493f9d4b4cd90bed2ba2800439745c8d132c975685678473cb2f9f441e",
+      "adaptation": "24dp intrinsic size; white base fill for existing caller tint; preserve viewport, geometry and alpha"
+    },
+    {
+      "source": "drawable/fa_ic_common_adjust.xml",
+      "source_sha256": "9f4309c44f3dc9300ab83a2136f6613b80043949b6726039e27f5fa940a0ccdf",
+      "destination": "common/src/main/res/drawable/ic_dp_controls.xml",
+      "sha256": "d6abc77fa94a3add8b22d9b9c23eedb6a89aa2aa858c60e96fa801586878f91f",
+      "adaptation": "24dp intrinsic size; white base fill for existing caller tint; preserve viewport, geometry and alpha"
+    },
+    {
+      "source": "drawable/fa_ic_common_link.xml",
+      "source_sha256": "6140502271cc6058270a1801cc4ac63ecb88e19422868fdef4209bf90c22df94",
+      "destination": "common/src/main/res/drawable/ic_dp_connection.xml",
+      "sha256": "edd2f2756632f3f7a14ffd4c16967f12c4b64c4bdb541d45032f048619ad1c44",
+      "adaptation": "24dp intrinsic size; white base fill for existing caller tint; preserve viewport, geometry and alpha"
+    }
+  ],
+  "generated_launcher_adapters": [
+    {
+      "destination": "shared/src/main/res/mipmap-anydpi/ic_launcher.xml",
+      "sha256": "bd9262892b5e332c16188e16bba12f027519ccb2942b0e651176d2340d215215"
+    },
+    {
+      "destination": "shared/src/main/res/mipmap-anydpi/ic_launcher_round.xml",
+      "sha256": "bd9262892b5e332c16188e16bba12f027519ccb2942b0e651176d2340d215215"
+    },
+    {
+      "destination": "shared/src/main/res/mipmap-anydpi-v26/ic_launcher.xml",
+      "sha256": "56fc27aee76a53774f8e3d71912be5fb3196ddbfabd0f99a960d54e853ea60b0"
+    },
+    {
+      "destination": "shared/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml",
+      "sha256": "56fc27aee76a53774f8e3d71912be5fb3196ddbfabd0f99a960d54e853ea60b0"
+    },
+    {
+      "destination": "shared/src/main/res/drawable-v26/ic_carplay_launcher_foreground.xml",
+      "sha256": "ecb253180b0bb8bc43eb3f2570741b94b7c22b8c6e97b214aad68f004b9f1a92"
+    }
+  ]
+}

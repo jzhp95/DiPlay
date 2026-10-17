@@ -1,24 +1,45 @@
-# CarPlay 图形资源来源
+# CarPlay 图形资源适配
 
-本次资源提取自用户指定的 `Apple CarPlay_sign.apk(1).1`，包名
-`com.ganfandw.carplay`，版本 `1.3.2`（1302）。APK SHA-256：
-`fdf8ab7aee2bcb236b80a0e0cca28bf367236352c49dafa1754659a5224b0298`。
-这记录了输入文件身份，不代表对发行方身份的认证。
+## 当前来源
 
-## 已接入的资源
+使用用户指定的 `Apple CarPlay_master_20251010_1554.apk.1`：
 
-- 桌面图标：mdpi、hdpi、xhdpi、xxhdpi、xxxhdpi 五档普通、圆形、背景、前景和单色图层，均放在 `shared/src/main/res/`。
-- 自适应图标：原 APK 的两个 `mipmap-anydpi` XML 移到 `mipmap-anydpi-v26`，内容保持原样。当前应用支持 Android 7.1（API 25），此版本使用各密度位图；Android 8 及以上使用自适应图标，避免旧系统读取不支持的标签。
-- 应用内 Logo：替换 `common` 的 `ic_carplay.png`，首页、页面标题及其他原有引用沿用原资源 ID。
-- 对应的无线、有线连接、音频、显示、主页、关于、按键、仪表、日间、权限和通知图标：保留当前项目资源 ID，使用 APK 中对应图形。
-- 手机应用 Manifest 分别使用 `@mipmap/ic_launcher` 和 `@mipmap/ic_launcher_round`，普通及 UID 构建共用这些资源。
+- 包名：`com.ts.carplaypermission`
+- 版本：`master_20251010_1554`，versionCode 1
+- APK SHA-256：`fcd4bb55dfbb1ee928ec34803a747f9f35f630ff495cf1b92242474a15e58a72`
+- 全部资源解码位置：仓库外 `../extracted-carplay-master-20251010/`
 
-逐项来源、目的路径和 SHA-256 见 `carplay-sign-resources.json`。文件按原字节复制，没有重新绘制、压缩或给图标追加缩小边距。原包没有对应图形的图标继续使用项目现有资源。首页 Logo 原图是 512×300，现有 FIT_CENTER 行为保留。
+以上身份来自原 APK 的静态检查，不代表发行方真实性认证。此前绿色 `com.ganfandw.carplay` 包的桌面图标配置由本次适配替代。
 
-## 范围与验证
+## 桌面和应用内标志
 
-仅替换图形资源和桌面图标引用，不导入源 APK 的代码、Manifest 权限、主题、布局或认证文件，不修改连接与方控逻辑。完整解码结果保存在仓库外的 `../extracted-carplay-sign-1.3.2/`；不要将完整解码目录加入版本管理。
+原 Manifest 的主图标指向 `@drawable/allmenu_carplay`，即 200×200 的白底黑色 CarPlay 标志。该 PNG 原字节复制到：
 
-可以检查 JSON 中的散列确认资源未变。桌面图标尺寸和外形还受车机启动器遮罩及缓存影响，需要重新安装后实车确认；不能据此承诺某个启动器上的显示大小。
+- `common/src/main/res/drawable/ic_carplay.png`：沿用应用内 Logo 的现有引用。
+- `shared/src/main/res/drawable/ic_carplay_launcher.png`：提供桌面图标独立依赖，避免 shared 反向依赖 common。
 
-本次验证：39 个资源的来源散列一致；AAPT2 编译和链接通过；独立资源测试确认 API 25 选择普通位图，API 29/33 选择自适应图标，后两者原生渲染及相关矢量图标加载通过。API 25 测试环境对 WebP 的绘制返回空白占位，不能据此证明旧系统实机显示，仍需设备验证。项目 CI 命令已尝试，但 Gradle wrapper 无法写入用户缓存中的 `.zip.lck`（`Operation not permitted`），未完成整包构建。
+原包 `roundIcon` 指向的自适应图标包含 Android 默认机器人和网格背景，与主 CarPlay 图标不一致，因此不导入。当前应用采用如下兼容适配：
+
+- API 25：`mipmap-anydpi` 的 48dp 图层包装，使用原 PNG。
+- API 26+：`mipmap-anydpi-v26` 的白色背景和原 PNG 前景；前景四侧各留 8% 自适应遮罩余量。
+- 普通和圆形入口均引用同一 CarPlay 标志，最终轮廓由桌面遮罩决定。
+- 没有额外声明单色图层：原 PNG 带白底，不能直接作为透明的单色标志。
+- 删除此前绿色桌面位图和图层，防止特定密度选择到旧图。
+
+这是围绕原主图标制作的 Android 兼容包装，并非原 APK 默认圆形素材的直接复制。普通版和 UID 版使用相同资源。
+
+## 界面图标
+
+从原包 Flyme 图形资源中按用途映射到项目现有资源 ID，共 17 个界面图标位置：无线、有线连接、连接设置、音频、显示、主页、关于、日间、权限、导航、搜索、返回、右箭头、高级、概览、诊断和控制。
+
+矢量路径、viewport、透明度保持不变，仅将尺寸统一为当前界面的 24dp，并将依赖 `?colorLabelLevel1`、`?colorFaLabelL1` 等主题的填色转换为白色基础色；当前界面已有的 tint 继续控制最终颜色。这避免引入 Flyme 主题、尺寸资源和 UI 库。
+
+源包中的其他图形仍可在完整解码目录中查阅。无对应用途的素材、系统和第三方库图形不批量导入；其他现有图标保留。没有更换布局、主题、连接或方控逻辑，也没有导入原 APK 的代码或认证文件。
+
+## 清单和验证
+
+`carplay-master-resources.json` 记录了 19 个提取资源目标（17 个界面位置及两份原 PNG）、原文件散列、适配后散列，以及 5 个生成的桌面 XML 包装。
+
+桌面最终显示还受车机启动器遮罩和图标缓存影响，需要更新安装后实车确认。
+
+本次检查：AAPT2 资源编译和链接通过；API 25/29/33 的桌面普通、圆形图标及应用内 Logo 加载和绘制通过，黑色标志没有触及裁切边缘；API 29/33 的 17 个界面矢量图标渲染通过。API 25 测试环境只能验证矢量资源加载，不能验证其实际绘制，仍需旧系统实机检查。`git diff --check` 和公开目录凭据检查通过。项目 CI 命令已尝试，Gradle wrapper 因无法写入用户缓存的 `.zip.lck`（`Operation not permitted`）而退出，未完成整包构建。
