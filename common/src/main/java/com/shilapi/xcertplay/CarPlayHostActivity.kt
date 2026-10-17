@@ -5123,6 +5123,7 @@ class CarPlayHostActivity : ComponentActivity() {
             },
             mediaBufferMillis = AirPlayPersistence.loadMediaBufferMillis(this, wireless = wirelessEnabled),
             onAudioDiagnostic = { message ->
+                DetailedDebugLog.record("audio", "generation=$controllerGeneration $message")
                 if (message.startsWith("Microphone: ")) {
                     AsyncDiagnosticLog.append(diagnosticLog, message)
                 } else {
@@ -5164,6 +5165,7 @@ class CarPlayHostActivity : ComponentActivity() {
             }
 
             override fun onSessionActive(session: AirPlaySession) {
+                DetailedDebugLog.record("connection", "session active generation=$controllerGeneration current=$restartGeneration")
                 runOnUiThread {
                     if (controllerGeneration != restartGeneration) {
                         return@runOnUiThread
@@ -5206,6 +5208,7 @@ class CarPlayHostActivity : ComponentActivity() {
             }
 
             override fun onSessionEnded(session: AirPlaySession) {
+                DetailedDebugLog.record("connection", "session ended generation=$controllerGeneration current=$restartGeneration")
                 runOnUiThread {
                     val active = activeAirPlaySession
                     if (active != null && active !== session) {
@@ -5233,6 +5236,7 @@ class CarPlayHostActivity : ComponentActivity() {
             }
 
             override fun onTransportError(message: String) {
+                DetailedDebugLog.record("connection", "transport error generation=$controllerGeneration $message")
                 runOnUiThread {
                     if (controllerGeneration != restartGeneration || startupRetryStopped) return@runOnUiThread
                     callPopupSessionReady = false
@@ -5251,6 +5255,7 @@ class CarPlayHostActivity : ComponentActivity() {
             }
 
             override fun onDebugLog(message: String) {
+                DetailedDebugLog.record("protocol", "generation=$controllerGeneration $message")
                 if (DiagnosticRedactor.redact(message) == null) return
                 if (message.startsWith(CarPlayController.CONNECTION_DIAGNOSTIC_PREFIX + " ")) {
                     // Retain old-controller teardown evidence without accepting its UI/session state.
@@ -5266,7 +5271,7 @@ class CarPlayHostActivity : ComponentActivity() {
                     if (message.startsWith(PROTOCOL_TRACE_PREFIX)) {
                         appendFileLog(message)
                     } else {
-                        appendLog(message)
+                        appendLog(message, recordDetail = false)
                     }
                 }
             }
@@ -5275,6 +5280,7 @@ class CarPlayHostActivity : ComponentActivity() {
     private fun createStatusReporter(
         controllerGeneration: Int,
     ): (CarPlayStatus) -> Unit = report@{ status ->
+        DetailedDebugLog.record("connection-stage", "generation=$controllerGeneration current=$restartGeneration stage=${status.javaClass.simpleName} menuOpen=$menuOpen")
         if (controllerGeneration != restartGeneration) return@report
         if (status is CarPlayStatus.Failed || status is CarPlayStatus.ControlEnded) {
             callPopupSessionReady = false
@@ -6462,7 +6468,10 @@ class CarPlayHostActivity : ComponentActivity() {
         else -> getString(R.string.getting_carplay_ready)
     }
 
-    private fun appendLog(message: String) {
+    private fun appendLog(message: String) = appendLog(message, recordDetail = true)
+
+    private fun appendLog(message: String, recordDetail: Boolean) {
+        if (recordDetail) DetailedDebugLog.record("host", message)
         val safe = DiagnosticRedactor.redact(message) ?: return
         sessionLog?.append(formattedLogLine(safe, System.currentTimeMillis()))
     }
@@ -6692,6 +6701,7 @@ internal object CarPlayBackgroundSession {
     private val stopWaiters = mutableListOf<() -> Unit>()
 
     fun stop(completion: () -> Unit = {}) {
+        DetailedDebugLog.record("session", "stop requested")
         val action: (((() -> Unit)) -> Unit)?
         synchronized(this) {
             if (stopping) { stopWaiters.add(completion); return }
@@ -6700,6 +6710,7 @@ internal object CarPlayBackgroundSession {
         }
         if (action == null) { completion(); return }
         action.invoke {
+            DetailedDebugLog.record("session", "stop completed")
             val callbacks = synchronized(this) {
                 stopping = false
                 stopWaiters.toList().also { stopWaiters.clear() }
@@ -6733,6 +6744,7 @@ internal object CarPlayBackgroundSession {
     @Synchronized
     fun store(controller: CarPlayController, sink: AndroidMediaSink, width: Int, height: Int,
         owner: Any, display: CarPlaySessionDisplay, stop: (() -> Unit) -> Unit) {
+        DetailedDebugLog.record("session", "store controller=${System.identityHashCode(controller)} size=${width}x$height")
         if (this.controller !== controller) callPopupReady = false
         this.stopAction = stop
         this.owner = owner
@@ -6746,6 +6758,7 @@ internal object CarPlayBackgroundSession {
     @Synchronized
     fun clear(expected: CarPlayController? = null, keepOwner: Boolean = false) {
         if (expected != null && controller !== expected) return
+        DetailedDebugLog.record("session", "clear keepOwner=$keepOwner")
         controller = null
         sink = null
         if (!keepOwner) { stopAction = null; owner = null }

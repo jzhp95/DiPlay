@@ -32,12 +32,16 @@ internal object WheelKeyLog {
 
     @Synchronized
     fun bound(nowMillis: Long = System.currentTimeMillis()) {
+        DetailedDebugLog.record("wheel-service", "bound")
         boundAtMillis = nowMillis
     }
 
     /** A line the service also writes to logcat. */
     @Synchronized
-    fun note(message: String, nowMillis: Long = System.currentTimeMillis()) = add(message, nowMillis)
+    fun note(message: String, nowMillis: Long = System.currentTimeMillis()) {
+        DetailedDebugLog.record("wheel", message)
+        add(message, nowMillis)
+    }
 
     /** [text] is a key that writes text; [detail] says which feature kept the key or why one did not. */
     @Synchronized
@@ -49,6 +53,7 @@ internal object WheelKeyLog {
         }
         presses++
         if (kept) this.kept++
+        DetailedDebugLog.record("wheel-input", "key=$code scan=$scan device=$device kept=$kept detail=${detail ?: "none"}")
         add("key $code/$scan device $device ${if (kept) "kept" else "left to the head unit"}" +
             (detail?.let { ": $it" } ?: ""), nowMillis)
     }

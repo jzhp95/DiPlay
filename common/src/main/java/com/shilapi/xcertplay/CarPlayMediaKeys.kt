@@ -79,6 +79,7 @@ internal object CarPlayMediaKeys {
         }
         appContext = context.applicationContext
         controller = next
+        DetailedDebugLog.record("media", "attach controller=${System.identityHashCode(next)}")
         FlymeWheelIntegration.attach(context, next)
         GeelyWheelKeys.start(context)
         com.shilapi.xcertplay.media.AmbientMusicController.claimPlaybackOwner(next)
@@ -97,6 +98,7 @@ internal object CarPlayMediaKeys {
     @Synchronized
     fun detach(expected: CarPlayController?) {
         if (expected == null || controller !== expected) return
+        DetailedDebugLog.record("media", "detach controller=${System.identityHashCode(expected)}")
         FlymeWheelIntegration.detach(expected)
         com.shilapi.xcertplay.media.AmbientMusicController.releasePlaybackOwner(expected)
         expected.playbackListener = null
@@ -109,11 +111,13 @@ internal object CarPlayMediaKeys {
 
     /** Called when CarPlay music starts or stops; may run on any thread. */
     fun onMediaAudioChanged(active: Boolean) {
+        DetailedDebugLog.record("audio", "media stream active=$active")
         mainHandler.post { synchronized(this) { updateLocked(active) } }
     }
 
     /** The iPhone started or stopped playing; may run on any thread. */
     private fun onIphonePlaying(expected: CarPlayController, playing: Boolean) {
+        DetailedDebugLog.record("iphone", "playback playing=$playing controller=${System.identityHashCode(expected)}")
         if (playing) mainHandler.post {
             synchronized(this) {
                 if (controller === expected) regainFocusLocked(onIphonePlaybackResume = true)
@@ -128,6 +132,9 @@ internal object CarPlayMediaKeys {
                 if (controller !== expected) return@synchronized
                 // Resolve retained state at delivery: a queued callback cannot roll a replay back.
                 val update = expected.nowPlayingSnapshot()
+                if (nowPlaying.playing != update.playing || nowPlaying.elapsedMillis != update.elapsedMillis) {
+                    DetailedDebugLog.record("iphone", "positionMs=${update.elapsedMillis} playing=${update.playing} durationMs=${update.durationMillis}")
+                }
                 FlymeWheelIntegration.update(expected)
                 val previousArtwork = artwork
                 if (albumTrackChanged(nowPlaying, update)) {
@@ -148,6 +155,7 @@ internal object CarPlayMediaKeys {
                     nowPlaying, update, elapsedUpdatedAt, SystemClock.elapsedRealtime(),
                 )
                 val metadataChanged = metadataChanged(nowPlaying, update) || artwork !== previousArtwork
+                if (metadataChanged) DetailedDebugLog.record("iphone", "metadata changed artworkPresent=${artwork != null}")
                 nowPlaying = update
                 if (metadataChanged) ClusterMusicState.publish(update, update.artworkTransferId?.let { artworkCache[it] })
                 updateInitialAlbumRecovery(expected)
@@ -277,6 +285,7 @@ internal object CarPlayMediaKeys {
             forwardGrantedFocusLocked()
         }
         Log.i(TAG, "audio focus regained=$focusHeld")
+        DetailedDebugLog.record("focus", "reacquire granted=$focusHeld iphoneResume=$onIphonePlaybackResume")
     }
 
     private fun updateLocked(active: Boolean) {
@@ -290,6 +299,7 @@ internal object CarPlayMediaKeys {
     private fun start(context: Context) {
         val expectedController = controller ?: return
         val focusDisabled = AirPlayPersistence.loadDisableMediaKeyAudioFocus(context)
+        DetailedDebugLog.record("focus", "start requested focusDisabled=$focusDisabled")
         transientFocusInterrupted = false
         val granted = if (focusDisabled) {
             // Some OEMs route physical volume buttons to the focus owner. Keep an active
@@ -368,6 +378,7 @@ internal object CarPlayMediaKeys {
     }
 
     private fun releaseLocked() {
+        DetailedDebugLog.record("focus", "release requested held=$focusHeld sessionPresent=${session != null} requestPresent=${focusRequest != null}")
         focusOwner = null
         controller?.let(com.shilapi.xcertplay.media.AmbientMusicController::releasePlaybackOwner)
         artworkOwner = null
@@ -386,10 +397,14 @@ internal object CarPlayMediaKeys {
         artwork = null
         artworkCache.clear()
         ClusterMusicState.publish(CarPlayNowPlaying(), null)
-        focusRequest?.let { request -> appContext?.getSystemService(AudioManager::class.java)?.let(request::abandon) }
+        focusRequest?.let { request -> appContext?.getSystemService(AudioManager::class.java)?.let { audio ->
+            val result = request.abandon(audio)
+            DetailedDebugLog.record("focus", "abandon result=$result")
+        } }
         focusRequest = null
         focusHeld = false
         transientFocusInterrupted = false
+        DetailedDebugLog.record("focus", "release finished")
     }
 
     private fun publishPlaybackStateLocked() {
@@ -416,7 +431,10 @@ internal object CarPlayMediaKeys {
     private fun send(index: Int, source: String) {
         // Suppress competing hardware paths; explicit MediaController transport commands still work.
         if ((source == "geely-wheel" || source.startsWith("KEYCODE_")) &&
-            !FlymeWheelIntegration.allowHardware(index)) return
+            !FlymeWheelIntegration.allowHardware(index)) {
+            DetailedDebugLog.record("wheel", "suppressed source=$source media=$index reason=flyme-owner-or-duplicate")
+            return
+        }
         // While the car's video player is on screen the wheel drives it: a CarPlay play/pause would
         // make the iPhone end the video session.
         if (CarPlayVideo.onMediaKey(index)) {
@@ -434,8 +452,10 @@ internal object CarPlayMediaKeys {
 
     /** The steering-wheel microphone key captured outside the Android key stream (Geely/Lynk). */
     internal fun onExternalSiriKey(): Boolean {
-        val active = synchronized(this) { controller } ?: return false
-        return runCatching { active.requestSiri() }.getOrDefault(false)
+        val active = synchronized(this) { controller }
+        val sent = runCatching { active?.requestSiri() == true }.getOrDefault(false)
+        DetailedDebugLog.record("wheel", "external Siri sent=$sent")
+        return sent
     }
 
     private val callback = CarPlayMediaCallback(
@@ -555,6 +575,9 @@ internal class CarPlayMediaCallback(
     override fun onMediaButtonEvent(mediaButtonIntent: Intent): Boolean {
         @Suppress("DEPRECATION")
         val event = mediaButtonIntent.getParcelableExtra<KeyEvent>(Intent.EXTRA_KEY_EVENT) ?: return false
+        if (!WheelKeyLog.writesText(event.keyCode)) {
+            DetailedDebugLog.record("media-input", "key=${event.keyCode} action=${event.action} repeats=${event.repeatCount} scan=${event.scanCode} device=${event.deviceId}")
+        }
         val index = CarPlayMediaButton.forKeyCode(event.keyCode, experimentalDiLink3Keys())
             ?: return super.onMediaButtonEvent(mediaButtonIntent)
         if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {

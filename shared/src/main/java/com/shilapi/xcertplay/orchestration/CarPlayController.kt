@@ -633,12 +633,17 @@ class CarPlayController(
     }
 
     fun sendMediaButton(index: Int): Boolean {
-        if (closed) return false
-        val session = activeSession ?: return false
+        if (closed) { debugLog("media dispatch index=$index rejected=controller-closed"); return false }
+        val session = activeSession ?: run { debugLog("media dispatch index=$index rejected=no-session"); return false }
         return try {
-            touchExecutor.execute { session.sendMedia(index) }
+            touchExecutor.execute {
+                debugLog("media dispatch index=$index executing")
+                session.sendMedia(index)
+            }
+            debugLog("media dispatch index=$index queued=true")
             true
         } catch (_: Exception) {
+            debugLog("media dispatch index=$index queued=false")
             false
         }
     }

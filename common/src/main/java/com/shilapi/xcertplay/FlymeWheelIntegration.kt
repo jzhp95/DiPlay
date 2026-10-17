@@ -16,6 +16,7 @@ internal object FlymeWheelIntegration {
         owner = controller
         bridge = if (AirPlayPersistence.loadCarBluetoothAudio(context)) null else
             FlymeWheelBridge(context, object : FlymeWheelBridge.Host {
+                override fun diagnostic(message: String) { DetailedDebugLog.record("flyme-eas", message) }
                 override fun ready() = !controller.isClosed() && CarPlayBackgroundSession.active &&
                     CarPlayBackgroundSession.snapshot()?.controller === controller
                 override fun mediaButton(index: Int) = CarPlayMediaKeys.onExternalMediaKey(index, "flyme-eas")

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_detailed_debug">详细调试日志</string>
+    <string name="settings_detailed_debug_description">记录连接、重试、音频焦点、方控接收与发送结果，立即生效，重启后保持开关状态。复现问题后关闭并保存诊断报告。最多保留约 4 MB，超出后覆盖最早记录；不记录认证密钥和原始音视频。</string>
+    <string name="settings_detailed_debug_started">详细日志已开始记录，请连接手机并复现问题</string>
+    <string name="settings_detailed_debug_stopped">详细日志已停止，已录内容可随诊断报告导出</string>
+    <string name="settings_debug_marker">添加问题标记</string>
+    <string name="settings_debug_marker_added">已记录问题发生时间</string>
+    <string name="settings_debug_enable_first">请先开启详细调试日志</string>
+</resources>

@@ -14,6 +14,7 @@ public final class FlymeWheelBridge implements AutoCloseable {
   boolean ready();
   void mediaButton(int index);
   PlaybackSnapshot playback();
+  default void diagnostic(String message) {}
  }
  private static final String TAG="FlymeWheel";
  private static final String PERMISSION="ecarx.oem.permission.OPENAPI_MEDIACENTER_PERMISSION";
@@ -62,10 +63,12 @@ public final class FlymeWheelBridge implements AutoCloseable {
   adapter=new EasAdapter(context,new EasAdapter.Sink(){
    private void deliver(Runnable action){main.post(()->{if(!closed)action.run();});}
    public void event(int action,int raw,String source){deliver(()->{
-    if(gate.accepts(action,host.ready())&&keys.allow(action,true,android.os.SystemClock.elapsedRealtime())){note("raw="+raw+" -> media="+action);host.mediaButton(action);}
+    boolean accepted=gate.accepts(action,host.ready())&&keys.allow(action,true,android.os.SystemClock.elapsedRealtime());
+    note("raw="+raw+" -> media="+action+" accepted="+accepted);
+    if(accepted)host.mediaButton(action);
    });}
    public boolean canDispatch(int action){return !closed&&host.ready()&&(action==1||action==2||action==4||action==5);}
-   public void registered(){deliver(()->{gate.registered=true;adapter.updatePlayback(host.playback());acquire();});}
+   public void registered(){deliver(()->{note("registered=true source=36");gate.registered=true;adapter.updatePlayback(host.playback());acquire();});}
    public boolean shouldRequestFocus(){return !closed&&host.ready()&&gate.mayExecuteRequest();}
    public void requestFinished(){deliver(()->main.postDelayed(FlymeWheelBridge.this::acquire,800));}
    public void focus(String pkg){
@@ -82,6 +85,7 @@ public final class FlymeWheelBridge implements AutoCloseable {
  }
  private void acquire(){
   if(closed||!host.ready()||!gate.request())return;
+  note("request focus source=36");
   adapter.requestFocus();
   // Next attempt is scheduled only after this worker request completes.
  }
@@ -102,11 +106,14 @@ public final class FlymeWheelBridge implements AutoCloseable {
    if(adapter!=null){adapter.close();adapter=null;}state("lifecycle","session stopped; unregister queued; no focus retry");
   });
  }
- private static synchronized void note(String line){
-  Log.i(TAG,line);DIAGNOSTICS.addLast(android.os.SystemClock.elapsedRealtime()+" "+line);
-  while(DIAGNOSTICS.size()>160)DIAGNOSTICS.removeFirst();
+ private void note(String line){
+  synchronized(FlymeWheelBridge.class){
+   Log.i(TAG,line);DIAGNOSTICS.addLast(android.os.SystemClock.elapsedRealtime()+" "+line);
+   while(DIAGNOSTICS.size()>160)DIAGNOSTICS.removeFirst();
+  }
+  try{host.diagnostic(line);}catch(RuntimeException ignored){}
  }
- private static synchronized void state(String key,String value){STATES.put(key,value);note(key+"="+value);}
+ private void state(String key,String value){synchronized(FlymeWheelBridge.class){STATES.put(key,value);}note(key+"="+value);}
  public static synchronized String report(){
   StringBuilder text=new StringBuilder("Flyme EAS (source 36)\n");
   for(java.util.Map.Entry<String,String> entry:STATES.entrySet())text.append(entry.getKey()).append('=').append(entry.getValue()).append('\n');

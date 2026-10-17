@@ -339,6 +339,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        DetailedDebugLog.record("home", "created restored=${savedInstanceState != null} session=${CarPlayBackgroundSession.hasSession()}")
         cancelLegacyUpdateChecks()
         if (savedInstanceState == null && shouldEnterConnectedCarPlay(intent)) {
             openProjection(); finish(); return
@@ -1655,6 +1656,18 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         }
         filteredSection(content, SettingsSection.DIAGNOSTICS,
             getString(R.string.diagnostics), R.drawable.ic_dp_diagnostics) { card ->
+            toggle(card, getString(R.string.settings_detailed_debug), getString(R.string.settings_detailed_debug_description),
+                DetailedDebugLog.enabled(this)) { enabled ->
+                DetailedDebugLog.setEnabled(this, enabled)
+                DetailedDebugLog.record("snapshot", "session=${CarPlayBackgroundSession.hasSession()} active=${CarPlayBackgroundSession.active} wireless=${AirPlayPersistence.loadWirelessEnabled(this)} focusDisabled=${AirPlayPersistence.loadDisableMediaKeyAudioFocus(this)} wheelService=${WheelKeyService.connected()}")
+                toast(getString(if (enabled) R.string.settings_detailed_debug_started else R.string.settings_detailed_debug_stopped))
+            }
+            card.addView(button(getString(R.string.settings_debug_marker), false) {
+                if (DetailedDebugLog.enabled(this)) {
+                    DetailedDebugLog.record("USER_MARK", "problem observed session=${CarPlayBackgroundSession.hasSession()} active=${CarPlayBackgroundSession.active}")
+                    toast(getString(R.string.settings_debug_marker_added))
+                } else toast(getString(R.string.settings_debug_enable_first))
+            }, matchButton(SETTINGS_BLOCK_GAP_DP, 60))
             exportButton = button(if (exportInProgress) getString(R.string.saving_report) else getString(R.string.save_diagnostic_report), false) {
                 saveReportToDownloads()
             }.apply { isEnabled = !exportInProgress }
@@ -5092,25 +5105,29 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
     }
 
     private fun connect(wireless: Boolean) {
+        DetailedDebugLog.record("home", "connect requested wireless=$wireless setupReady=${setupError == null} pendingHotspot=$pendingCarHotspotSetup")
         startupHotspotCancelled = true
         if (wireless && pendingCarHotspotSetup) { toast(getString(R.string.save_your_hotspot_details_in_connection_setup_first)); page = "connection"; render(); return }
         if (setupError != null) { toast(setupError!!); return }
         if (wireless && AirPlayPersistence.loadWirelessHotspotMode(this) == WirelessHotspotMode.MANUAL &&
             hotspotError(storedSsid(), storedPassword()) != null) {
+            DetailedDebugLog.record("home", "connect waiting reason=hotspot-configuration")
             pendingCarHotspotSetup = true
             page = "connection"
             render()
             toast(getString(R.string.save_the_name_and_password_from_the_car_s_hotspot_settings))
             return
         }
-        if (wireless && carHotspotOff()) { carHotspotOffDialog(); return }
+        if (wireless && carHotspotOff()) { DetailedDebugLog.record("home", "connect waiting reason=hotspot-off"); carHotspotOffDialog(); return }
         if (wireless && DiPlayPreferences.phoneAddress(this) == null) {
+            DetailedDebugLog.record("home", "connect waiting reason=choose-phone")
             pendingWireless = true; choosePhone(); return
         }
         val preferences = getSharedPreferences("diplay", MODE_PRIVATE)
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED && !preferences.getBoolean("notification_asked", false)) {
             preferences.edit().putBoolean("notification_asked", true).apply()
             notificationTransport = wireless
+            DetailedDebugLog.record("home", "connect waiting reason=notification-permission")
             notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
             return
         }
@@ -5122,10 +5139,12 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         else open()
     }
     private fun openProjection() {
+        DetailedDebugLog.record("home", "open projection session=${CarPlayBackgroundSession.hasSession()}")
         OwnScreenStart.start(this, Intent(this, CarPlayHostActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
     }
     private fun choosePhone() {
         if (Build.VERSION.SDK_INT >= 31 && checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+            DetailedDebugLog.record("home", "connect waiting reason=bluetooth-permission")
             bluetoothPermission.launch(Manifest.permission.BLUETOOTH_CONNECT); return
         }
         val adapter = getSystemService(BluetoothManager::class.java)?.adapter ?: BluetoothAdapter.getDefaultAdapter()
@@ -5422,6 +5441,9 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         appendLine()
         appendLine("--- Last crash recorded by Apple CarPlay ---")
         appendLine(CrashRecord.report(appContext))
+        appendLine()
+        appendLine("--- Detailed connection / focus / wheel event recording ---")
+        appendLine(DetailedDebugLog.report(appContext))
         appendLine()
         for (name in SessionLogFile.REPORT_NAMES) {
             val file = File(appContext.filesDir, "logs/$name")

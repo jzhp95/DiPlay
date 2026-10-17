@@ -33,6 +33,10 @@ $signingDir = $env:DIPLAY_PLATFORM_SIGNING_DIR
 if (-not $signingDir) { $signingDir = Join-Path $repoRoot 'AOSP-platform-signing' }
 $buildTools = Join-Path $androidSdk 'build-tools\36.1.0'
 $apkOutputDir = Join-Path $repoRoot 'build\car-test-apks'
+# One local-time stamp pairs both APKs and their checksums from this invocation.
+$buildStamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+$normalApk = "Apple-CarPlay-normal-$buildStamp.apk"
+$systemApk = "Apple-CarPlay-system-uid-$buildStamp.apk"
 $privateKey = Join-Path $signingDir 'platform.pk8'
 $certificate = Join-Path $signingDir 'platform.x509.pem'
 $gradle = Join-Path $repoRoot 'gradlew.bat'
@@ -133,17 +137,13 @@ function Build-One {
 Push-Location -LiteralPath $repoRoot
 try {
     New-Item -ItemType Directory -Path $apkOutputDir -Force | Out-Null
-    foreach ($name in @('Apple-CarPlay-normal.apk', 'Apple-CarPlay-system-uid.apk')) {
-        $oldOutput = Join-Path $apkOutputDir $name
-        if (Test-Path -LiteralPath $oldOutput) { Remove-Item -LiteralPath $oldOutput -Force }
-    }
-    Build-One -Kind normal -SystemFlag false -PackageName com.shihab.diplay.hudtest -FinalName Apple-CarPlay-normal.apk
-    Build-One -Kind system-uid -SystemFlag true -PackageName com.shihab.diplay.flyme.hudtest -FinalName Apple-CarPlay-system-uid.apk
-    $checksums = foreach ($name in @('Apple-CarPlay-normal.apk', 'Apple-CarPlay-system-uid.apk')) {
+    Build-One -Kind normal -SystemFlag false -PackageName com.shihab.diplay.hudtest -FinalName $normalApk
+    Build-One -Kind system-uid -SystemFlag true -PackageName com.shihab.diplay.flyme.hudtest -FinalName $systemApk
+    $checksums = foreach ($name in @($normalApk, $systemApk)) {
         $hash = (Get-FileHash -LiteralPath (Join-Path $apkOutputDir $name) -Algorithm SHA256).Hash.ToLowerInvariant()
         "$hash  $name"
     }
-    $checksums | Set-Content -LiteralPath (Join-Path $apkOutputDir 'SHA256SUMS.txt') -Encoding ASCII
+    $checksums | Set-Content -LiteralPath (Join-Path $apkOutputDir "SHA256SUMS-$buildStamp.txt") -Encoding ASCII
     Write-Host "`nBoth APKs verified. Output: $apkOutputDir"
     Write-Host 'Actual system UID and OEM grants must still be checked after installation on the car.'
 } finally { Pop-Location }

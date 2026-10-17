@@ -155,6 +155,10 @@ class WheelKeyService : AccessibilityService() {
     override fun onKeyEvent(event: KeyEvent): Boolean {
         lastObservedDoubleSiriEvent = null
         val kept = handleKey(event)
+        if (DetailedDebugLog.recording && !WheelKeyLog.writesText(event.keyCode) &&
+            !runCatching { event.isPrintingKey }.getOrDefault(true)) {
+            DetailedDebugLog.record("wheel-raw", "key=${event.keyCode} action=${event.action} repeats=${event.repeatCount} scan=${event.scanCode} device=${event.deviceId} kept=$kept")
+        }
         // A held key repeats many times a second; its first press is the evidence.
         if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) recordPress(event, kept)
         return kept

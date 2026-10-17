@@ -10,14 +10,16 @@ fi
 signing_dir="${DIPLAY_PLATFORM_SIGNING_DIR:-$repo/AOSP-platform-signing}"
 tools="$ANDROID_HOME/build-tools/36.1.0"
 output="$repo/build/car-test-apks"
+# One local-time stamp pairs both APKs and their checksums from this invocation.
+build_stamp=$(date '+%Y%m%d-%H%M%S')
+normal_apk="Apple-CarPlay-normal-$build_stamp.apk"
+system_apk="Apple-CarPlay-system-uid-$build_stamp.apk"
 key="$signing_dir/platform.pk8"
 cert="$signing_dir/platform.x509.pem"
 for file in "$key" "$cert" "$tools/apksigner" "$tools/zipalign" "$tools/aapt2"; do
     [[ -f "$file" ]] || { printf 'Missing required input: %s\n' "$file" >&2; exit 1; }
 done
 mkdir -p "$output"
-# Remove only previous final outputs; a failed run must not look like a successful new build.
-rm -f "$output/Apple-CarPlay-normal.apk" "$output/Apple-CarPlay-system-uid.apk"
 
 task=:mobile:assembleDebug
 if [[ -n "${DIPLAY_AUTH_ASSETS_DIR:-}" || -d "$repo/offline-mfi" ]]; then
@@ -70,8 +72,8 @@ build_one() {
     printf 'Verified: %s\n' "$output/$final"
 }
 
-build_one normal false com.shihab.diplay.hudtest Apple-CarPlay-normal.apk
-build_one system-uid true com.shihab.diplay.flyme.hudtest Apple-CarPlay-system-uid.apk
-shasum -a 256 "$output/Apple-CarPlay-normal.apk" "$output/Apple-CarPlay-system-uid.apk" > "$output/SHA256SUMS.txt"
+build_one normal false com.shihab.diplay.hudtest "$normal_apk"
+build_one system-uid true com.shihab.diplay.flyme.hudtest "$system_apk"
+shasum -a 256 "$output/$normal_apk" "$output/$system_apk" > "$output/SHA256SUMS-$build_stamp.txt"
 printf '\nBoth APKs verified. Output: %s\n' "$output"
 printf '%s\n' 'The system APK declares shared UID; actual UID and OEM grants must still be checked after installation on the car.'

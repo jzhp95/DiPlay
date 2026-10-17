@@ -106,10 +106,14 @@ Windows 脚本与 shell 脚本采用同样的构建、签名和校验步骤；�
 
 脚本默认读取 `DiPlay/AOSP-platform-signing/platform.pk8` 和 `platform.x509.pem`，输出至已忽略的 `DiPlay/build/car-test-apks/`：
 
-- `Apple-CarPlay-normal.apk`：`com.shihab.diplay.hudtest`，不声明共享 UID，不开启 EAS。
-- `Apple-CarPlay-system-uid.apk`：`com.shihab.diplay.flyme.hudtest`，声明 `android.uid.system` 并开启 EAS。
+- `Apple-CarPlay-normal-YYYYMMDD-HHMMSS.apk`：`com.shihab.diplay.hudtest`，不声明共享 UID，不开启 EAS。
+- `Apple-CarPlay-system-uid-YYYYMMDD-HHMMSS.apk`：`com.shihab.diplay.flyme.hudtest`，声明 `android.uid.system` 并开启 EAS。
+
+文件名使用脚本启动时的本机时间（精确到秒），同一轮两个 APK 共用时间戳。校验文件为 `SHA256SUMS-YYYYMMDD-HHMMSS.txt`；再次运行保留历史 APK 和校验文件。
 
 两包均进行 16KB ZIP 对齐、平台签名、证书指纹及 Manifest 校验，并记录 SHA256。证书目录整体被 `.gitignore` 排除，APK 输出也被忽略。脚本实际产出 APK 后才可验证其结果；脚本准备好不表示当前受限环境已经构建成功。
+
+两包均包含“设置 → 诊断 → 详细调试日志”开关和报告导出。上车测试与日志字段说明见 [车机连接与方控调试](DEBUGGING.zh-CN.md)。
 
 认证目录选择顺序为 `DIPLAY_AUTH_ASSETS_DIR` 指定的资源根目录、仓库根目录下的 `offline-mfi/`。找到本地输入时，脚本执行 `assembleStandaloneDebug`，只将这两个文件暂存到 `mobile/build/generated/local-auth-assets/offline-mfi/` 并打入 APK 的 `assets/offline-mfi/`；APK 校验也会确认两项资源存在。两处都没有时才生成不含认证资源的源码测试包。`offline-mfi/` 整体被 Git 忽略；不会把项目根目录或 Android 平台签名材料加入 assets。材料的格式/匹配校验不等于 iPhone 已接受该认证身份，连接仍需实测。
 

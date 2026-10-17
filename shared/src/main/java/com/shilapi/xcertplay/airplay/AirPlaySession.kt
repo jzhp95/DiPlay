@@ -362,8 +362,9 @@ class AirPlaySession(
         sendHidReport(AirPlayHid.KNOB_HID_UID, AirPlayHid.knobReport(AirPlayKnobState(select = down)))
 
     fun sendMedia(index: Int) {
-        sendHidReport(AirPlayHid.MEDIA_HID_UID, AirPlayHid.mediaReport(index))
-        sendHidReport(AirPlayHid.MEDIA_HID_UID, AirPlayHid.mediaReport(0))
+        val downWritten = sendHidReport(AirPlayHid.MEDIA_HID_UID, AirPlayHid.mediaReport(index))
+        val upWritten = sendHidReport(AirPlayHid.MEDIA_HID_UID, AirPlayHid.mediaReport(0))
+        debugLog("media HID index=$index downWritten=$downWritten upWritten=$upWritten (event channel write; no playback acknowledgement)")
     }
 
     fun sendTelephony(index: Int) {

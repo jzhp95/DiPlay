@@ -74,6 +74,7 @@ internal object CrashRecord {
 class CrashRecordInstaller : ContentProvider() {
     override fun onCreate(): Boolean {
         context?.let(CrashRecord::install)
+        context?.let { runCatching { DetailedDebugLog.initialize(it) } }
         return true
     }
 
