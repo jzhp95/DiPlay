@@ -59,7 +59,7 @@ class WheelTestActivity : Activity() {
         if (!foreground) return
         if (!CarPlayBackgroundSession.hasSession()) { controller.start(); return }
         if (disconnectDialog?.isShowing == true) return
-        disconnectDialog = AlertDialog.Builder(this).setTitle(R.string.wheel_test_title)
+        disconnectDialog = appDialogBuilder().setTitle(R.string.wheel_test_title)
             .setMessage(R.string.wheel_test_disconnect_message)
             .setNegativeButton(R.string.cancel, null)
             .setPositiveButton(R.string.wheel_test_disconnect_and_start) { _, _ ->

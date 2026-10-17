@@ -20,6 +20,21 @@ internal fun Context.appDialogTheme(): Int = if (
 
 internal fun Context.appDialogContext(): Context = ContextThemeWrapper(this, appDialogTheme())
 
-internal fun Context.appDialogBuilder(): AlertDialog.Builder = AlertDialog.Builder(this, appDialogTheme())
+internal fun Context.appDialogBuilder(): AlertDialog.Builder = CarDialogBuilder(this)
 
-internal fun Context.appDialog(): Dialog = Dialog(this, appDialogTheme())
+private class CarDialogBuilder(owner: Context) : AlertDialog.Builder(owner, owner.appDialogTheme()) {
+    private val palette = DiPlayPalette.of((owner as? AppAppearanceOwner)?.currentAppNight ?: owner.resolveAppNightNow())
+
+    override fun setView(view: android.view.View): AlertDialog.Builder = super.setView(CarDialogStyle.scrollable(view))
+
+    override fun create(): AlertDialog = super.create().also { CarDialogStyle.install(it, palette) }
+
+    override fun show(): AlertDialog = create().also { it.show() }
+}
+
+internal fun Context.styleAppDialog(dialog: Dialog) {
+    val night = (this as? AppAppearanceOwner)?.currentAppNight ?: resolveAppNightNow()
+    CarDialogStyle.install(dialog, DiPlayPalette.of(night))
+}
+
+internal fun Context.appDialog(): Dialog = Dialog(this, appDialogTheme()).also(::styleAppDialog)

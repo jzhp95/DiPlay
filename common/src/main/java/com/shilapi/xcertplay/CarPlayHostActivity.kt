@@ -1,6 +1,5 @@
 package com.shilapi.xcertplay
 
-import android.app.AlertDialog
 import android.Manifest
 import android.content.ActivityNotFoundException
 import android.animation.ObjectAnimator
@@ -6026,7 +6025,7 @@ class CarPlayHostActivity : ComponentActivity() {
         if (!menuOpen) return
         if (menuSettingsSignature?.let { it != menuSettingsSignature() } == true) {
             // Follow the menu's light or dark palette, like DiPlay's other dialogs.
-            AlertDialog.Builder(this, if (appNight) R.style.Theme_Xcertplay_Dialog_Dark else R.style.Theme_Xcertplay_Dialog_Light)
+            appDialogBuilder()
                 .setTitle(getString(R.string.settings_discard_pending_title))
                 .setMessage(getString(R.string.settings_discard_pending_message))
                 .setPositiveButton(getString(R.string.save_and_reconnect)) { _, _ -> saveSettingsAndReconnect() }

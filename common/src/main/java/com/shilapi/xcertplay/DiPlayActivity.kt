@@ -4869,7 +4869,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                     control.text = labelFor(updatedMinute)
                     handler.post(::checkForAppearanceChange)
                 }
-            }, selected / 60, selected % 60, true).show()
+            }, selected / 60, selected % 60, true).also { styleAppDialog(it) }.show()
         }
         parent.addView(control, matchButton(0, 60))
         parent.addView(space(12))
@@ -5537,7 +5537,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             refreshAmbient()
         }
         refreshAmbient()
-        val dialog = AlertDialog.Builder(this).setTitle(getString(R.string.settings_ambient_configuration))
+        val dialog = appDialogBuilder().setTitle(getString(R.string.settings_ambient_configuration))
             .setView(ScrollView(this).apply { addView(body) })
             .setPositiveButton(getString(R.string.save), null)
             .setNegativeButton(getString(R.string.cancel), null).create()
