@@ -29,12 +29,14 @@ class CarPlayHomeScreenshotsTest {
         for ((name, widthDp, tag) in listOf(
             Triple("compact-zh", 320, "zh-CN"),
             Triple("full-zh", 1100, "zh-CN"),
+            Triple("short-car-zh", 900, "zh-CN"),
             Triple("compact-ar-rtl", 320, "ar-SA"),
             Triple("full-uk", 1100, "uk-UA"),
         )) for (fontScale in listOf(1f, 1.2f, 1.5f)) for (night in listOf(false, true)) {
             val locale = Locale.forLanguageTag(tag)
+            val heightDp = if (name == "short-car-zh") 400 else 700
             val config = Configuration(context.resources.configuration).apply {
-                screenWidthDp = widthDp; screenHeightDp = 700; this.fontScale = fontScale
+                screenWidthDp = widthDp; screenHeightDp = heightDp; this.fontScale = fontScale
                 setLocale(locale); setLayoutDirection(locale)
             }
             val localized = context.createConfigurationContext(config)
@@ -49,25 +51,36 @@ class CarPlayHomeScreenshotsTest {
                     typeface = Typeface.create(if (bold) "sans-serif-medium" else "sans-serif", 0)
                     gravity = Gravity.CENTER_VERTICAL
                 } })
+            val cards = layout.cards({}, {}, "Bluetooth · Wi-Fi")
+            cards.notice.text = localized.getString(com.shilapi.xcertplay.host.R.string.hotspot_details_off)
+            cards.notice.visibility = View.VISIBLE
             val root = LinearLayout(localized).apply {
                 orientation = LinearLayout.VERTICAL
-                background = layout.background()
                 val padding = (12 * resources.displayMetrics.density).toInt()
                 setPadding(padding, padding, padding, padding)
                 addView(layout.header(View(localized), {}, {}, {}, {}).apply {
                     disconnect.visibility = View.VISIBLE
                 }.root)
-                addView(layout.cards({}, {}, "Bluetooth · Wi-Fi", "1.4.0").root)
+                addView(View(localized), LinearLayout.LayoutParams(1, (24 * resources.displayMetrics.density).toInt()))
+                layout.addCardsTo(this, cards)
             }
             val width = (widthDp * localized.resources.displayMetrics.density).toInt()
-            val viewportHeight = (700 * localized.resources.displayMetrics.density).toInt()
+            val viewportHeight = (heightDp * localized.resources.displayMetrics.density).toInt()
             val scroll = android.widget.ScrollView(localized).apply {
                 isFillViewport = true
                 addView(root)
             }
-            scroll.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+            val screen = layout.screen(scroll, root, cards)
+            screen.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
                 View.MeasureSpec.makeMeasureSpec(viewportHeight, View.MeasureSpec.EXACTLY))
-            scroll.layout(0, 0, width, viewportHeight)
+            screen.layout(0, 0, width, viewportHeight)
+            if (name == "short-car-zh" && fontScale <= 1.2f) {
+                for (button in listOf(cards.connect, cards.usbConnect)) {
+                    val bounds = android.graphics.Rect(0, 0, button.width, button.height)
+                    root.offsetDescendantRectToMyCoords(button, bounds)
+                    assertTrue("Short car screen clips action ${button.text}: $bounds", bounds.bottom <= scroll.height)
+                }
+            }
             descendants(root).filterIsInstance<TextView>().forEach { text ->
                 val bounds = android.graphics.Rect(0, 0, text.width, text.height)
                 root.offsetDescendantRectToMyCoords(text, bounds)
@@ -84,7 +97,7 @@ class CarPlayHomeScreenshotsTest {
             }
             val bitmap = Bitmap.createBitmap(width, viewportHeight, Bitmap.Config.ARGB_8888)
             try {
-                scroll.draw(Canvas(bitmap))
+                screen.draw(Canvas(bitmap))
                 val output = File("build/reports/carplay-home-ui").apply { mkdirs() }
                 File(output, "$name-$fontScale-${if (night) "night" else "day"}.png").outputStream().use {
                     assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it))

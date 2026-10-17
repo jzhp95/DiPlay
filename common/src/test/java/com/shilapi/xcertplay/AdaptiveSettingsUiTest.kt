@@ -48,6 +48,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
 import org.robolectric.annotation.Implementation
 import org.robolectric.annotation.Implements
 import org.robolectric.shadows.ShadowAlertDialog
@@ -1027,6 +1028,37 @@ class AdaptiveSettingsUiTest {
                 it.contentDescription == screen.getString(R.string.settings_open_category, title)
             })
         }
+    }
+
+    @Test @Config(qualifiers = "zh-rCN-w1200dp-h700dp-land")
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun expandedOverviewDoesNotDuplicateItsNavigationRail() = verifyOverviewDestinations("expanded")
+
+    @Test @Config(qualifiers = "zh-rCN-w400dp-h700dp-port")
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun compactOverviewKeepsItsOnlyCategoryNavigation() = verifyOverviewDestinations("compact")
+
+    private fun verifyOverviewDestinations(name: String) {
+        RuntimeEnvironment.setFontScale(1.3f)
+        val screen = openSettings()
+        assertFalse(texts(screen).any { it.text == screen.getString(R.string.settings_your_setup) })
+        assertTrue(texts(screen).any { it.text == screen.getString(R.string.settings_quick_settings) })
+        (SettingsCategory.entries - SettingsCategory.OVERVIEW).forEach { category ->
+            val title = ReflectionHelpers.callInstanceMethod<String>(screen, "settingsCategoryTitle",
+                ReflectionHelpers.ClassParameter(SettingsCategory::class.java, category))
+            assertEquals(category.name, 1, descendants(screen.window.decorView).count {
+                it.contentDescription == screen.getString(R.string.settings_open_category, title)
+            })
+        }
+        layoutRoot(screen)
+        val root = screen.findViewById<ViewGroup>(android.R.id.content).getChildAt(0)
+        val bitmap = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
+        try {
+            root.draw(Canvas(bitmap))
+            val output = Paths.get("build/reports/settings-overview-ui/$name-large-font.png")
+            Files.createDirectories(output.parent)
+            Files.newOutputStream(output).use { assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)) }
+        } finally { bitmap.recycle() }
     }
 
     @Test fun headerActionsShareOneHeight() = assertHeaderActionsShareOneHeight()

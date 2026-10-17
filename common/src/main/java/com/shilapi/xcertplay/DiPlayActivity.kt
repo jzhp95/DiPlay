@@ -686,7 +686,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                 "backup" -> backup(content)
                 else -> home(content)
             }
-            scroll
+            if (page == "home") homeLayout().screen(scroll, content, checkNotNull(homeCards)) else scroll
         }
         // Keep the background full screen, but all controls inside the camera and
         // visible system/keyboard bounds. Insets are physical pixels, not scaled dp.
@@ -918,8 +918,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                         AirPlayPersistence.loadWirelessEnabled(this))) openProjection()
                 else connect(false)
             },
-            hint = connectionHint,
-            version = getString(R.string.home_public_preview, version()))
+            hint = connectionHint)
         // refreshStatus binds the existing session state to its matching connection card.
         homeCards = cards
         status = cards.status
@@ -934,19 +933,21 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             // Off BYD units the access is allowed on Android's "Modify system settings" screen; ADB plays no part.
             val allowOnSystemScreen = startupProblem == CarHotspotTethering.Result.PERMISSION_REQUIRED &&
                 !CarHotspotSetup.isBydHeadUnit(this) && CarHotspotTethering.appStartSupported()
-            cards.wireless.addView(label(if (allowOnSystemScreen) getString(R.string.settings_write_settings_missing)
-                else hotspotResultText(startupProblem), 15, WARNING))
-            if (!compact && allowOnSystemScreen) cards.wireless.addView(
+            cards.notice.text = if (allowOnSystemScreen) getString(R.string.settings_write_settings_missing)
+                else hotspotResultText(startupProblem)
+            cards.notice.visibility = View.VISIBLE
+            if (!compact && allowOnSystemScreen) cards.footer.addView(
                 homeButton(getString(R.string.settings_write_settings_allow), false) { openWriteSettingsAccess() },
                 matchButton(CONTROL_GAP_DP, 56))
         } else if (carHotspotOff()) {
             // No name is saved before Connection setup, and the sentence that quotes it would show “”.
             val name = AirPlayPersistence.loadManualHotspotSsid(this)
             val off = if (name.isBlank()) getString(R.string.hotspot_details_off) else getString(R.string.msg_car_hotspot_off, name)
-            cards.wireless.addView(label(off, 15, WARNING).apply { setPadding(0, dp(14), 0, 0) })
+            cards.notice.text = off
+            cards.notice.visibility = View.VISIBLE
         }
         setupError?.let { cards.root.addView(label(it, 16, WARNING).apply { setPadding(0, dp(16), 0, 0) }) }
-        content.addView(cards.root)
+        homeLayout().addCardsTo(content, cards)
     }
 
     // Only the category scrolls, so the rail keeps showing where the driver is.
@@ -1079,34 +1080,17 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             SettingsCategory.DIAGNOSTICS to R.string.settings_diagnostics_summary,
             SettingsCategory.ADVANCED to R.string.settings_advanced_subtitle,
         )
-        val categoryGap = dp(SETTINGS_BLOCK_GAP_DP)
-        val twoColumns = isExpandedSettingsLayout && resources.configuration.let {
-            SettingsLayoutPolicy.overviewHasTwoColumns(it.screenWidthDp, it.fontScale)
-        }
-        if (twoColumns) {
-            val columns = row().apply { gravity = Gravity.TOP }
-            val setup = column()
-            setup.addView(settingsSectionHeading(R.string.settings_your_setup))
-            destinations.forEach { item ->
-                setup.addView(settingsSummaryCard(item.first, getString(item.second)),
-                    LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = categoryGap })
-            }
-            columns.addView(setup, LinearLayout.LayoutParams(0, -2, 1f))
-            columns.addView(space(14), LinearLayout.LayoutParams(dp(14), 1))
-            val quick = column()
-            quick.addView(settingsSectionHeading(R.string.settings_quick_settings))
-            quick.addView(quickSettingsCard())
-            columns.addView(quick, LinearLayout.LayoutParams(0, -2, 1f))
-            content.addView(columns, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(SETTINGS_BLOCK_GAP_DP) })
-        } else {
-            content.addView(settingsSectionHeading(R.string.settings_your_setup))
+        // The expanded layout already exposes every category in its persistent navigation rail.
+        if (!isExpandedSettingsLayout) {
             destinations.forEach { item ->
                 content.addView(settingsSummaryCard(item.first, getString(item.second)),
-                    LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = categoryGap })
+                    LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(SETTINGS_BLOCK_GAP_DP) })
             }
-            content.addView(settingsSectionHeading(R.string.settings_quick_settings).apply { setPadding(0, dp(10), 0, dp(8)) })
-            content.addView(quickSettingsCard(), LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(SETTINGS_BLOCK_GAP_DP) })
         }
+        content.addView(settingsSectionHeading(R.string.settings_quick_settings))
+        content.addView(quickSettingsCard(), LinearLayout.LayoutParams(-1, -2).apply {
+            bottomMargin = dp(SETTINGS_BLOCK_GAP_DP)
+        })
 
         renderSections(content, SettingsInformationArchitecture.sectionsByCategory.getValue(SettingsCategory.OVERVIEW))
     }

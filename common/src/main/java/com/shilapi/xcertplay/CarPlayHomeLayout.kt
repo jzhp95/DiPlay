@@ -10,6 +10,7 @@ import android.view.View
 import android.widget.Button
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 import androidx.core.view.doOnLayout
 import com.shilapi.xcertplay.host.R
@@ -32,10 +33,13 @@ internal class CarPlayHomeLayout(
         val hint: TextView,
         val connect: Button,
         val usbConnect: Button,
+        val footer: LinearLayout,
+        val notice: TextView,
     )
 
     private val compact get() = context.resources.configuration.screenHeightDp < 500 ||
         context.resources.configuration.screenWidthDp < 600
+    private val shortScreen get() = context.resources.configuration.screenHeightDp < 500
     private val night get() = !palette.systemBarIconsAreDark
     private val gap get() = if (compact) 12 else 24
     private fun dp(value: Int) = (value * context.resources.displayMetrics.density).roundToInt()
@@ -63,8 +67,8 @@ internal class CarPlayHomeLayout(
                 background = RippleDrawable(ColorStateList.valueOf(palette.ripple), shape, null)
                 if (hero) setTextColor(Color.WHITE)
             }
-            textSize = if (compact) 16f else 17f
-            minHeight = dp(if (hero) (if (compact) 56 else 64) else 54)
+            textSize = if (shortScreen) 15f else if (compact) 16f else 17f
+            minHeight = dp(if (hero) (if (shortScreen) 48 else if (compact) 56 else 64) else 54)
             style()
             doOnLayout { style() }
         }
@@ -100,7 +104,7 @@ internal class CarPlayHomeLayout(
             val brandWidth = android.text.Layout.getDesiredWidth(brand.text, brand.paint).roundToInt()
             return actionWidth + brandWidth + dp(logoSize + 20 + 48 + gap * buttons.size) <= dp(width - 64)
         }
-        val allInHeader = width >= 1100 && fits(chooseButton, disconnectButton, settingsButton, carHomeButton)
+        val allInHeader = width >= 850 && fits(chooseButton, disconnectButton, settingsButton, carHomeButton)
         if (allInHeader) {
             addAction(top, chooseButton)
             addAction(top, disconnectButton)
@@ -124,48 +128,51 @@ internal class CarPlayHomeLayout(
 
     private fun connectionCard(icon: Int, title: Int) = column().apply {
         gravity = Gravity.CENTER_HORIZONTAL
-        val padding = if (compact) 20 else 32
-        setPadding(dp(padding), dp(if (compact) 24 else 36), dp(padding), dp(if (compact) 24 else 36))
+        val padding = if (shortScreen) 16 else if (compact) 20 else 32
+        val verticalPadding = if (shortScreen) 16 else if (compact) 24 else 36
+        setPadding(dp(padding), dp(verticalPadding), dp(padding), dp(verticalPadding))
         background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
             if (night) intArrayOf(-15062464, -14801351) else intArrayOf(-656385, -131841)).apply {
             cornerRadius = dp(34).toFloat()
             setStroke(dp(1), palette.outline)
         }
-        val iconSize = if (compact) 56 else 76
+        val iconSize = if (shortScreen) 40 else if (compact) 56 else 76
         addView(ImageView(context).apply {
             setImageResource(icon)
             imageTintList = ColorStateList.valueOf(palette.accent)
             contentDescription = null
             scaleType = ImageView.ScaleType.FIT_CENTER
-            setPadding(dp(16), dp(16), dp(16), dp(16))
+            val inset = dp(if (shortScreen) 8 else 16)
+            setPadding(inset, inset, inset, inset)
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
                 setColor(if (night) -14072733 else -1838593)
                 setStroke(dp(1), palette.outline)
             }
         }, LinearLayout.LayoutParams(dp(iconSize), dp(iconSize)))
-        addView(label(title, if (compact) 24 else 28).apply { gravity = Gravity.CENTER }, params(if (compact) 16 else 28))
+        addView(label(title, if (shortScreen) 20 else if (compact) 24 else 28).apply { gravity = Gravity.CENTER },
+            params(if (shortScreen) 10 else if (compact) 16 else 28))
     }
 
-    fun cards(connect: () -> Unit, usbConnect: () -> Unit, hint: String, version: String): Cards {
+    fun cards(connect: () -> Unit, usbConnect: () -> Unit, hint: String): Cards {
         val root = column()
         val wireless = connectionCard(R.drawable.ic_home_wifi, R.string.wireless_carplay)
         val usb = connectionCard(R.drawable.ic_home_link, R.string.home_usb_carplay)
-        val state = label(R.string.ready_when_you_are, 17, true).apply { gravity = Gravity.CENTER }
-        wireless.addView(state, params(18))
+        val state = label(R.string.ready_when_you_are, if (shortScreen) 15 else 17, true).apply { gravity = Gravity.CENTER }
+        wireless.addView(state, params(if (shortScreen) 10 else 18))
         val connectButton = action(R.string.connect_phone, true, connect)
-        wireless.addView(connectButton, params(24))
+        wireless.addView(connectButton, params(if (shortScreen) 14 else 24))
         val hintView = makeLabel(hint, 14, palette.secondaryText, false).apply { gravity = Gravity.CENTER }
-        wireless.addView(hintView, params(18))
-        val usbState = label(R.string.connect_your_iphone_with_a_usb_cable, 17, true).apply {
+        wireless.addView(hintView, params(if (shortScreen) 10 else 18))
+        val usbState = label(R.string.connect_your_iphone_with_a_usb_cable, if (shortScreen) 15 else 17, true).apply {
             gravity = Gravity.CENTER
         }
-        usb.addView(usbState, params(18))
+        usb.addView(usbState, params(if (shortScreen) 10 else 18))
         val usbButton = action(R.string.connect_with_usb, true, usbConnect)
-        usb.addView(usbButton, params(24))
+        usb.addView(usbButton, params(if (shortScreen) 14 else 24))
         usb.addView(label(R.string.plug_your_iphone_into_a_usb_data_port_allow_carplay_when_y, 14, true).apply {
             gravity = Gravity.CENTER
-        }, params(18))
+        }, params(if (shortScreen) 10 else 18))
         val wide = context.resources.configuration.screenWidthDp >= 850
         val connections = if (wide) object : LinearLayout(context) {
             override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
@@ -184,20 +191,41 @@ internal class CarPlayHomeLayout(
             }
         }.apply {
             gravity = Gravity.TOP
-            addView(wireless, LinearLayout.LayoutParams(0, -2, 1.15f))
+            addView(wireless, LinearLayout.LayoutParams(0, -2, 1f))
             addView(View(context), LinearLayout.LayoutParams(dp(24), 1))
             addView(usb, LinearLayout.LayoutParams(0, -2, 1f))
         } else column().apply {
             addView(wireless, params())
             addView(usb, params(20))
         }
-        root.addView(space(gap))
         root.addView(connections, LinearLayout.LayoutParams(-1, -2).apply {
             gravity = Gravity.CENTER_HORIZONTAL
         })
-        root.addView(makeLabel(version, 14, palette.secondaryText, false).apply {
-            gravity = Gravity.END
-        }, params(22))
-        return Cards(root, wireless, usb, state, usbState, hintView, connectButton, usbButton)
+        val notice = makeLabel("", 14, palette.warning, false).apply {
+            gravity = Gravity.LEFT or Gravity.CENTER_VERTICAL
+            minLines = 1
+            visibility = View.INVISIBLE
+        }
+        val footer = column().apply { addView(notice, params()) }
+        return Cards(root, wireless, usb, state, usbState, hintView, connectButton, usbButton, footer, notice)
+    }
+
+    /** Fill unused viewport space equally above/below the cards, without constraining scroll height. */
+    fun addCardsTo(content: LinearLayout, cards: Cards) {
+        fun flexibleSpace() = View(context).apply {
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }
+        content.addView(flexibleSpace(), LinearLayout.LayoutParams(1, 0, 1f))
+        content.addView(cards.root, params())
+        content.addView(flexibleSpace(), LinearLayout.LayoutParams(1, 0, 1f))
+    }
+
+    /** Keep the status at the screen's bottom left even when short windows scroll the cards. */
+    fun screen(scroll: ScrollView, content: LinearLayout, cards: Cards): LinearLayout = column().apply {
+        background = background()
+        scroll.setBackgroundColor(Color.TRANSPARENT)
+        addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
+        cards.footer.setPadding(content.paddingLeft, 0, content.paddingRight, dp(if (compact) 12 else 24))
+        addView(cards.footer, params())
     }
 }
