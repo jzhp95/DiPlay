@@ -42,3 +42,6 @@ release-signing.properties
 
 # Local platform signing bundle (including its documentation)
 /AOSP-platform-signing/
+
+# User-provisioned CarPlay authentication input
+/offline-mfi/

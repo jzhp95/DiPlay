@@ -76,6 +76,8 @@ $env:DIPLAY_TEST_SHELL = 'C:\path\to\Git\bin\sh.exe'
 
 ## 獨立實車測試 APK
 
+本機也可將 `identity.pk8` 與 `certificate.p7b` 放在儲存庫根目錄的 `offline-mfi/`，建置會自動識別。`DIPLAY_AUTH_ASSETS_DIR` 優先於此目錄。只有這兩個檔案會暫存至 APK assets；整個認證目錄被 Git 忽略。
+
 在 Git 之外準備只包含指定執行時素材的目錄：
 
 ```text

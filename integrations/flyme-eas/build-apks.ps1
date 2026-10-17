@@ -70,10 +70,11 @@ try {
 } finally { $sha256.Dispose() }
 
 $buildTask = ':mobile:assembleDebug'
-if ($env:DIPLAY_AUTH_ASSETS_DIR) {
+if ($env:DIPLAY_AUTH_ASSETS_DIR -or (Test-Path -LiteralPath (Join-Path $repoRoot 'offline-mfi') -PathType Container)) {
     $buildTask = ':mobile:assembleStandaloneDebug'
+    Write-Host 'Using local CarPlay authentication input (standalone build).'
 } else {
-    Write-Warning 'No DIPLAY_AUTH_ASSETS_DIR: source-only test APKs, without standalone iPhone authentication.'
+    Write-Warning 'No root offline-mfi/ or DIPLAY_AUTH_ASSETS_DIR: source-only test APKs.'
 }
 
 function Build-One {
@@ -83,6 +84,18 @@ function Build-One {
     $unsignedApk = Join-Path $repoRoot 'mobile\build\outputs\apk\debug\mobile-debug.apk'
     Assert-File $unsignedApk
     if ((Get-Item -LiteralPath $unsignedApk).Length -eq 0) { throw 'Build output APK is empty.' }
+    if ($buildTask -eq ':mobile:assembleStandaloneDebug') {
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        $archive = [System.IO.Compression.ZipFile]::OpenRead($unsignedApk)
+        try {
+            foreach ($entry in @('assets/offline-mfi/identity.pk8', 'assets/offline-mfi/certificate.p7b')) {
+                $asset = $archive.GetEntry($entry)
+                if ($null -eq $asset -or $asset.Length -eq 0) {
+                    throw "Required authentication asset missing or empty in APK: $entry"
+                }
+            }
+        } finally { $archive.Dispose() }
+    }
     $alignedApk = Join-Path $apkOutputDir "$Kind-aligned.apk"
     $candidateApk = Join-Path $apkOutputDir "$Kind-candidate.apk"
     Invoke-Checked -FilePath $zipAlign -ArgumentList @('-f', '-P', '16', '4', $unsignedApk, $alignedApk)

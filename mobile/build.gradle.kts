@@ -1,11 +1,34 @@
+import org.gradle.api.tasks.Sync
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
 }
 
-// Optional local-only input. CI and ordinary source builds contain no accessory identity.
+// User-provisioned local input; clean source/CI builds contain no accessory identity.
 val localAuthenticationAssets = providers.environmentVariable("DIPLAY_AUTH_ASSETS_DIR")
-    .orNull?.let { file(it).canonicalFile }
+    .orNull?.takeIf { it.isNotBlank() }?.let { file(it).canonicalFile }
+    ?: rootProject.projectDir.takeIf { it.resolve("offline-mfi").isDirectory }
+val authenticationNames = listOf("identity.pk8", "certificate.p7b")
+val selectedAuthenticationFiles = localAuthenticationAssets?.let { directory ->
+    authenticationNames.map { directory.resolve("offline-mfi/$it").canonicalFile }
+} ?: emptyList()
+val generatedAuthenticationAssets = layout.buildDirectory.dir("generated/local-auth-assets")
+val stageLocalAuthenticationAssets = localAuthenticationAssets?.let { directory ->
+    tasks.register<Sync>("stageLocalAuthenticationAssets") {
+        from(directory.resolve("offline-mfi")) {
+            include(authenticationNames)
+            into("offline-mfi")
+        }
+        into(generatedAuthenticationAssets)
+        val inputsToStage = selectedAuthenticationFiles
+        doFirst {
+            check(inputsToStage.all { it.isFile && it.length() in 1L..16384L }) {
+                "Local CarPlay authentication files must exist and contain 1..16384 bytes each"
+            }
+        }
+    }
+}
 
 android {
     namespace = "com.shilapi.xcertplay"
@@ -23,7 +46,9 @@ android {
     }
 
 
-    localAuthenticationAssets?.let { sourceSets.getByName("main").assets.srcDir(it) }
+    if (localAuthenticationAssets != null) {
+        sourceSets.getByName("main").assets.directories.add(generatedAuthenticationAssets.get().asFile.absolutePath)
+    }
 
     signingConfigs {
         create("release") {
@@ -73,7 +98,7 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
 }
 
-// No implicit import. Only the two explicitly selected local runtime assets are allowed.
+// Only the two staged runtime files may enter APK assets; never add the repository root.
 val credentialAssets = files(android.sourceSets.flatMap { source ->
     source.assets.directories.map { directory ->
         fileTree(directory) {
@@ -86,9 +111,12 @@ val rejectBundledCredentials by tasks.registering {
     group = "verification"
     description = "Reject unexpected credential files in APK assets."
     val filesToCheck = credentialAssets
-    val allowed = localAuthenticationAssets?.let { dir ->
-        listOf("identity.pk8", "certificate.p7b").map { dir.resolve("offline-mfi/$it").canonicalFile }.toSet()
+    val allowed = localAuthenticationAssets?.let {
+        authenticationNames.map {
+            generatedAuthenticationAssets.get().asFile.resolve("offline-mfi/$it").canonicalFile
+        }.toSet()
     } ?: emptySet()
+    stageLocalAuthenticationAssets?.let { dependsOn(it) }
     inputs.files(filesToCheck)
     doLast {
         check(allowed.all { it.isFile }) { "Explicit local authentication assets are incomplete" }
@@ -98,14 +126,14 @@ val rejectBundledCredentials by tasks.registering {
 }
 tasks.named("preBuild") { dependsOn(rejectBundledCredentials) }
 
-// Car-test packages must be standalone. Keep ordinary source/CI builds identity-free.
+// Car-test packages must contain the user-provisioned local authentication input.
 val verifyStandaloneAuthentication by tasks.registering {
     group = "verification"
     description = "Require the explicit runtime authentication input for a standalone car-test APK."
     val directory = localAuthenticationAssets
     doLast {
         check(directory != null) {
-            "Standalone car builds require DIPLAY_AUTH_ASSETS_DIR; assembleDebug alone is source-only."
+            "Standalone car builds require root offline-mfi/ or DIPLAY_AUTH_ASSETS_DIR."
         }
         check(listOf("identity.pk8", "certificate.p7b").all {
             directory.resolve("offline-mfi/$it").let { file -> file.isFile && file.length() > 0 }

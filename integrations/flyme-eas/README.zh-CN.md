@@ -95,7 +95,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\integrations\flyme-eas\bui
 
 Windows 机器先安装 JDK（CI 使用 25）、Android SDK Platform 37、Build Tools 36.1.0 和完整 NDK 28.2.13676358，并单独复制未入库的 `AOSP-platform-signing` 目录。脚本优先使用 `ANDROID_HOME`，其次 `ANDROID_SDK_ROOT`，默认 `%LOCALAPPDATA%\Android\Sdk`。可用 `DIPLAY_PLATFORM_SIGNING_DIR` 指定其他签名目录；通过 .NET 计算证书指纹，不要求安装 OpenSSL。未找到完整 NDK 时会在构建前指出缺失路径，不会伪造 `source.properties`。
 
-需要独立连接 iPhone 时，同样显式设置本地认证目录，例如：
+项目根目录存在 `offline-mfi/identity.pk8` 和 `offline-mfi/certificate.p7b` 时，Gradle 和两个打包脚本会自动识别，无需设置环境变量。只有把认证材料放在其他目录时才需要显式设置，例如：
 
 ```powershell
 $env:DIPLAY_AUTH_ASSETS_DIR = 'D:\private\carplay-auth-assets'
@@ -111,7 +111,7 @@ Windows 脚本与 shell 脚本采用同样的构建、签名和校验步骤；�
 
 两包均进行 16KB ZIP 对齐、平台签名、证书指纹及 Manifest 校验，并记录 SHA256。证书目录整体被 `.gitignore` 排除，APK 输出也被忽略。脚本实际产出 APK 后才可验证其结果；脚本准备好不表示当前受限环境已经构建成功。
 
-如果设置了 `DIPLAY_AUTH_ASSETS_DIR`，脚本会执行现有 `assembleStandaloneDebug` 验证显式认证输入；未设置则生成不含认证资源的源码测试包，不能据此测试独立 iPhone 认证连接。平台签名证书不能替代 CarPlay 认证资源。
+认证目录选择顺序为 `DIPLAY_AUTH_ASSETS_DIR` 指定的资源根目录、仓库根目录下的 `offline-mfi/`。找到本地输入时，脚本执行 `assembleStandaloneDebug`，只将这两个文件暂存到 `mobile/build/generated/local-auth-assets/offline-mfi/` 并打入 APK 的 `assets/offline-mfi/`；APK 校验也会确认两项资源存在。两处都没有时才生成不含认证资源的源码测试包。`offline-mfi/` 整体被 Git 忽略；不会把项目根目录或 Android 平台签名材料加入 assets。材料的格式/匹配校验不等于 iPhone 已接受该认证身份，连接仍需实测。
 
 普通版保持 `com.shihab.diplay`（debug 仍加 `.hudtest`）、普通 UID，不启用 EAS：
 
@@ -137,7 +137,7 @@ Windows 脚本与 shell 脚本采用同样的构建、签名和校验步骤；�
   "/Users/jzhp/Downloads/test-rea/DiPlay-flyme-system-debug.apk"
 ```
 
-不要将密钥、keystore 或私有认证资产复制进模块。要测试独立 CarPlay 连接，仍需原项目现有的显式 `DIPLAY_AUTH_ASSETS_DIR` 输入和 `:mobile:assembleStandaloneDebug`；普通 source-only APK 没有凭据，不因本模块而自动获得认证材料。
+不要将密钥、keystore 或私有认证资产复制进模块。要测试独立 CarPlay 连接，仍需根目录 `offline-mfi/` 或显式 `DIPLAY_AUTH_ASSETS_DIR` 输入，以及 `:mobile:assembleStandaloneDebug`；普通 source-only APK 没有凭据，不因本模块而自动获得认证材料。
 
 安装后验证实际身份（把 SERIAL 换成当前车机 adb 地址）：
 

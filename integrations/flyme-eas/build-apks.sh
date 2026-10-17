@@ -20,10 +20,11 @@ mkdir -p "$output"
 rm -f "$output/Apple-CarPlay-normal.apk" "$output/Apple-CarPlay-system-uid.apk"
 
 task=:mobile:assembleDebug
-if [[ -n "${DIPLAY_AUTH_ASSETS_DIR:-}" ]]; then
+if [[ -n "${DIPLAY_AUTH_ASSETS_DIR:-}" || -d "$repo/offline-mfi" ]]; then
     task=:mobile:assembleStandaloneDebug
+    printf '%s\n' 'Using local CarPlay authentication input (standalone build).'
 else
-    printf '%s\n' 'No DIPLAY_AUTH_ASSETS_DIR: source-only test APKs, without standalone iPhone authentication.' >&2
+    printf '%s\n' 'No root offline-mfi/ or DIPLAY_AUTH_ASSETS_DIR: source-only test APKs.' >&2
 fi
 expected_cert=$(openssl x509 -in "$cert" -noout -fingerprint -sha256 | cut -d= -f2 | tr -d ':' | tr '[:upper:]' '[:lower:]')
 [[ -n "$expected_cert" ]] || { printf '%s\n' 'Cannot read signing certificate' >&2; exit 1; }
@@ -34,6 +35,14 @@ build_one() {
     ./gradlew "-PflymeSystem=$system" "$task" --console=plain
     local input="$repo/mobile/build/outputs/apk/debug/mobile-debug.apk"
     [[ -s "$input" ]] || { printf 'Missing build output: %s\n' "$input" >&2; return 1; }
+    if [[ "$task" == :mobile:assembleStandaloneDebug ]]; then
+        "$JAVA_HOME/bin/jar" tf "$input" > "$output/$kind-apk-files.txt"
+        for entry in assets/offline-mfi/identity.pk8 assets/offline-mfi/certificate.p7b; do
+            grep -F -x "$entry" "$output/$kind-apk-files.txt" > /dev/null || {
+                printf 'Required authentication asset missing from APK: %s\n' "$entry" >&2; return 1;
+            }
+        done
+    fi
     local aligned="$output/$kind-aligned.apk" candidate="$output/$kind-candidate.apk"
     "$tools/zipalign" -f -P 16 4 "$input" "$aligned"
     "$tools/apksigner" sign --key "$key" --cert "$cert" --out "$candidate" "$aligned"

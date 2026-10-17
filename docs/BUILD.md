@@ -61,7 +61,7 @@ On Windows, use `gradlew.bat` in place of `./gradlew` in the commands below.
 
 ## Build the main app
 
-For a source build without runtime authentication assets:
+When neither the root `offline-mfi/` directory nor `DIPLAY_AUTH_ASSETS_DIR` is provided, build without runtime authentication assets:
 
 ```sh
 ./gradlew :mobile:assembleDebug
@@ -108,7 +108,7 @@ That workflow also checks and builds the `home` and `maphost` applications.
 
 ## Build a standalone car-test APK
 
-Prepare an external directory with these runtime authentication files:
+Place your locally provisioned files in the ignored repository-root `offline-mfi/` directory for automatic detection, or prepare an external directory with this layout:
 
 ```text
 runtime-assets/
@@ -117,11 +117,11 @@ runtime-assets/
     └── certificate.p7b
 ```
 
-Use only the intended runtime files in this directory.
+Only `identity.pk8` and `certificate.p7b` are staged into APK assets; the resource root is never bundled wholesale. Use only the intended runtime files in this directory.
 Keep the directory and its private key outside Git.
 The build rejects unexpected credential containers in APK assets.
 
-1. Set `DIPLAY_AUTH_ASSETS_DIR` to the absolute directory path.
+1. For an external directory, set `DIPLAY_AUTH_ASSETS_DIR` to its absolute path. It overrides the repository-root `offline-mfi/` fallback.
 2. Run the standalone debug task.
 
 ```sh
@@ -146,7 +146,7 @@ Set these environment variables locally:
 
 | Variable | Value |
 | --- | --- |
-| `DIPLAY_AUTH_ASSETS_DIR` | Absolute path to the runtime assets directory |
+| `DIPLAY_AUTH_ASSETS_DIR` | Optional absolute-path override for the runtime assets root; otherwise use root `offline-mfi/` |
 | `ANDROID_KEYSTORE_PATH` | Path to your Android signing keystore |
 | `ANDROID_KEYSTORE_PASSWORD` | Keystore password |
 | `ANDROID_KEY_ALIAS` | Signing key alias |
@@ -178,5 +178,5 @@ The retired `build-beta.py` helper is no longer part of the build procedure.
 | A required SDK or NDK package is absent | Install the listed package with SDK Manager. |
 | Java or Gradle JDK version is incorrect | Set the terminal JDK and Android Studio Gradle JDK to Java 25. |
 | Source APK cannot start standalone CarPlay | Supply runtime authentication assets. Use `:mobile:assembleStandaloneDebug`. |
-| Standalone task reports missing authentication files | Check the external directory path and both required files. |
+| Standalone task reports missing authentication files | Check root `offline-mfi/` or the explicit external directory path and both required files. |
 | Android rejects an app update | Use the same application ID and signing key as the installed app. |
