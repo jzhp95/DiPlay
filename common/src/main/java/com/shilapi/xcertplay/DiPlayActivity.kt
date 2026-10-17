@@ -2372,7 +2372,9 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         val forReport = backupOpenedFrom == SettingsCategory.DIAGNOSTICS
         content.addView(label(getString(if (forReport) R.string.settings_report_on_phone else R.string.backup_title), 40, TEXT, true))
         var endpoint = backupEndpoint
-        if ((backupServer == null || endpoint == null) && addresses.isEmpty()) {
+        // A running endpoint can outlive its last network interface. Re-rendering must not
+        // index an empty address list; keep the endpoint available if the network returns.
+        if (addresses.isEmpty()) {
             content.addView(space(SETTINGS_BLOCK_GAP_DP))
             content.addView(label(getString(R.string.backup_no_network), 16, MUTED))
             return
