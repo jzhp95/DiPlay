@@ -17,17 +17,19 @@ class AppAppearancePersistenceTest {
 
     @Before fun clearPreferences() = prefs.edit().clear().apply()
 
-    @Test fun freshInstallAndUnknownValuesDefaultToDark() {
-        assertEquals(AppAppearance.DARK, AirPlayPersistence.loadAppAppearance(context))
-        prefs.edit().putString("app_appearance", "future-value").apply()
-        assertEquals(AppAppearance.DARK, AirPlayPersistence.loadAppAppearance(context))
+    @Test fun freshInstallAndLegacyValuesFollowSystem() {
+        assertEquals(AppAppearance.AUTO, AirPlayPersistence.loadAppAppearance(context))
+        for (key in listOf("dark", "light", "auto", "future-value")) {
+            prefs.edit().putString("app_appearance", key).apply()
+            assertEquals(AppAppearance.AUTO, AirPlayPersistence.loadAppAppearance(context))
+        }
     }
 
-    @Test fun allAppearancesRoundTripWithoutChangingOtherPreferences() {
+    @Test fun legacyWritesCannotOverrideSystemOrChangeOtherPreferences() {
         AirPlayPersistence.saveFps(context, 60)
         AppAppearance.entries.forEach { appearance ->
             AirPlayPersistence.saveAppAppearance(context, appearance)
-            assertEquals(appearance, AirPlayPersistence.loadAppAppearance(context))
+            assertEquals(AppAppearance.AUTO, AirPlayPersistence.loadAppAppearance(context))
             assertEquals(60, AirPlayPersistence.loadFps(context))
         }
     }

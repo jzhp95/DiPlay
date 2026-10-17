@@ -218,7 +218,7 @@ class CarPlayHostSettingsTest {
         layoutMenu()
         (field("settingsMenuContentScroll") as ScrollView).scrollTo(0, 180)
         assertEquals(180, (field("settingsMenuContentScroll") as ScrollView).scrollY)
-        AirPlayPersistence.saveAppAppearance(activity, AppAppearance.LIGHT)
+        setSystemNight(activity, false)
         invoke("refreshAppAppearance")
         layoutMenu()
         shadowOf(Looper.getMainLooper()).idle()
@@ -509,7 +509,7 @@ class CarPlayHostSettingsTest {
         val scroll = views(oldMenu).filterIsInstance<android.widget.ScrollView>().single()
         scroll.scrollTo(0, 120)
 
-        AirPlayPersistence.saveAppAppearance(activity, AppAppearance.LIGHT)
+        setSystemNight(activity, false)
         invoke("refreshAppAppearance")
         shadowOf(android.os.Looper.getMainLooper()).idle()
 
@@ -810,7 +810,7 @@ class CarPlayHostSettingsTest {
         @Suppress("DEPRECATION")
         activity.resources.updateConfiguration(config, activity.resources.displayMetrics)
         if (name.contains("light")) {
-            AirPlayPersistence.saveAppAppearance(activity, AppAppearance.LIGHT)
+            setSystemNight(activity, false)
             invoke("refreshAppAppearance")
         }
         if (name.contains("grouped")) setField("settingsMenuCategoryKey", "display")

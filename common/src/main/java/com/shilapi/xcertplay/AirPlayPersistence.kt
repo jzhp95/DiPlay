@@ -607,22 +607,23 @@ object AirPlayPersistence {
             .putInt(KEY_AMBIENT_LUX_THRESHOLD, threshold.lux).apply()
     }
 
-    fun loadAppAppearance(context: Context): AppAppearance = AppAppearance.fromKey(
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_APP_APPEARANCE, null),
-    )
+    // Appearance is fixed to the system, including upgrades with legacy manual preferences.
+    @Suppress("UNUSED_PARAMETER")
+    fun loadAppAppearance(context: Context): AppAppearance = AppAppearance.AUTO
 
+    @Suppress("UNUSED_PARAMETER")
     fun saveAppAppearance(context: Context, appearance: AppAppearance) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .putString(KEY_APP_APPEARANCE, appearance.key).apply()
+            .remove(KEY_APP_APPEARANCE).apply()
     }
 
-    fun loadCarPlayNightMode(context: Context): CarPlayNightMode = CarPlayNightMode.fromKey(
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_CARPLAY_NIGHT_MODE, null),
-    )
+    @Suppress("UNUSED_PARAMETER")
+    fun loadCarPlayNightMode(context: Context): CarPlayNightMode = CarPlayNightMode.SYSTEM
 
+    @Suppress("UNUSED_PARAMETER")
     fun saveCarPlayNightMode(context: Context, mode: CarPlayNightMode) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .putString(KEY_CARPLAY_NIGHT_MODE, mode.key).apply()
+            .remove(KEY_CARPLAY_NIGHT_MODE).apply()
     }
 
     fun loadCarPlayNightSchedule(context: Context): CarPlayNightSchedule {

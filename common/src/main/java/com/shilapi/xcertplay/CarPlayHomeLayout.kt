@@ -62,7 +62,7 @@ internal class CarPlayHomeLayout(
 
         }
 
-    fun header(appearance: View, choose: () -> Unit, disconnect: () -> Unit,
+    fun header(appearance: View?, choose: () -> Unit, disconnect: () -> Unit,
         settings: () -> Unit, carHome: () -> Unit, wheelTest: () -> Unit = {}): Header {
         val root = column()
         val top = row()
@@ -77,7 +77,7 @@ internal class CarPlayHomeLayout(
             setOnClickListener(brandClick)
         }
         top.addView(brand, LinearLayout.LayoutParams(0, -2, 1f))
-        top.addView(appearance, LinearLayout.LayoutParams(dp(48), dp(48)))
+        if (appearance != null) top.addView(appearance, LinearLayout.LayoutParams(dp(48), dp(48)))
         val disconnectButton = action(R.string.disconnect, click = disconnect).apply { visibility = View.GONE }
         fun addAction(target: LinearLayout, view: View, weight: Boolean = false) {
             target.addView(view, LinearLayout.LayoutParams(if (weight) 0 else -2, -2, if (weight) 1f else 0f).apply {
@@ -92,7 +92,7 @@ internal class CarPlayHomeLayout(
             val natural = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
             val actionWidth = buttons.sumOf { it.measure(natural, natural); it.measuredWidth }
             val brandWidth = android.text.Layout.getDesiredWidth(brand.text, brand.paint).roundToInt()
-            return actionWidth + brandWidth + dp(8 + 48 + gap * buttons.size) <= dp(width - 64)
+            return actionWidth + brandWidth + dp(8 + (if (appearance != null) 48 else 0) + gap * buttons.size) <= dp(width - 64)
         }
         val allInHeader = width >= 850 && fits(chooseButton, disconnectButton, settingsButton, carHomeButton)
         if (allInHeader) {

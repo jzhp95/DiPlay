@@ -60,13 +60,14 @@ class WheelTestActivityTest {
         } finally { activity.pause().stop().destroy() }
     }
 
-    @Test fun appearanceFollowsAppSettingsAndLiveChangesKeepTheTestState() {
+    @Test fun appearanceFollowsSystemAndLiveChangesKeepTheTestState() {
         val context = org.robolectric.RuntimeEnvironment.getApplication()
         val prefs = context.getSharedPreferences("xcertplay_airplay", android.content.Context.MODE_PRIVATE)
         val previous = prefs.getString("app_appearance", null)
         val host = Any()
         prefs.edit().putString("app_appearance", "auto").commit()
-        AppAppearanceRuntime.publishHost(host, true)
+        setSystemNight(context, true)
+        AppAppearanceRuntime.publishHost(host, false)
         val activity = Robolectric.buildActivity(WheelTestActivity::class.java).setup()
         try {
             val screen = activity.get()
@@ -75,7 +76,8 @@ class WheelTestActivityTest {
             probe.start()
             probe.simulate(4)
             val before = probe.snapshot()
-            AppAppearanceRuntime.publishHost(host, false)
+            setSystemNight(screen, false)
+            screen.onConfigurationChanged(screen.resources.configuration)
             assertFalse(screen.currentAppNight)
             assertSame(probe, ReflectionHelpers.getField<WheelTestController>(screen, "controller"))
             assertEquals(before.running, probe.snapshot().running)
@@ -87,7 +89,7 @@ class WheelTestActivityTest {
             assertTrue(views.release.isEnabled)
             prefs.edit().putString("app_appearance", "dark").commit()
             ReflectionHelpers.getField<Runnable>(screen, "appearancePoll").run()
-            assertTrue(screen.currentAppNight)
+            assertFalse(screen.currentAppNight)
             assertTrue(probe.snapshot().running)
             assertEquals(before.event, probe.snapshot().event)
         } finally {

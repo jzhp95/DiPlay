@@ -46,7 +46,7 @@ class FlymeUiScreenshotsTest {
                 val content = LinearLayout(context).apply {
                     orientation = LinearLayout.VERTICAL
                     setPadding(dp(24),dp(16),dp(24),dp(16))
-                    addView(home.header(View(context), {}, {}, {}, {}).root)
+                    addView(home.header(null, {}, {}, {}, {}).root)
                     home.addCardsTo(this,cards)
                 }
                 val scroll = ScrollView(context).apply { isFillViewport=true;addView(content) }

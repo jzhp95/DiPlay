@@ -151,7 +151,6 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
     private var appearanceObserverRemoval: (() -> Unit)? = null
     private var appearanceUpdatesResumed = false
     private var appearanceRenderPending = false
-    private var appearanceButtonFocusPending = false
     private var windowLearning: WindowKeyLearning? = null
     private val windowLearningPresses = WheelKeyPresses()
     private val endWindowLearning = Runnable { cancelKeyLearning() }
@@ -757,9 +756,6 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             centreGlyphs = resources.configuration.locales[0].language != "zh").apply {
             setPadding(if (compact) dp(8) else dp(12), 0, 0, 0)
         }, LinearLayout.LayoutParams(0, if (compact) dp(44) else dp(52), 1f))
-        addView(appearanceButton(), LinearLayout.LayoutParams(dp(if (compact) 44 else 52), dp(if (compact) 44 else 52)).apply {
-            marginEnd = dp(if (compact) 8 else 12)
-        })
         addView(headerButton(if (page == "home") getString(R.string.car_home) else getString(R.string.back),
             if (page == "home") R.drawable.ic_dp_car else R.drawable.ic_dp_back, compact) {
             if (page == "home") startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME))
@@ -859,22 +855,6 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                 marginEnd = searchGap
             })
         }
-        addView(appearanceButton(), LinearLayout.LayoutParams(controlHeight, controlHeight))
-    }
-
-    private fun appearanceButton(): ImageButton = iconButton(
-        icon = if (appNight) R.drawable.ic_dp_night else R.drawable.ic_dp_day,
-        description = getString(if (appNight) R.string.settings_switch_to_light_appearance
-            else R.string.settings_switch_to_dark_appearance),
-    ) {
-        AirPlayPersistence.saveAppAppearance(
-            this,
-            if (appNight) AppAppearance.LIGHT else AppAppearance.DARK,
-        )
-        rememberLaunchAppearance()
-        requestAppearanceRender(focusAppearanceButton = true)
-    }.apply {
-        tag = APPEARANCE_BUTTON_TAG
     }
 
     private fun homeLayout() = CarPlayHomeLayout(this, palette,
@@ -882,7 +862,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         makeLabel = { title, size, color, bold -> label(title, size, color, bold) })
 
     private fun homeHeader(): LinearLayout {
-        val header = homeLayout().header(appearanceButton(),
+        val header = homeLayout().header(null,
             choose = { choosePhone() },
             disconnect = {
                 disconnectButton?.isEnabled = false
@@ -1148,7 +1128,6 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         toggle(this, getString(R.string.connect_when_diplay_opens),
             getString(R.string.default_connection_description),
             DiPlayPreferences.autoConnect(this@DiPlayActivity)) { DiPlayPreferences.saveAutoConnect(this@DiPlayActivity, it) }
-        appearanceControl(this)
         toggle(this, getString(R.string.full_screen), getString(R.string.settings_full_screen_description),
             AirPlayPersistence.loadHideTopBar(this@DiPlayActivity) && AirPlayPersistence.loadHideBottomBar(this@DiPlayActivity)) { enabled ->
             AirPlayPersistence.saveHideTopBar(this@DiPlayActivity, enabled)
@@ -1209,24 +1188,6 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
     private fun displaySettings(content: LinearLayout) {
         settingsPageTitle(content, getString(R.string.settings_display), getString(R.string.settings_display_summary))
         renderSections(content, SettingsInformationArchitecture.sectionsByCategory.getValue(SettingsCategory.DISPLAY))
-    }
-
-    private fun nightModeLabels() = CarPlayNightMode.entries.map { mode ->
-        getString(when (mode) {
-            CarPlayNightMode.SYSTEM -> R.string.carplay_night_system
-            CarPlayNightMode.AMBIENT -> R.string.carplay_night_ambient
-            CarPlayNightMode.DAY -> R.string.carplay_night_day
-            CarPlayNightMode.NIGHT -> R.string.carplay_night_night
-            CarPlayNightMode.SCHEDULE -> R.string.carplay_night_schedule
-        })
-    }
-
-    private fun appearanceControl(parent: LinearLayout) {
-        val modes = CarPlayNightMode.entries
-        choice(parent, getString(R.string.carplay_night_mode), nightModeLabels(),
-            modes.indexOf(AirPlayPersistence.loadCarPlayNightMode(this)), reconnects = false) { index ->
-            AirPlayPersistence.saveCarPlayNightMode(this, modes[index])
-        }
     }
 
     private fun audioSettings(content: LinearLayout) {
@@ -1587,7 +1548,6 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             card.addView(label(getString(R.string.settings_gesture_fingers_hint), 14, MUTED).apply {
                 setPadding(0, dp(10), 0, 0)
             })
-            toggle(card, getString(R.string.right_hand_drive), getString(R.string.place_carplay_s_controls_closer_to_the_driver), AirPlayPersistence.loadRightHandDrive(this)) { AirPlayPersistence.saveRightHandDrive(this, it); markReconnectNeeded() }
         }
         filteredSection(content, SettingsSection.WHEEL_KEYS,
             getString(R.string.settings_wheel_keys), R.drawable.ic_dp_controls, ::wheelKeysSettings)
@@ -1721,62 +1681,6 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         if (settingsSectionFilter?.contains(SettingsSection.BYD_ADB) != false) bydAdbSettings(content)
         filteredSection(content, SettingsSection.DISPLAY_AND_PERFORMANCE,
             getString(R.string.display_and_performance), R.drawable.ic_dp_display) { card ->
-            val appearances = AppAppearance.entries
-            choice(
-                card,
-                getString(R.string.settings_app_appearance),
-                listOf(
-                    getString(R.string.settings_app_appearance_dark),
-                    getString(R.string.settings_app_appearance_light),
-                    getString(R.string.settings_app_appearance_auto),
-                ),
-                appearances.indexOf(AirPlayPersistence.loadAppAppearance(this)),
-                reconnects = false,
-            ) { index ->
-                AirPlayPersistence.saveAppAppearance(this, appearances[index])
-                rememberLaunchAppearance()
-                handler.post { checkForAppearanceChange() }
-            }
-            card.addView(label(getString(R.string.settings_app_appearance_description), 14, MUTED))
-            val nightModes = CarPlayNightMode.entries
-            val nightMode = AirPlayPersistence.loadCarPlayNightMode(this)
-            val ambientControls = column().apply {
-                visibility = if (nightMode == CarPlayNightMode.AMBIENT) View.VISIBLE else View.GONE
-            }
-            val scheduleControls = column().apply {
-                visibility = if (nightMode == CarPlayNightMode.SCHEDULE) View.VISIBLE else View.GONE
-            }
-            choice(
-                card,
-                getString(R.string.carplay_night_mode),
-                nightModeLabels(),
-                nightModes.indexOf(nightMode),
-                reconnects = false,
-            ) { index ->
-                AirPlayPersistence.saveCarPlayNightMode(this, nightModes[index])
-                ambientControls.visibility = if (nightModes[index] == CarPlayNightMode.AMBIENT) View.VISIBLE else View.GONE
-                scheduleControls.visibility = if (nightModes[index] == CarPlayNightMode.SCHEDULE) View.VISIBLE else View.GONE
-                handler.post(::checkForAppearanceChange)
-            }
-            val sentenceSeparator = if (resources.configuration.locales[0].language == "zh") "" else " "
-            card.addView(label(getString(R.string.carplay_night_hint) + sentenceSeparator +
-                getString(R.string.carplay_night_time_note), 14, MUTED).apply {
-                setPadding(0, 0, 0, dp(18))
-            })
-            ambientControls.addView(label(getString(R.string.carplay_night_ambient_hint), 14, MUTED).apply {
-                setPadding(0, 0, 0, dp(18))
-            })
-            ambientLightThresholdControl(ambientControls)
-            nightDelaySettingControl(ambientControls, R.string.ambient_delay_title, R.string.ambient_delay_hint,
-                0..60, 2, R.string.ambient_delay_summary, { AirPlayPersistence.loadAmbientDelaySeconds(this) },
-                save = { AirPlayPersistence.saveAmbientDelaySeconds(this, it) })
-            card.addView(ambientControls)
-            scheduleControls.addView(label(getString(R.string.carplay_night_schedule_hint), 14, MUTED).apply {
-                setPadding(0, 0, 0, dp(18))
-            })
-            scheduleTimeControl(scheduleControls, start = true)
-            scheduleTimeControl(scheduleControls, start = false)
-            card.addView(scheduleControls)
             card.addView(button(getString(R.string.picture_adjustments), false) {
                 OwnScreenStart.start(this, Intent(this, CarPlayHostActivity::class.java)
                     .putExtra("picture_controls", true).addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
@@ -5887,21 +5791,15 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         }
     }
 
-    private fun requestAppearanceRender(focusAppearanceButton: Boolean = false) {
+    private fun requestAppearanceRender() {
         appearanceRenderPending = true
-        appearanceButtonFocusPending = appearanceButtonFocusPending || focusAppearanceButton
         if (!appearanceUpdatesResumed || shouldDeferAppearanceRender(
                 windowKeyLearning = windowLearning != null,
                 serviceKeyLearning = WheelKeyService.isLearning(),
             )
         ) return
         appearanceRenderPending = false
-        val restoreAppearanceButton = appearanceButtonFocusPending
-        appearanceButtonFocusPending = false
-        render(
-            appearanceOnly = true,
-            preferredFocusTag = APPEARANCE_BUTTON_TAG.takeIf { restoreAppearanceButton },
-        )
+        render(appearanceOnly = true)
     }
 
     private fun applyPendingAppearanceRender() {
@@ -5926,12 +5824,10 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         return true
     }
 
-    // The system draws the next launch's starting window before any app code runs. API 33 is the first
-    // release that lets the app choose it; older head units keep the dark frame. Auto stays dark: the time
-    // of the next launch is unknown, and a dark frame in daylight is safer than a bright frame at night.
+    // Remember the current system palette for the next starting window on API 33+.
     private fun rememberLaunchAppearance() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
-        val light = AirPlayPersistence.loadAppAppearance(this) == AppAppearance.LIGHT
+        val light = !resolveAppNightNow()
         splashScreen.setSplashScreenTheme(if (light) R.style.Theme_Xcertplay_Light else R.style.Theme_Xcertplay)
     }
 
@@ -6006,7 +5902,6 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
 
         private const val ADB_KEY_SAVE_WAIT_MILLIS = 500L
         private const val APPEARANCE_POLL_MILLIS = 2_000L
-        private const val APPEARANCE_BUTTON_TAG = "app_appearance_button"
         private const val SETTINGS_SEARCH_BUTTON_TAG = "settings_search_button"
         private const val SETTINGS_HEADER_COMPACT_GAP_DP = 8
         private const val SETTINGS_HEADER_GAP_DP = 12

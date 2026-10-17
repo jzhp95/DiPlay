@@ -58,7 +58,7 @@ class CarPlayHomeScreenshotsTest {
                 orientation = LinearLayout.VERTICAL
                 val padding = (12 * resources.displayMetrics.density).toInt()
                 setPadding(padding, padding, padding, padding)
-                addView(layout.header(View(localized), {}, {}, {}, {}).apply {
+                addView(layout.header(null, {}, {}, {}, {}).apply {
                     disconnect.visibility = View.VISIBLE
                 }.root)
                 addView(View(localized), LinearLayout.LayoutParams(1, (24 * resources.displayMetrics.density).toInt()))

@@ -27,8 +27,8 @@ class AppearanceLayoutCompatibilityTest {
             Intent(context, DiPlayActivity::class.java).putExtra("page", "settings")).setup()
         val activity = controller.get()
         try {
-            for (appearance in AppAppearance.entries) {
-                AirPlayPersistence.saveAppAppearance(activity, appearance)
+            for (night in listOf(false, true)) {
+                setSystemNight(activity, night)
                 ReflectionHelpers.callInstanceMethod<Unit>(activity, "checkForAppearanceChange")
                 shadowOf(Looper.getMainLooper()).idle()
                 for (category in SettingsCategory.entries) {

@@ -68,27 +68,31 @@ class ClusterMapPresentationTest {
     }
 
     @Test @Config(sdk = [28, 29])
-    fun legacySurfaceUsesAnOpaquePlaceholderWithoutChangingSurfaceAlpha() = withPresentation { presentation ->
-        val video: android.view.View = org.robolectric.util.ReflectionHelpers.getField(presentation, "videoView")
-        val label: android.view.View = org.robolectric.util.ReflectionHelpers.getField(presentation, "waitingLabel")
-        assertTrue(video is android.view.SurfaceView)
-        val background = label.background as android.graphics.drawable.ColorDrawable
-        assertEquals(255, android.graphics.Color.alpha(background.color))
-        // DiPlay's dark theme (the default) gives a black placeholder.
-        assertEquals(android.graphics.Color.BLACK, background.color)
-        assertEquals(1f, video.alpha, 0.001f)
-        presentation.setStreamActive(true)
-        assertEquals(1f, video.alpha, 0.001f)
-        label.alpha = 0.4f
-        presentation.setStreamActive(false)
-        assertEquals(1f, video.alpha, 0.001f)
-        assertEquals(0.4f, label.alpha, 0.001f)
-        assertEquals(android.view.View.VISIBLE, label.visibility)
+    fun legacySurfaceUsesAnOpaquePlaceholderWithoutChangingSurfaceAlpha() {
+        setSystemNight(context, true)
+        withPresentation { presentation ->
+            val video: android.view.View = org.robolectric.util.ReflectionHelpers.getField(presentation, "videoView")
+            val label: android.view.View = org.robolectric.util.ReflectionHelpers.getField(presentation, "waitingLabel")
+            assertTrue(video is android.view.SurfaceView)
+            val background = label.background as android.graphics.drawable.ColorDrawable
+            assertEquals(255, android.graphics.Color.alpha(background.color))
+            // The system night theme gives a black placeholder.
+            assertEquals(android.graphics.Color.BLACK, background.color)
+            assertEquals(1f, video.alpha, 0.001f)
+            presentation.setStreamActive(true)
+            assertEquals(1f, video.alpha, 0.001f)
+            label.alpha = 0.4f
+            presentation.setStreamActive(false)
+            assertEquals(1f, video.alpha, 0.001f)
+            assertEquals(0.4f, label.alpha, 0.001f)
+            assertEquals(android.view.View.VISIBLE, label.visibility)
+        }
     }
 
+
     @Test fun legacyPlaceholderFollowsALightAppTheme() {
-        val appearance = AirPlayPersistence.loadAppAppearance(context)
-        AirPlayPersistence.saveAppAppearance(context, AppAppearance.LIGHT)
+        val night = context.resolveAppNightNow()
+        setSystemNight(context, false)
         try {
             withPresentation { presentation ->
                 val label: android.view.View = org.robolectric.util.ReflectionHelpers.getField(presentation, "waitingLabel")
@@ -96,7 +100,7 @@ class ClusterMapPresentationTest {
                 assertEquals(android.graphics.Color.DKGRAY, spinner(label).indeterminateTintList?.defaultColor)
             }
         } finally {
-            AirPlayPersistence.saveAppAppearance(context, appearance)
+            setSystemNight(context, night)
         }
     }
 

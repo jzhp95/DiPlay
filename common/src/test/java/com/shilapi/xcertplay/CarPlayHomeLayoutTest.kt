@@ -22,7 +22,7 @@ class CarPlayHomeLayoutTest {
         val layout = CarPlayHomeLayout(context, DiPlayPalette.LIGHT,
             { title, _, click -> Button(context).apply { text = title; setOnClickListener { click() } } },
             { title, _, _, _ -> TextView(context).apply { text = title } })
-        val header = layout.header(View(context), {}, {}, {}, {}, { opened++ })
+        val header = layout.header(null, {}, {}, {}, {}, { opened++ })
         assertFalse("home brand must not show a logo", descendants(header.root).any { it is android.widget.ImageView })
         val brand = descendants(header.root).filterIsInstance<TextView>().single {
             it.text == "Apple CarPlay"
@@ -50,7 +50,7 @@ class CarPlayHomeLayoutTest {
             makeLabel = { title, size, color, _ -> TextView(context).apply {
                 text = title; textSize = size.toFloat(); setTextColor(color)
             } })
-        val header = layout.header(View(context),
+        val header = layout.header(null,
             { calls += "phone" }, { calls += "disconnect" },
             { calls += "settings" }, { calls += "home" })
         val cards = layout.cards({ calls += "wireless" }, { calls += "usb" }, "hint")
@@ -117,7 +117,7 @@ class CarPlayHomeLayoutTest {
             orientation = android.widget.LinearLayout.VERTICAL
             layoutParams = android.widget.LinearLayout.LayoutParams(-1, -2)
             setPadding(32, 24, 32, 32)
-            addView(layout.header(View(context), {}, {}, {}, {}).root)
+            addView(layout.header(null, {}, {}, {}, {}).root)
             addView(View(context), android.widget.LinearLayout.LayoutParams(-1, 24))
             layout.addCardsTo(this, cards)
         }

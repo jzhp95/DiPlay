@@ -23,25 +23,25 @@ class AppDialogsTest {
     }
 
     @Test fun dialogThemesUseTheResolvedAppAppearance() {
-        AirPlayPersistence.saveAppAppearance(context, AppAppearance.DARK)
+        setSystemNight(context, true)
         assertDialogColors(context.appDialogContext(), DiPlayPalette.DARK)
 
-        AirPlayPersistence.saveAppAppearance(context, AppAppearance.LIGHT)
+        setSystemNight(context, false)
         assertDialogColors(context.appDialogContext(), DiPlayPalette.LIGHT)
     }
 
-    @Test fun anExistingDialogContextKeepsItsAppearanceAfterThePreferenceChanges() {
-        AirPlayPersistence.saveAppAppearance(context, AppAppearance.LIGHT)
+    @Test fun anExistingDialogContextKeepsItsAppearanceAfterTheSystemChanges() {
+        setSystemNight(context, false)
         val existingContext = context.appDialogBuilder().context
 
-        AirPlayPersistence.saveAppAppearance(context, AppAppearance.DARK)
+        setSystemNight(context, true)
 
         assertDialogColors(existingContext, DiPlayPalette.LIGHT)
         assertDialogColors(context.appDialogBuilder().context, DiPlayPalette.DARK)
     }
 
     @Test fun dialogUsesTheOwnersCurrentAppearanceInsteadOfResolvingItAgain() {
-        AirPlayPersistence.saveAppAppearance(context, AppAppearance.DARK)
+        setSystemNight(context, true)
         val lightOwner = object : ContextWrapper(context), AppAppearanceOwner {
             override val currentAppNight = false
         }

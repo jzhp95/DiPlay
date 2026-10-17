@@ -28,7 +28,7 @@ class CarPlayNightModePersistenceTest {
         AirPlayPersistence.saveCarPlayNightMode(context, CarPlayNightMode.AMBIENT)
         AirPlayPersistence.saveAmbientLightThreshold(context, AmbientLightThreshold(200))
         assertEquals(AmbientLightThreshold(200), AirPlayPersistence.loadAmbientLightThreshold(context))
-        assertEquals(CarPlayNightMode.AMBIENT, AirPlayPersistence.loadCarPlayNightMode(context))
+        assertEquals(CarPlayNightMode.SYSTEM, AirPlayPersistence.loadCarPlayNightMode(context))
         AirPlayPersistence.saveAmbientLightThreshold(context, AmbientLightThreshold())
         assertEquals(AmbientLightThreshold(), AirPlayPersistence.loadAmbientLightThreshold(context))
     }
@@ -40,11 +40,13 @@ class CarPlayNightModePersistenceTest {
         }
     }
 
-    @Test fun allModesRoundTripWithoutChangingOtherPreferences() {
+    @Test fun legacyModesCannotOverrideSystemOrChangeOtherPreferences() {
         AirPlayPersistence.saveFps(context, 60)
         for (mode in CarPlayNightMode.entries) {
+            prefs.edit().putString("carplay_night_mode", mode.key).apply()
+            assertEquals(CarPlayNightMode.SYSTEM, AirPlayPersistence.loadCarPlayNightMode(context))
             AirPlayPersistence.saveCarPlayNightMode(context, mode)
-            assertEquals(mode, AirPlayPersistence.loadCarPlayNightMode(context))
+            assertEquals(CarPlayNightMode.SYSTEM, AirPlayPersistence.loadCarPlayNightMode(context))
             assertEquals(60, AirPlayPersistence.loadFps(context))
         }
     }
