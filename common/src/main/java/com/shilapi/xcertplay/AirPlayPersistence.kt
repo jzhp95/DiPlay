@@ -131,7 +131,7 @@ object AirPlayPersistence {
 
     const val DEFAULT_MANUFACTURER = "Apple CarPlay"
     const val DEFAULT_MODEL = "Apple CarPlay"
-    const val DEFAULT_OEM_LABEL = "BYD"
+    const val DEFAULT_OEM_LABEL = "返回车机"
     const val DEFAULT_MFI_I2C_PATH = "/dev/i2c-1"
 
     fun loadAmbientDelaySeconds(context: Context): Int =
@@ -586,6 +586,8 @@ object AirPlayPersistence {
     fun loadOemLabel(context: Context): String =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .getString(KEY_OEM_LABEL, DEFAULT_OEM_LABEL)
+            // Older builds persisted the previous default when saving unrelated settings.
+            .takeUnless { it == "BYD" }
             // iOS hides the car icon without a label.
             .orEmpty().ifBlank { DEFAULT_OEM_LABEL }
 

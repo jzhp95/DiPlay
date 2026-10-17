@@ -555,18 +555,17 @@ class AdaptiveSettingsUiTest {
         assertEquals(SettingsCategory.ADVANCED, ReflectionHelpers.getField<SettingsCategory>(advanced, "category"))
     }
 
-    @Test fun aRowBeforeAButtonKeepsTheGap() {
+    @Test fun vehicleDoesNotOfferCarButtonCustomization() {
         val screen = openSettings()
         descendants(screen.window.decorView)
             .first { it.contentDescription == screen.getString(R.string.settings_open_category,
                 screen.getString(R.string.settings_vehicle)) }
             .performClick()
-        val chooseImage = texts(screen).single { it.text == screen.getString(R.string.choose_image) }
-        val card = chooseImage.parent as LinearLayout
-        val preview = card.getChildAt(card.indexOfChild(chooseImage) - 1)
+        val labels = texts(screen).map { it.text.toString() }
+        assertFalse(screen.getString(R.string.car_button_in_carplay) in labels)
+        assertFalse(screen.getString(R.string.choose_image) in labels)
+        assertFalse(labels.any { it.startsWith(screen.getString(R.string.car_button_name)) })
 
-        assertEquals(Math.round(12 * screen.resources.displayMetrics.density),
-            (preview.layoutParams as LinearLayout.LayoutParams).bottomMargin)
     }
 
     @Test fun tappingAToggleRowChangesTheSetting() {
@@ -720,7 +719,7 @@ class AdaptiveSettingsUiTest {
             assertFalse(text(it), text(it) in audio)
         }
         assertTrue(text(R.string.right_hand_drive) in vehicle)
-        assertTrue(text(R.string.car_button_in_carplay) in vehicle)
+        assertFalse(text(R.string.car_button_in_carplay) in vehicle)
         assertTrue(text(R.string.wheel_siri_key) in vehicle)
         assertTrue(text(R.string.settings_wheel_keys) in vehicle)
         assertTrue(text(R.string.settings_navigation_wheel_volume) in advanced)

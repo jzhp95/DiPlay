@@ -107,7 +107,6 @@ internal enum class SettingsSection {
     EXPERIMENTAL_DISPLAY,
     ADVANCED_MEDIA,
     AMBIENT_LIGHTING,
-    CAR_BUTTON,
     AUDIO_ROUTING,
     NAVIGATION_WHEEL,
     LOCATION,
@@ -133,7 +132,6 @@ internal object SettingsInformationArchitecture {
         SettingsCategory.VEHICLE to setOf(
             SettingsSection.CARPLAY_CONTROLS,
             SettingsSection.WHEEL_KEYS,
-            SettingsSection.CAR_BUTTON,
         ),
         SettingsCategory.DIAGNOSTICS to setOf(SettingsSection.DIAGNOSTICS),
         SettingsCategory.ADVANCED to setOf(
@@ -1952,8 +1950,6 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                 reconnectIfRunning()
             }
         }
-        filteredSection(content, SettingsSection.CAR_BUTTON,
-            getString(R.string.car_button_in_carplay), R.drawable.ic_dp_car) { card -> carButtonCard = card; carButtonControls(card) }
         filteredSection(content, SettingsSection.AUDIO_ROUTING,
             getString(R.string.audio_routing), R.drawable.ic_dp_audio) { card ->
             mediaChannelControl(card)

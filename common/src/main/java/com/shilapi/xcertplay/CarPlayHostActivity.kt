@@ -2950,13 +2950,6 @@ class CarPlayHostActivity : ComponentActivity() {
                 description = getString(R.string.settings_hide_byd_call_popup_description),
             ) { hideBydCallPopup = it })
         }
-        pageFor("display").addView(
-            buildAirPlayIconSection(),
-            LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-            ).apply { topMargin = dp(26) },
-        )
         content.addView(
             buildDrivingSideSection(),
             LinearLayout.LayoutParams(
@@ -3662,16 +3655,6 @@ class CarPlayHostActivity : ComponentActivity() {
         section.addView(
             settingsInputRow(getString(R.string.model), model) { value ->
                 model = value
-                updateResolutionMenu()
-            },
-            LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-            ).apply { topMargin = dp(10) },
-        )
-        section.addView(
-            settingsInputRow(getString(R.string.oem_label), oemLabel) { value ->
-                oemLabel = value
                 updateResolutionMenu()
             },
             LinearLayout.LayoutParams(
