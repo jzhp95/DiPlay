@@ -42,6 +42,7 @@ object SettingsBackupCodec {
     private val AIRPLAY_PREFIXES = listOf("cluster_", "carplay_night_")
     private val DIPLAY_KEYS = setOf(
         "auto_connect",
+        "enter_carplay_on_open",
         "connect_on_phone_bluetooth",
         "default_connection_mode",
         "settings_force_full_layout",

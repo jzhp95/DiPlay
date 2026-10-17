@@ -82,7 +82,50 @@ class LauncherIntentTest {
         assertNull(shadowOf(activity).nextStartedActivity)
     }
 
+    @Test fun autoEnterIsOffByDefaultAndDoesNotEnableAutoConnect() {
+        val app = RuntimeEnvironment.getApplication()
+        assertFalse(DiPlayPreferences.enterCarPlayOnOpen(app))
+        DiPlayPreferences.saveEnterCarPlayOnOpen(app, true)
+        assertTrue(DiPlayPreferences.enterCarPlayOnOpen(app))
+        assertFalse(DiPlayPreferences.autoConnect(app))
+    }
+
+    @Test fun enabledFreshLauncherReturnsToProjectionWithoutStoppingSession() {
+        DiPlayPreferences.saveEnterCarPlayOnOpen(RuntimeEnvironment.getApplication(), true)
+        controller = Robolectric.buildActivity(DiPlayActivity::class.java, launcher()).create()
+        val activity = controller!!.get()
+        assertTrue(activity.isFinishing)
+        assertEquals(CarPlayHostActivity::class.java.name,
+            shadowOf(activity).nextStartedActivity?.component?.className)
+        assertEquals(0, stops)
+    }
+
+    @Test fun enabledReusedLauncherReturnsToProjectionButExplicitSettingsRemainReachable() {
+        DiPlayPreferences.saveEnterCarPlayOnOpen(RuntimeEnvironment.getApplication(), true)
+        controller = Robolectric.buildActivity(DiPlayActivity::class.java,
+            Intent().putExtra("page", "settings")).create()
+        val activity = controller!!.get()
+        assertEquals("settings", ReflectionHelpers.getField<String>(activity, "page"))
+        assertNull(shadowOf(activity).nextStartedActivity)
+        ReflectionHelpers.callInstanceMethod<Unit>(activity, "onNewIntent",
+            ReflectionHelpers.ClassParameter(Intent::class.java, launcher()))
+        assertEquals(CarPlayHostActivity::class.java.name,
+            shadowOf(activity).nextStartedActivity?.component?.className)
+        assertEquals(0, stops)
+    }
+
+    @Test fun enabledButDisconnectedLauncherStillShowsReceiverUi() {
+        CarPlayBackgroundSession.clear()
+        DiPlayPreferences.saveEnterCarPlayOnOpen(RuntimeEnvironment.getApplication(), true)
+        controller = Robolectric.buildActivity(DiPlayActivity::class.java, launcher()).create()
+        val activity = controller!!.get()
+        assertFalse(activity.isFinishing)
+        assertNull(shadowOf(activity).nextStartedActivity)
+        assertEquals(0, stops)
+    }
+
     @Test fun recreationRetainsSettingsInsteadOfRedirectingToProjection() {
+        DiPlayPreferences.saveEnterCarPlayOnOpen(RuntimeEnvironment.getApplication(), true)
         controller = Robolectric.buildActivity(DiPlayActivity::class.java, launcher())
             .create(Bundle().apply { putString("page", "settings") })
         val activity = controller!!.get()

@@ -340,6 +340,9 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         cancelLegacyUpdateChecks()
+        if (savedInstanceState == null && shouldEnterConnectedCarPlay(intent)) {
+            openProjection(); finish(); return
+        }
         // Keep the session running but expose its Open/Disconnect controls from the launcher.
         val returningToSession = savedInstanceState == null && isLauncherIntent(intent) &&
             CarPlayBackgroundSession.hasSession()
@@ -394,11 +397,17 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         })
     }
 
+    private fun shouldEnterConnectedCarPlay(intent: Intent): Boolean =
+        isLauncherIntent(intent) && CarPlayBackgroundSession.hasSession() &&
+            DiPlayPreferences.enterCarPlayOnOpen(this)
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent); setIntent(intent)
         connectionSettingsReturnCategory = null
-        // A launcher tap opens Home even with a live session. Only the explicit Open CarPlay
-        // button returns to projection; the adjacent Disconnect button stops the session.
+        if (shouldEnterConnectedCarPlay(intent)) {
+            page = "home"; render(); openProjection(); return
+        }
+        // Home remains the default unless the driver explicitly enables launcher auto-entry.
         page = intent.getStringExtra("page") ?: "home"; render()
         automaticVehicleValidationStarted = false
         scheduleAutomaticVehicleValidation()
@@ -1659,6 +1668,11 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         filteredSection(content, SettingsSection.AUTOMATIC_CONNECTION,
             getString(R.string.automatic_connection), R.drawable.ic_dp_automation) { card ->
             toggle(card, getString(R.string.connect_when_diplay_opens), getString(R.string.default_connection_description), DiPlayPreferences.autoConnect(this)) { DiPlayPreferences.saveAutoConnect(this, it) }
+            toggle(card, getString(R.string.settings_enter_carplay_on_open),
+                getString(R.string.settings_enter_carplay_on_open_description),
+                DiPlayPreferences.enterCarPlayOnOpen(this)) {
+                DiPlayPreferences.saveEnterCarPlayOnOpen(this, it)
+            }
             toggle(card, getString(R.string.connect_when_iphone_bluetooth_connects),
                 getString(R.string.connect_when_iphone_bluetooth_connects_description),
                 DiPlayPreferences.connectOnPhoneBluetooth(this)) { enabled ->

@@ -970,4 +970,6 @@
     <string name="black_corner_overlay_off">关闭</string>
     <string name="black_corner_overlay_value">%1$d dp</string>
     <string name="iphone_corner_mask_mode">iPhone 遮罩（实验性）</string>
+    <string name="settings_enter_carplay_on_open">打开 APP 时自动进入 CarPlay</string>
+    <string name="settings_enter_carplay_on_open_description">仅在 CarPlay 已连接时生效。开启后，从车机桌面点击应用图标会直接进入 CarPlay；关闭时进入应用首页，可手动断开连接。未连接时仍按原有自动连接设置执行。立即生效。</string>
 </resources>
