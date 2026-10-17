@@ -920,7 +920,8 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         }
         val cards = homeLayout().cards(
             connect = {
-                if (CarPlayBackgroundSession.hasSession()) openProjection()
+                if (HomeCardTransport.wireless(CarPlayBackgroundSession.hasSession(),
+                        AirPlayPersistence.loadWirelessEnabled(this))) openProjection()
                 else connect(true)
             },
             usbConnect = {
