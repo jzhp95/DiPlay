@@ -7,6 +7,12 @@ plugins {
 // Use the same Build Tools for Android compilation, CI and APK packaging.
 subprojects {
     val androidProject = this
+    pluginManager.withPlugin("com.android.application") {
+        androidProject.extensions.configure<com.android.build.api.dsl.ApplicationExtension> {
+            androidResources.localeFilters.add("zh")
+            androidResources.generateLocaleConfig = false
+        }
+    }
     listOf("com.android.application", "com.android.library").forEach { pluginId ->
         pluginManager.withPlugin(pluginId) {
             androidProject.extensions.configure<com.android.build.api.dsl.CommonExtension> {

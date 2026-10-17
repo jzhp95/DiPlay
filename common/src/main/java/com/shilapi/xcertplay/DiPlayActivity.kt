@@ -91,7 +91,7 @@ import java.util.Locale
 import kotlin.math.roundToInt
 
 internal enum class SettingsCategory {
-    OVERVIEW, CONNECTION, DISPLAY, AUDIO, NAVIGATION, VEHICLE, LANGUAGE, DIAGNOSTICS, ADVANCED, ABOUT,
+    OVERVIEW, CONNECTION, DISPLAY, AUDIO, NAVIGATION, VEHICLE, DIAGNOSTICS, ADVANCED, ABOUT,
 }
 
 /** A settings card. Every entry needs one category in [SettingsInformationArchitecture]; see AGENTS.md. */
@@ -114,13 +114,11 @@ internal enum class SettingsSection {
     CLUSTER_MAP,
     BYD_NAVIGATION,
     PERMISSIONS_AND_HELP,
-    LANGUAGE,
 }
 
 internal object SettingsInformationArchitecture {
     val sectionsByCategory: Map<SettingsCategory, Set<SettingsSection>> = mapOf(
         SettingsCategory.OVERVIEW to emptySet(),
-        SettingsCategory.LANGUAGE to setOf(SettingsSection.LANGUAGE),
         SettingsCategory.ABOUT to emptySet(),
         SettingsCategory.CONNECTION to setOf(
             SettingsSection.CONNECTION_SETUP,
@@ -174,7 +172,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
     private var hotspotJoinControls: HotspotJoinControls? = null
     private var setupError: String? = null
     private var status: TextView? = null
-    private var homeCardTitle: TextView? = null
+    private var homeCards: CarPlayHomeLayout.Cards? = null
     private var homeConnectionHint: TextView? = null
     private var connectButton: Button? = null
     private var disconnectButton: Button? = null
@@ -318,7 +316,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         exportDiagnostics()
     }
 
-    private var languagePreferenceAtCreate = AppLocale.SYSTEM
+    private var languagePreferenceAtCreate = AppLocale.SIMPLIFIED_CHINESE
 
     private var interfaceOverride: Configuration? = null
     private var interfaceSystemDensityDpi = 0
@@ -642,6 +640,8 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         settingsSearchBox = null
         if (page != "settings") clearSettingsSearchState()
         status = null; connectButton = null; disconnectButton = null; lastRunning = null; carButtonCard = null
+        homeCards = null
+        homeConnectionHint = null
         reconnectBar = null
         readinessCard = null
         exportButton = null
@@ -656,7 +656,12 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         rootScroll = scroll
         val content = column()
         scroll.addView(content)
-        val header = if (page == "settings") settingsHeader(compact) else standardHeader(compact)
+        val header = when (page) {
+            "settings" -> settingsHeader(compact)
+            "home" -> homeHeader()
+            else -> standardHeader(compact)
+        }
+        if (page == "home") scroll.background = homeLayout().background()
         val root: View = if (page == "settings" && isExpandedSettingsLayout) {
             content.setPadding(0, 0, 0, dp(32))
             settingsCategoryContent(content)
@@ -880,35 +885,49 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         tag = APPEARANCE_BUTTON_TAG
     }
 
+    private fun homeLayout() = CarPlayHomeLayout(this, palette,
+        makeButton = { title, primary, click -> button(title, primary, click) },
+        makeLabel = { title, size, color, bold -> label(title, size, color, bold) })
+
+    private fun homeHeader(): LinearLayout {
+        val header = homeLayout().header(appearanceButton(),
+            choose = { choosePhone() },
+            disconnect = {
+                disconnectButton?.isEnabled = false
+                CarPlayBackgroundSession.stop { runOnUiThread { refreshStatus() } }
+            },
+            settings = { page = "settings"; render() },
+            carHome = { startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)) })
+        disconnectButton = header.disconnect
+        return header.root
+    }
+
     private fun home(content: LinearLayout) {
         val compact = isCompactLayout
         fun homeButton(title: String, primary: Boolean, click: () -> Unit) = button(title, primary, click)
-        val wide = resources.configuration.screenWidthDp >= 850
-        val body = column()
-        val left = column()
-        if (!compact) {
-            left.addView(label(getString(R.string.your_phone_your_drive), 12, ACCENT, true).apply { letterSpacing = .16f })
-            left.addView(label(getString(R.string.a_familiar_drive), if (wide) 42 else 36, TEXT, true).apply { setPadding(0, dp(12), 0, dp(10)) })
-            left.addView(label(getString(R.string.your_maps_music_and_conversations_carplay_right_here_on_yo), 19, MUTED))
-        }
-        val card = card()
-        homeCardTitle = label(getString(R.string.wireless_carplay), 12, ACCENT, true).apply { letterSpacing = .12f }
-        card.addView(homeCardTitle)
-        status = label(getString(R.string.ready_when_you_are), 24, TEXT, true).apply { setPadding(0, dp(10), 0, dp(16)) }
-        card.addView(status)
-        connectButton = homeButton(getString(R.string.connect_phone), true) {
-            if (CarPlayBackgroundSession.hasSession()) openProjection()
-            else connect(true)
-        }
-        card.addView(connectButton, matchButton(height = if (compact) 54 else 68))
         val connectionHint = when (AirPlayPersistence.loadWirelessHotspotMode(this)) {
             WirelessHotspotMode.EXISTING_WIFI -> getString(R.string.existing_wifi_hint)
             WirelessHotspotMode.MANUAL -> getString(R.string.hotspot_hint_manual)
             WirelessHotspotMode.LOCAL_ONLY_HOTSPOT -> getString(R.string.hotspot_hint_local)
             else -> getString(R.string.hotspot_hint_p2p)
         }
-        homeConnectionHint = if (compact) null else label(connectionHint, 15, MUTED).apply { setPadding(0, dp(14), 0, 0) }
-        homeConnectionHint?.let(card::addView)
+        val cards = homeLayout().cards(
+            connect = {
+                if (CarPlayBackgroundSession.hasSession()) openProjection()
+                else connect(true)
+            },
+            usbConnect = {
+                if (HomeCardTransport.wired(CarPlayBackgroundSession.hasSession(),
+                        AirPlayPersistence.loadWirelessEnabled(this))) openProjection()
+                else connect(false)
+            },
+            hint = connectionHint,
+            version = getString(R.string.home_public_preview, version()))
+        // refreshStatus binds the existing session state to its matching connection card.
+        homeCards = cards
+        status = cards.status
+        connectButton = cards.connect
+        homeConnectionHint = cards.hint
         val startupProblem = hotspotStartupResult?.takeIf {
             it != CarHotspotTethering.Result.READY && it != CarHotspotTethering.Result.CANCELLED &&
                 CarHotspotSettings.shouldEnable(this, true, AirPlayPersistence.loadWirelessHotspotMode(this)) &&
@@ -918,9 +937,9 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             // Off BYD units the access is allowed on Android's "Modify system settings" screen; ADB plays no part.
             val allowOnSystemScreen = startupProblem == CarHotspotTethering.Result.PERMISSION_REQUIRED &&
                 !CarHotspotSetup.isBydHeadUnit(this) && CarHotspotTethering.appStartSupported()
-            card.addView(label(if (allowOnSystemScreen) getString(R.string.settings_write_settings_missing)
+            cards.wireless.addView(label(if (allowOnSystemScreen) getString(R.string.settings_write_settings_missing)
                 else hotspotResultText(startupProblem), 15, WARNING))
-            if (!compact) card.addView(
+            if (!compact) cards.wireless.addView(
                 if (allowOnSystemScreen) homeButton(getString(R.string.settings_write_settings_allow), false) { openWriteSettingsAccess() }
                 else homeButton(getString(R.string.open_car_hotspot_settings), false) { openCarWifiSettings() },
                 matchButton(CONTROL_GAP_DP, 56))
@@ -928,70 +947,11 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             // No name is saved before Connection setup, and the sentence that quotes it would show “”.
             val name = AirPlayPersistence.loadManualHotspotSsid(this)
             val off = if (name.isBlank()) getString(R.string.hotspot_details_off) else getString(R.string.msg_car_hotspot_off, name)
-            card.addView(label(off, 15, WARNING).apply { setPadding(0, dp(14), 0, 0) })
-            if (!compact) card.addView(homeButton(getString(R.string.open_car_hotspot_settings), false) { openCarWifiSettings() }, matchButton(CONTROL_GAP_DP, 56))
+            cards.wireless.addView(label(off, 15, WARNING).apply { setPadding(0, dp(14), 0, 0) })
+            if (!compact) cards.wireless.addView(homeButton(getString(R.string.open_car_hotspot_settings), false) { openCarWifiSettings() }, matchButton(CONTROL_GAP_DP, 56))
         }
-        card.addView(homeButton(getString(R.string.choose_iphone), false) { choosePhone() }, matchButton(if (compact) CONTROL_GAP_DP else 16, if (compact) 46 else 56))
-        disconnectButton = homeButton(getString(R.string.disconnect), false) {
-            disconnectButton?.isEnabled = false
-            CarPlayBackgroundSession.stop { runOnUiThread { refreshStatus() } }
-        }.apply { visibility = View.GONE }
-        card.addView(disconnectButton, matchButton(if (compact) CONTROL_GAP_DP else 16, if (compact) 46 else 56))
-        val right = column().apply { gravity = Gravity.CENTER_HORIZONTAL }
-        val logo = ImageView(this).apply {
-            setImageResource(R.drawable.ic_carplay)
-            contentDescription = getString(R.string.carplay_icon)
-            scaleType = ImageView.ScaleType.FIT_CENTER
-        }
-        val branding = column().apply {
-            gravity = Gravity.CENTER
-            addView(logo, LinearLayout.LayoutParams(dp(96), dp(96)))
-        }
-        right.addView(homeButton(getString(R.string.connect_with_usb), false) { connect(false) }, matchButton(height = if (compact) 54 else 68))
-        if (!compact) right.addView(label(getString(R.string.plug_your_iphone_into_a_usb_data_port_allow_carplay_when_y), 14, MUTED).apply { gravity = Gravity.CENTER; setPadding(dp(8), dp(10), dp(8), dp(24)) })
-        else right.addView(space(16))
-        right.addView(homeButton(getString(R.string.settings), false) { page = "settings"; render() }, matchButton(height = if (compact) 54 else 68))
-        if (!compact) right.addView(label(getString(R.string.make_diplay_feel_right_for_your_car), 14, MUTED).apply { gravity = Gravity.CENTER; setPadding(0, dp(10), 0, dp(24)) })
-        else right.addView(space(12))
-        right.addView(label(getString(R.string.home_public_preview, version()), 12, MUTED).apply { letterSpacing = .08f })
-        if (compact && resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) {
-            val compactRight = column().apply {
-                addView(space(8))
-                addView(branding)
-                addView(space(24))
-                addView(right)
-            }
-            body.addView(row().apply {
-                gravity = Gravity.TOP
-                addView(card, LinearLayout.LayoutParams(0, -2, 1.6f))
-                addView(space(16), LinearLayout.LayoutParams(dp(16), 1))
-                addView(compactRight, LinearLayout.LayoutParams(0, -2, 1f))
-            })
-        } else if (!compact && wide) {
-            // Both rows share column widths. The USB button starts at the wireless
-            // card's top edge, independently of hero wrapping or font scaling.
-            fun columns(first: View, second: View, stretchSecond: Boolean = false) = row().apply {
-                gravity = Gravity.TOP
-                addView(first, LinearLayout.LayoutParams(0, -2, 1.6f))
-                addView(space(40), LinearLayout.LayoutParams(dp(40), 1))
-                addView(second, LinearLayout.LayoutParams(0, if (stretchSecond) -1 else -2, 1f))
-            }
-            body.addView(columns(left, branding, true))
-            body.addView(space(26))
-            body.addView(columns(card, right))
-        } else {
-            if (!compact) {
-                body.addView(left)
-                body.addView(space(26))
-            }
-            body.addView(card)
-            body.addView(space(26))
-            body.addView(branding)
-            body.addView(space(24))
-            body.addView(right)
-        }
-        setupError?.let { body.addView(label(it, 16, WARNING).apply { setPadding(0, dp(16), 0, 0) }) }
-        content.addView(body)
+        setupError?.let { cards.root.addView(label(it, 16, WARNING).apply { setPadding(0, dp(16), 0, 0) }) }
+        content.addView(cards.root)
     }
 
     // Only the category scrolls, so the rail keeps showing where the driver is.
@@ -1076,7 +1036,6 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         SettingsCategory.VEHICLE -> R.drawable.ic_dp_car
         SettingsCategory.DIAGNOSTICS -> R.drawable.ic_dp_diagnostics
         SettingsCategory.ADVANCED -> R.drawable.ic_dp_advanced
-        SettingsCategory.LANGUAGE -> R.drawable.ic_dp_language
         SettingsCategory.ABOUT -> R.drawable.ic_dp_about
     }
 
@@ -1089,7 +1048,6 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         SettingsCategory.VEHICLE -> R.string.settings_vehicle
         SettingsCategory.DIAGNOSTICS -> R.string.diagnostics
         SettingsCategory.ADVANCED -> R.string.settings_advanced
-        SettingsCategory.LANGUAGE -> R.string.language_section_title
         SettingsCategory.ABOUT -> R.string.about
     })
 
@@ -1103,10 +1061,6 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             SettingsCategory.VEHICLE -> vehicleSettings(content)
             SettingsCategory.DIAGNOSTICS -> diagnosticsSettings(content)
             SettingsCategory.ADVANCED -> advancedSettings(content)
-            SettingsCategory.LANGUAGE -> {
-                settingsPageTitle(content, getString(R.string.language_section_title), getString(R.string.settings_language_summary))
-                renderSections(content, SettingsInformationArchitecture.sectionsByCategory.getValue(SettingsCategory.LANGUAGE))
-            }
             SettingsCategory.ABOUT -> about(content)
         }
     }
@@ -1132,7 +1086,6 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             SettingsCategory.AUDIO to R.string.settings_audio_summary,
             SettingsCategory.NAVIGATION to R.string.settings_navigation_summary,
             SettingsCategory.VEHICLE to R.string.settings_vehicle_summary,
-            SettingsCategory.LANGUAGE to R.string.settings_language_summary,
             SettingsCategory.ABOUT to R.string.about_diplay,
             SettingsCategory.DIAGNOSTICS to R.string.settings_diagnostics_summary,
             SettingsCategory.ADVANCED to R.string.settings_advanced_subtitle,
@@ -2376,7 +2329,6 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             card.addView(button(getString(R.string.bluetooth_settings), false) { openBluetoothSettings() }, matchButton(10, 60))
             card.addView(button(getString(R.string.wireless_connection_help), false) { wirelessHelp() }, matchButton(10, 60))
         }
-        languageSettings(content)
     }
 
     private fun about(content: LinearLayout) {
@@ -5260,9 +5212,22 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
 
     private fun refreshStatus() {
         val running = CarPlayBackgroundSession.hasSession()
-        // A USB session shares this card's status and Disconnect, but not its wireless title or Wi-Fi hint (#742).
         val wired = HomeCardTransport.wired(running, AirPlayPersistence.loadWirelessEnabled(this))
-        homeCardTitle?.text = getString(if (wired) R.string.home_usb_carplay else R.string.wireless_carplay)
+        homeCards?.let { cards ->
+            val activeStatus = if (wired) cards.usbStatus else cards.status
+            val activeButton = if (wired) cards.usbConnect else cards.connect
+            if (status !== activeStatus || connectButton !== activeButton) {
+                cards.status.text = getString(R.string.ready_when_you_are)
+                cards.usbStatus.text = getString(R.string.connect_your_iphone_with_a_usb_cable)
+                cards.connect.text = getString(R.string.connect_phone)
+                cards.usbConnect.text = getString(R.string.connect_with_usb)
+                cards.connect.isEnabled = true
+                cards.usbConnect.isEnabled = true
+                status = activeStatus
+                connectButton = activeButton
+                lastRunning = null
+            }
+        }
         homeConnectionHint?.visibility = if (wired) View.GONE else View.VISIBLE
         status?.text = when {
             setupError != null -> getString(R.string.setup_needs_attention)
@@ -5557,16 +5522,6 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         return grid
     }
     private fun version() = packageManager.getPackageInfo(packageName, 0).versionName ?: "0.1.0-beta.1"
-    private fun languageSettings(content: LinearLayout) {
-        filteredSection(content, SettingsSection.LANGUAGE,
-            getString(R.string.language_section_title), R.drawable.ic_dp_language) { card ->
-            card.addView(label(getString(R.string.language_hint), 14, MUTED))
-            val current = AppLocale.preference(this)
-            val languageButton = button("${getString(R.string.language_app_language)} · ${AppLocale.displayName(this, current)}", false) { }
-            languageButton.setOnClickListener { AppLocale.showPicker(this) }
-            card.addView(languageButton, matchButton(12, 60))
-        }
-    }
 
     private fun section(parent: LinearLayout, title: String, icon: Int? = null, build: (LinearLayout) -> Unit) {
         searchIndexSink?.add(title)

@@ -33,7 +33,6 @@ class InterfaceSizeActivityTest {
     fun fixedScalingKeepsFreshWindowDimensionsAndTheSelectedSettingsCategory() {
         val app = RuntimeEnvironment.getApplication()
         CarPlayBackgroundSession.clear()
-        AppLocale.save(app, AppLocale.SYSTEM)
         InterfaceSize.save(app, 150)
         val controller = Robolectric.buildActivity(DiPlayActivity::class.java)
         val activity = controller.get()
@@ -96,7 +95,6 @@ class InterfaceSizeActivityTest {
     fun aRealSystemDensityChangeRecreatesAtTheNewScaledDensityAndKeepsSettings() {
         val app = RuntimeEnvironment.getApplication()
         CarPlayBackgroundSession.clear()
-        AppLocale.save(app, AppLocale.SYSTEM)
         InterfaceSize.save(app, 150)
         val controller = Robolectric.buildActivity(DiPlayActivity::class.java)
         val activity = controller.get()
@@ -139,7 +137,8 @@ class InterfaceSizeActivityTest {
     @Test
     fun scaledSettingsKeepTheChosenLanguageBeforeAndroid13() {
         CarPlayBackgroundSession.clear()
-        AppLocale.save(RuntimeEnvironment.getApplication(), AppLocale.ARABIC)
+        RuntimeEnvironment.getApplication().getSharedPreferences("diplay", 0).edit()
+            .putString("app_language", "ar").commit()
         val controller = Robolectric.buildActivity(DiPlayActivity::class.java)
         val activity = controller.get()
         activity.setTheme(android.R.style.Theme_Material_NoActionBar)
@@ -147,34 +146,22 @@ class InterfaceSizeActivityTest {
         try {
             val configuration = activity.resources.configuration
             assertEquals(720, configuration.smallestScreenWidthDp)
-            assertEquals("ar", configuration.locales[0].language)
+            assertEquals("zh", configuration.locales[0].language)
         } finally {
             controller.pause().stop().destroy()
-            AppLocale.save(RuntimeEnvironment.getApplication(), AppLocale.SYSTEM)
         }
     }
 
     @Test
-    fun theChosenLanguageIsWrittenBackWhenTheSystemLanguageReturns() {
+    fun chineseIsWrittenBackWhenTheSystemLanguageReturns() {
         val app = RuntimeEnvironment.getApplication()
-        AppLocale.save(app, AppLocale.SPANISH)
-        try {
-            @Suppress("DEPRECATION")
-            app.resources.updateConfiguration(
-                android.content.res.Configuration(app.resources.configuration).apply { setLocale(java.util.Locale.ENGLISH) },
-                app.resources.displayMetrics,
-            )
-            assertEquals(true, AppLocale.enforce(app))
-            assertEquals("es", app.resources.configuration.locales[0].language)
-            assertEquals(false, AppLocale.enforce(app))
-            AppLocale.save(app, AppLocale.SYSTEM)
-            assertEquals(true, AppLocale.enforce(app))
-            assertEquals(
-                android.content.res.Resources.getSystem().configuration.locales[0],
-                app.resources.configuration.locales[0],
-            )
-        } finally {
-            AppLocale.save(app, AppLocale.SYSTEM)
-        }
+        @Suppress("DEPRECATION")
+        app.resources.updateConfiguration(
+            Configuration(app.resources.configuration).apply { setLocale(java.util.Locale.ENGLISH) },
+            app.resources.displayMetrics,
+        )
+        assertEquals(true, AppLocale.enforce(app))
+        assertEquals("zh", app.resources.configuration.locales[0].language)
+        assertEquals(false, AppLocale.enforce(app))
     }
 }

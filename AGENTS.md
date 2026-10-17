@@ -42,7 +42,7 @@ Exception: a gated control that only its own audience sees, and that completes a
 Example: auto car hotspot needs ADB but appears only for car-hotspot users, so it is in Connection.
 
 Mark an experimental setting or card with the title suffix ` (experimental)`, never `· experimental`, a dash, or an `Experimental …` prefix.
-Each locale MUST use its existing form: `(تجريبي)`, `(experimental)`, `(экспериментально)`, `(експериментально)`, `（实验性）`, `（實驗性）`, `（実験的機能）`.
+UI copy uses Simplified Chinese; use `（实验性）` for the suffix.
 
 ### Add the code
 
@@ -57,15 +57,15 @@ Each locale MUST use its existing form: `(تجريبي)`, `(experimental)`, `(э
    A setting that only takes effect at the next connection MUST call `markReconnectNeeded()` after it saves.
    This shows the "Reconnect now" bar. It MUST NOT drop a running session without the driver's consent.
    Reconnect at once (`reconnectIfRunning()`) only after a dialog button that says "Apply and reconnect", or when the description says that the change reconnects CarPlay.
-6. Add each new string to `common/src/main/res/values/` and to every `values-xx` locale folder.
-   New Settings copy SHOULD use the `settings_` prefix. `SettingsTranslationsTest` fails when a `settings_*` string has no translation.
+6. Add each new string in Simplified Chinese to `common/src/main/res/values/`.
+   New Settings copy SHOULD use the `settings_` prefix. Do not reintroduce language-specific resource folders; `SettingsTranslationsTest` guards the Chinese-only resource policy.
 7. A control that opens a choice uses `button()` with the text `"Title · Value"`.
    That form renders as a setting row with the value and a chevron, and Search indexes the title.
 8. When you move a control between categories, update `AdaptiveSettingsUiTest.settingsLiveWhereDriversLookForThem`.
 
 ### Overview
 
-Overview holds the connection status, links to the categories, quick settings, About and Language.
+Overview holds the connection status, links to the categories, quick settings and About. The app language is fixed to Simplified Chinese; do not add a language picker.
 Do not add a new setting to Overview. Add it to its category. Then promote it to quick settings only if drivers change it often.
 
 ## Settings layout

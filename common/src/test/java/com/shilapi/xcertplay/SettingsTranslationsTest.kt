@@ -1,32 +1,24 @@
 package com.shilapi.xcertplay
 
-import org.junit.Assert.assertEquals
-import org.junit.Test
 import java.io.File
 import javax.xml.parsers.DocumentBuilderFactory
+import org.junit.Assert.*
+import org.junit.Test
 
-// Lint does not check this library module's translations, so Settings copy is guarded here.
+/** Default resources are Chinese so services and third-party launchers never fall back to English. */
 class SettingsTranslationsTest {
-    private val res = File("src/main/res")
-    private val placeholder = Regex("%\\d+\\$[sd]")
-
-    @Test fun everySettingsStringIsTranslatedWithTheSamePlaceholders() {
-        val base = strings(File(res, "values")).filterKeys { it.startsWith("settings_") }
-        val locales = res.listFiles { file -> file.name.matches(Regex("values-[a-z]{2}(-r[A-Z]{2})?")) }!!
-        for (locale in locales) {
-            val translated = strings(locale)
-            assertEquals(locale.name, emptySet<String>(), base.keys - translated.keys)
-            for ((name, text) in base) {
-                assertEquals("${locale.name}/$name", placeholders(text), placeholders(translated.getValue(name)))
-            }
+    @Test fun onlyDefaultChineseResourceTablesRemain() {
+        for (module in listOf(File("."), File("../shared"), File("../samples/home"), File("../samples/maphost"))) {
+            val res = File(module, "src/main/res")
+            val locales = res.listFiles()?.filter { it.name.matches(Regex("values-[a-z]{2}(?:-.*)?")) }.orEmpty()
+            assertEquals("$module retains a selectable resource locale", emptyList<File>(), locales)
+            val strings = File(res, "values").listFiles { f -> f.extension == "xml" }!!
+                .flatMap { file ->
+                    val nodes = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(file).getElementsByTagName("string")
+                    (0 until nodes.length).map { nodes.item(it) }
+                }.associate { it.attributes.getNamedItem("name").nodeValue to it.textContent }
+            assertTrue("$module has no Chinese default strings", strings.values.any { value -> value.any { it in '\u4e00'..'\u9fff' } })
         }
+        assertFalse(File("src/main/res/xml/locales_config.xml").exists())
     }
-
-    private fun placeholders(text: String) = placeholder.findAll(text).map { it.value }.toSet()
-
-    private fun strings(folder: File): Map<String, String> = folder.listFiles { file -> file.extension == "xml" }!!
-        .flatMap { file ->
-            val nodes = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(file).getElementsByTagName("string")
-            (0 until nodes.length).map { nodes.item(it) }.map { it.attributes.getNamedItem("name").nodeValue to it.textContent }
-        }.toMap()
 }

@@ -20,9 +20,8 @@ class NightModeResourcesTest {
     }
 
     @Test fun customSettingsFollowEverySupportedResourceLocale() {
-        val expected = mapOf("en" to "Transition delay", "zh-CN" to "切换延迟",
-            "ar" to "تأخير التبديل", "ru" to "Задержка переключения",
-            "es" to "Retardo de cambio", "uk" to "Затримка перемикання")
+        val expected = listOf("en", "zh-CN", "ar", "ru", "es", "uk", "zh-TW")
+            .associateWith { "切换延迟" }
         for ((tag, title) in expected) {
             val c = context(tag)
             assertEquals(tag, title, c.getString(R.string.ambient_delay_title))
@@ -39,7 +38,7 @@ class NightModeResourcesTest {
         val customChinese = c.getString(R.string.ambient_delay_title).any { it.code in 0x4e00..0x9fff }
         assertEquals(baselineChinese, customChinese)
         val english = context("en")
-        assertEquals("Transition delay", english.getString(R.string.ambient_delay_title))
-        assertEquals("2 s", english.getString(R.string.ambient_delay_summary, 2))
+        assertEquals("切换延迟", english.getString(R.string.ambient_delay_title))
+        assertEquals("2 秒", english.getString(R.string.ambient_delay_summary, 2))
     }
 }

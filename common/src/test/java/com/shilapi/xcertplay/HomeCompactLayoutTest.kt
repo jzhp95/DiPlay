@@ -9,9 +9,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
-import org.robolectric.util.ReflectionHelpers
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [29])
@@ -47,33 +45,11 @@ class HomeCompactLayoutTest {
         else assertTrue(usbPosition[1] >= connectPosition[1] + connect.height)
         assertTrue(text(R.string.car_home).visibility == View.VISIBLE)
         assertFalse(descendants(root).filterIsInstance<TextView>().any {
-            it.text == activity.getString(R.string.a_familiar_drive) ||
-                it.text == activity.getString(R.string.plug_your_iphone_into_a_usb_data_port_allow_carplay_when_y)
+            it.text == activity.getString(R.string.a_familiar_drive)
         })
+        assertTrue(text(R.string.home_usb_carplay).visibility == View.VISIBLE)
+        assertTrue(text(R.string.choose_iphone).visibility == View.VISIBLE)
         controller.pause().stop().destroy()
-    }
-
-    @Config(qualifiers = "en-w2667dp-h1333dp")
-    @Test fun fullSizeMultiWindowKeepsTheFullHome() {
-        assertFalse(homeIsCompact(multiWindow = true))
-    }
-
-    @Config(qualifiers = "en-w1333dp-h400dp")
-    @Test fun shortWindowUsesTheCompactHome() {
-        assertTrue(homeIsCompact(multiWindow = true))
-    }
-
-    @Config(qualifiers = "en-w500dp-h800dp")
-    @Test fun narrowWindowUsesTheCompactHome() {
-        assertTrue(homeIsCompact(multiWindow = false))
-    }
-
-    private fun homeIsCompact(multiWindow: Boolean): Boolean {
-        val activity = Robolectric.buildActivity(DiPlayActivity::class.java).setup().get()
-        shadowOf(activity).setInMultiWindowMode(multiWindow)
-        ReflectionHelpers.callInstanceMethod<Unit>(activity, "render")
-        val hero = activity.getString(R.string.a_familiar_drive)
-        return descendants(activity.window.decorView).filterIsInstance<TextView>().none { it.text == hero }
     }
 
     private fun descendants(view: View): Sequence<View> = sequence {

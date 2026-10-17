@@ -167,7 +167,7 @@ class CarPlayHostActivity : ComponentActivity() {
     private var startupRetryButton: View? = null
     private var startupFailureGeneration = -1
     private lateinit var airPlayIdentity: AirPlayIdentity
-    private var languagePreferenceAtCreate = AppLocale.SYSTEM
+    private var languagePreferenceAtCreate = AppLocale.SIMPLIFIED_CHINESE
 
     override fun attachBaseContext(newBase: Context) {
         super.attachBaseContext(AppLocale.wrap(newBase))
@@ -547,11 +547,8 @@ class CarPlayHostActivity : ComponentActivity() {
     private var hotspotStatus = HotspotStatus(state = "off")
     private var menuOpen = false
     private var latestStage = "Preparing CarPlay"
-    /** English strings for [friendlyStage], whose keywords are English whatever the UI language. */
-    private val englishResources: Resources by lazy {
-        createConfigurationContext(Configuration(resources.configuration).apply { setLocale(Locale.ENGLISH) })
-            .resources
-    }
+    // Internal tokens preserve native-error classification without packaging an English UI locale.
+    private val englishResources: Resources by lazy { ConnectionDiagnosticResources(resources) }
     private var darkMode = false
     private var appNight = true
     private var hostAppearanceResumed = false
@@ -1109,6 +1106,7 @@ class CarPlayHostActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        AppLocale.enforce(this)
         WheelKeyService.restoreIfNeeded(this)
         hostAppearanceResumed = true
         updateCallPopupGuard()
@@ -1816,6 +1814,7 @@ class CarPlayHostActivity : ComponentActivity() {
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
+        AppLocale.enforce(this)
         refreshConfiguration(newConfig, ThemeModeDiagnostics.Source.CALLBACK)
         applyFullscreenMode()
         stageStatusView?.maxWidth = (resources.displayMetrics.widthPixels * 0.78f).toInt()
@@ -3166,14 +3165,6 @@ class CarPlayHostActivity : ComponentActivity() {
             style(DiPlayButtonKind.TONAL_DANGER, overlayPalette, overlay = true)
             setOnClickListener { exitApplication() }
         }
-
-        content.addView(DiPlayButton(this).apply {
-            text = getString(R.string.language_app_language)
-            textSize = 17f
-            minHeight = dp(52)
-            style(DiPlayButtonKind.SECONDARY, overlayPalette, overlay = true)
-            setOnClickListener { AppLocale.showPicker(this@CarPlayHostActivity) }
-        }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
 
         val gestureButton = DiPlayButton(this).apply {
             textSize = 17f

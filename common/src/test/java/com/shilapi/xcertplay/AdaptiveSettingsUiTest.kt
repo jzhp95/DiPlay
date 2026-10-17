@@ -1047,44 +1047,29 @@ class AdaptiveSettingsUiTest {
         assertEquals(1, actions.map { it.layoutParams.height }.toSet().size)
     }
 
-    @Test fun compactLanguageAndAboutDestinationsWork() {
-        verifyLanguageAndAboutDestinations(expanded = false)
+    @Test fun compactAboutWorksWithoutLanguageDestination() {
+        verifyChineseOnlyAboutDestination(expanded = false)
     }
 
     @Test
     @Config(qualifiers = "en-w1000dp-h700dp")
-    fun expandedLanguageAndAboutDestinationsWork() {
-        verifyLanguageAndAboutDestinations(expanded = true)
+    fun expandedAboutWorksWithoutLanguageDestination() {
+        verifyChineseOnlyAboutDestination(expanded = true)
     }
 
-    private fun verifyLanguageAndAboutDestinations(expanded: Boolean) {
+    private fun verifyChineseOnlyAboutDestination(expanded: Boolean) {
         val screen = openSettings()
         val categoryScroll = ReflectionHelpers.getField<ScrollView>(screen, "rootScroll")
-        val languageDestination = descendants(categoryScroll).single {
-            it.contentDescription == screen.getString(R.string.settings_open_category,
-                screen.getString(R.string.language_section_title))
-        }
-        assertTrue(isInside(languageDestination, categoryScroll))
-        run {
-            val titles = descendants(categoryScroll).mapNotNull { it.contentDescription?.toString() }.toList()
-            val vehicle = screen.getString(R.string.settings_open_category, screen.getString(R.string.settings_vehicle))
-            val language = screen.getString(R.string.settings_open_category, screen.getString(R.string.language_section_title))
-            val about = screen.getString(R.string.settings_open_category, screen.getString(R.string.about))
-            assertEquals(titles.indexOf(vehicle) + 1, titles.indexOf(language))
-            assertEquals(titles.indexOf(language) + 1, titles.indexOf(about))
-        }
+        val languageTitle = screen.getString(R.string.language_section_title)
+        assertFalse(descendants(categoryScroll).any {
+            it.contentDescription == screen.getString(R.string.settings_open_category, languageTitle)
+        })
         fun open(title: Int) {
             descendants(screen.window.decorView).first {
                 it.contentDescription == screen.getString(R.string.settings_open_category, screen.getString(title))
             }.performClick()
         }
         assertFalse(texts(screen).any { it.text == screen.getString(R.string.language_app_language) })
-        open(R.string.language_section_title)
-        assertEquals(SettingsCategory.LANGUAGE, ReflectionHelpers.getField<SettingsCategory>(screen, "settingsCategory"))
-        assertTrue(texts(screen).any { it.text == screen.getString(R.string.language_hint) })
-        assertTrue(texts(screen).any { it.text == screen.getString(R.string.settings_language_summary) })
-        ReflectionHelpers.callInstanceMethod<Unit>(screen, "openSettingsCategory",
-            ReflectionHelpers.ClassParameter(SettingsCategory::class.java, SettingsCategory.OVERVIEW))
         open(R.string.about)
         assertEquals(SettingsCategory.ABOUT, ReflectionHelpers.getField<SettingsCategory>(screen, "settingsCategory"))
         assertTrue(texts(screen).any { it.text == screen.getString(R.string.carplay_at_home_in_your_car) })

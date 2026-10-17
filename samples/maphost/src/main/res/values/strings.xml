@@ -1,16 +1,16 @@
 <resources>
-    <string name="maphost_title">My launcher</string>
-    <string name="maphost_smaller">Smaller</string>
-    <string name="maphost_larger">Larger</string>
-    <string name="maphost_stopped">Apple CarPlay stopped; waiting for it to come back</string>
-    <string name="maphost_not_installed">Apple CarPlay is not installed</string>
-    <string name="maphost_connecting">Connecting to %1$s</string>
-    <string name="maphost_refused">Apple CarPlay refused the connection</string>
-    <string name="maphost_requesting">Asking Apple CarPlay for the map</string>
-    <string name="maphost_missing">Apple CarPlay sent no map</string>
-    <string name="maphost_disabled">Turn on \"Share the live map with other launchers\" in Apple CarPlay</string>
-    <string name="maphost_unsupported">This head unit is too old (Android 11 or newer is needed)</string>
-    <string name="maphost_error">Apple CarPlay could not show the map: %1$s</string>
-    <string name="maphost_live">Live map from Apple CarPlay. Tap it to open CarPlay.</string>
-    <string name="maphost_waiting">Map attached; waiting for CarPlay</string>
+    <string name="maphost_title">我的启动器</string>
+    <string name="maphost_smaller">缩小</string>
+    <string name="maphost_larger">放大</string>
+    <string name="maphost_stopped">Apple CarPlay 已停止，等待恢复</string>
+    <string name="maphost_not_installed">未安装 Apple CarPlay</string>
+    <string name="maphost_connecting">正在连接 %1$s</string>
+    <string name="maphost_refused">Apple CarPlay 拒绝连接</string>
+    <string name="maphost_requesting">正在向 Apple CarPlay 请求地图</string>
+    <string name="maphost_missing">Apple CarPlay 未提供地图</string>
+    <string name="maphost_disabled">请在 Apple CarPlay 中开启「与其他启动器共享实时地图」</string>
+    <string name="maphost_unsupported">此车机版本过旧，需要 Android 11 或更高版本</string>
+    <string name="maphost_error">Apple CarPlay 无法显示地图：%1$s</string>
+    <string name="maphost_live">Apple CarPlay 实时地图，点击打开 CarPlay。</string>
+    <string name="maphost_waiting">地图已挂载，等待 CarPlay</string>
 </resources>
