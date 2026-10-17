@@ -1,9 +1,9 @@
 package com.shilapi.xcertplay.backup
 
 import android.content.Context
-import android.content.SharedPreferences.Editor
 import org.json.JSONArray
 import org.json.JSONObject
+import com.shilapi.xcertplay.backup.SettingsBackupSchema.Type
 
 data class SettingsImportOutcome(val applied: Int, val skipped: Int, val invalid: Boolean)
 
@@ -117,14 +117,13 @@ object SettingsBackupCodec {
                     skipped++
                     continue
                 }
-                val stored = when (val target = current[key]) {
-                    is Boolean -> if (value is Boolean) { editor.putBoolean(key, value); true } else false
-                    is Int -> integral(value)?.takeIf { it in Int.MIN_VALUE..Int.MAX_VALUE }?.let { editor.putInt(key, it.toInt()); true } ?: false
-                    is Long -> integral(value)?.let { editor.putLong(key, it); true } ?: false
-                    is Float -> decimal(value)?.let { editor.putFloat(key, it); true } ?: false
-                    is String -> if (value is String) { editor.putString(key, value); true } else false
-                    is Set<*> -> stringSet(value)?.let { editor.putStringSet(key, it); true } ?: false
-                    null -> inferred(editor, key, value)
+                val stored = when (SettingsBackupSchema.type(name, key) ?: SettingsBackupSchema.storedType(current[key])) {
+                    Type.BOOLEAN -> if (value is Boolean) { editor.putBoolean(key, value); true } else false
+                    Type.INT -> integral(value)?.takeIf { it in Int.MIN_VALUE..Int.MAX_VALUE }?.let { editor.putInt(key, it.toInt()); true } ?: false
+                    Type.LONG -> integral(value)?.let { editor.putLong(key, it); true } ?: false
+                    Type.FLOAT -> decimal(value)?.let { editor.putFloat(key, it); true } ?: false
+                    Type.STRING -> if (value is String) { editor.putString(key, value); true } else false
+                    Type.STRING_SET -> stringSet(value)?.let { editor.putStringSet(key, it); true } ?: false
                     else -> false
                 }
                 if (stored) applied++ else skipped++
@@ -132,19 +131,6 @@ object SettingsBackupCodec {
             editor.apply()
         }
         return SettingsImportOutcome(applied, skipped, invalid = false)
-    }
-
-    private fun inferred(editor: Editor, key: String, value: Any?): Boolean = when (value) {
-        is Boolean -> { editor.putBoolean(key, value); true }
-        is String -> { editor.putString(key, value); true }
-        else -> {
-            val integral = integral(value)
-            when {
-                integral != null && integral in Int.MIN_VALUE..Int.MAX_VALUE -> { editor.putInt(key, integral.toInt()); true }
-                integral != null -> { editor.putLong(key, integral); true }
-                else -> decimal(value)?.let { editor.putFloat(key, it); true } ?: false
-            }
-        }
     }
 
     private fun integral(value: Any?): Long? {

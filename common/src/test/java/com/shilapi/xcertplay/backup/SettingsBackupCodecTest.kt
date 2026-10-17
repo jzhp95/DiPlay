@@ -133,6 +133,46 @@ class SettingsBackupCodecTest {
         assertEquals(60, prefs("xcertplay_airplay").getInt("display_fps", 0))
     }
 
+    @Test fun unsetSettingsRejectWrongTypesWithoutPoisoningPreferences() {
+        val document = """
+            {"format":"diplay-settings","version":1,"settings":{
+              "xcertplay_airplay":{"hevc_enabled":"false","display_fps":true,"wireless_hotspot_mode":3},
+              "diplay":{"auto_connect":"true"},
+              "carplay_picture":{"brightness":"80"},
+              "diplay_car_hotspot":{"auto_enable":1}
+            }}
+        """.trimIndent()
+        val result = SettingsBackupCodec.import(context, document.toByteArray())
+        assertEquals(0, result.applied)
+        assertEquals(6, result.skipped)
+        assertFalse(prefs("xcertplay_airplay").getBoolean("hevc_enabled", false))
+        assertEquals(60, prefs("xcertplay_airplay").getInt("display_fps", 60))
+        assertFalse(prefs("diplay").getBoolean("auto_connect", false))
+        assertEquals(0, prefs("carplay_picture").getInt("brightness", 0))
+    }
+
+    @Test fun validBackupRestoresFreshPreferencesAndRepairsPreviouslyWrongTypes() {
+        prefs("xcertplay_airplay").edit().putString("hevc_enabled", "false").apply()
+        val document = """
+            {"format":"diplay-settings","version":1,"settings":{
+              "xcertplay_airplay":{"hevc_enabled":true,"display_fps":48,"carplay_night_mode":"auto","cluster_speedometer_enabled":true},
+              "diplay":{"enter_carplay_on_open":true},
+              "carplay_picture":{"contrast":120},
+              "diplay_car_hotspot":{"auto_enable":true}
+            }}
+        """.trimIndent()
+        val result = SettingsBackupCodec.import(context, document.toByteArray())
+        assertEquals(7, result.applied)
+        assertEquals(0, result.skipped)
+        assertTrue(prefs("xcertplay_airplay").getBoolean("hevc_enabled", false))
+        assertEquals(48, prefs("xcertplay_airplay").getInt("display_fps", 0))
+        assertEquals("auto", prefs("xcertplay_airplay").getString("carplay_night_mode", null))
+        assertTrue(prefs("xcertplay_airplay").getBoolean("cluster_speedometer_enabled", false))
+        assertTrue(prefs("diplay").getBoolean("enter_carplay_on_open", false))
+        assertEquals(120, prefs("carplay_picture").getInt("contrast", 0))
+        assertTrue(prefs("diplay_car_hotspot").getBoolean("auto_enable", false))
+    }
+
     @Test
     fun exportImportRoundTripRestoresValues() {
         prefs("xcertplay_airplay").edit()
@@ -140,7 +180,7 @@ class SettingsBackupCodecTest {
             .putBoolean("temporary_system_bars", true)
             .putBoolean("hevc_enabled", true)
             .putString("manual_hotspot_ssid", "car-ap")
-            .putFloat("ui_scale_percent", 100f)
+            .putInt("ui_scale_percent", 100)
             .apply()
         prefs("diplay_car_hotspot").edit().putBoolean("auto_enable", true).apply()
         val document = SettingsBackupCodec.export(context, "0.2.17")
@@ -149,7 +189,7 @@ class SettingsBackupCodecTest {
             .putBoolean("temporary_system_bars", false)
             .putBoolean("hevc_enabled", false)
             .putString("manual_hotspot_ssid", "changed")
-            .putFloat("ui_scale_percent", 120f)
+            .putInt("ui_scale_percent", 120)
             .apply()
         prefs("diplay_car_hotspot").edit().putBoolean("auto_enable", false).apply()
         val outcome = SettingsBackupCodec.import(context, document)
@@ -160,7 +200,7 @@ class SettingsBackupCodecTest {
         assertEquals(true, airplay.getBoolean("hevc_enabled", false))
         // The car's hotspot name is not part of a backup.
         assertEquals("changed", airplay.getString("manual_hotspot_ssid", ""))
-        assertEquals(100f, airplay.getFloat("ui_scale_percent", 0f))
+        assertEquals(100, airplay.getInt("ui_scale_percent", 0))
         assertEquals(true, prefs("diplay_car_hotspot").getBoolean("auto_enable", false))
         assertFalse(airplay.contains("identity_private"))
     }
