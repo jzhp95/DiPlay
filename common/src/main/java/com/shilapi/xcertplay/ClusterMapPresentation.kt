@@ -200,28 +200,9 @@ internal class ClusterMapPresentation(
     companion object {
         const val TAG = "Apple CarPlay-Cluster"
 
-        /** Keep the 5/5.1 selection order, then try the measured DiLink 4 projection display. */
-        fun findDisplay(context: Context, theme: DiLink51ClusterLayout.Theme = DiLink51ClusterLayout.theme(context)): Display? {
-            val displays = context.getSystemService(DisplayManager::class.java)
-                ?.getDisplays(DisplayManager.DISPLAY_CATEGORY_PRESENTATION) ?: return null
-            val name = DiLink51ClusterLayout.displayName(
-                displays.map { it.name }, android.os.Build.FINGERPRINT, theme,
-            )
-            if (name == null) {
-                // Never replace a missing 5.1 side layer with a full-screen display.
-                if (DiLink51ClusterLayout.supported()) return null
-                return displays.firstOrNull { display ->
-                    val size = sizeOf(display)
-                    DiLink4ClusterDisplay.accepts(display.name, size.x, size.y)
-                }
-            }
-            return displays.firstOrNull { it.name == name }?.takeIf {
-                if (!DiLink51ClusterLayout.supported()) true else {
-                    val size = sizeOf(it)
-                    DiLink51ClusterLayout.plan(size.x, size.y, theme) != null
-                }
-            }
-        }
+        /** Vendor display routing is retired; generic virtual map streams use their own surfaces. */
+        @Suppress("UNUSED_PARAMETER")
+        fun findDisplay(context: Context, theme: DiLink51ClusterLayout.Theme = DiLink51ClusterLayout.theme(context)): Display? = null
 
         fun describeDisplays(context: Context): String =
             context.getSystemService(DisplayManager::class.java)?.displays

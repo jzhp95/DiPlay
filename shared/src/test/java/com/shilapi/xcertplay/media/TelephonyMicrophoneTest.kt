@@ -112,19 +112,6 @@ class TelephonyMicrophoneTest {
         assertEquals(AudioManager.MODE_NORMAL, manager.mode)
     }
 
-    @Test fun aCallInTheCarsPhoneStateRecordsFromVoiceRecognitionWithoutCallEffects() {
-        BydOutputSettings.setPhoneAudioRoute(context, true)
-        PhoneAudioRoute.attach(context)
-        try {
-            sink.onMicrophoneStarted(telephony, config("telephony"))
-            val record = awaitCapture()
-            assertEquals(MediaRecorder.AudioSource.VOICE_RECOGNITION, record.audioSource)
-            assertTrue(ShadowAudioEffect.getAudioEffects().isEmpty())
-        } finally {
-            BydOutputSettings.setPhoneAudioRoute(context, false)
-        }
-    }
-
     @Test fun anUnverifiedPauseFlagDoesNotSwitchCallAudioRouting() {
         context.getSharedPreferences("diplay_bt_suspend", 0).edit()
             .putBoolean("suspended_by_us", true).putBoolean("restore_initially_enabled", true).commit()

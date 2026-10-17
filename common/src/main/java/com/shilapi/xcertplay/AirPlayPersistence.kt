@@ -504,17 +504,15 @@ object AirPlayPersistence {
             .apply()
     }
 
-    fun loadBtSuspendDuringCarplay(context: Context): Boolean =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getBoolean(KEY_BT_SUSPEND_DURING_CARPLAY, false)
+    @Suppress("UNUSED_PARAMETER")
+    fun loadBtSuspendDuringCarplay(context: Context): Boolean = false
 
-    fun loadHideBydCallPopup(context: Context): Boolean =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getBoolean(KEY_HIDE_BYD_CALL_POPUP, false)
+    @Suppress("UNUSED_PARAMETER")
+    fun loadHideBydCallPopup(context: Context): Boolean = false
 
+    @Suppress("UNUSED_PARAMETER")
     fun saveHideBydCallPopup(context: Context, enabled: Boolean) {
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .putBoolean(KEY_HIDE_BYD_CALL_POPUP, enabled).apply()
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(KEY_HIDE_BYD_CALL_POPUP).apply()
     }
 
     fun saveBtSuspendDuringCarplay(context: Context, enabled: Boolean) {
@@ -817,8 +815,8 @@ object AirPlayPersistence {
     fun loadClusterMapEnabled(context: Context): Boolean =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_CLUSTER_MAP, false)
 
-    fun loadAdbClusterEnabled(context: Context): Boolean = loadClusterMapEnabled(context) &&
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_ADB_CLUSTER_ACTIVITY, false)
+    @Suppress("UNUSED_PARAMETER")
+    fun loadAdbClusterEnabled(context: Context): Boolean = false
 
     fun saveAdbClusterEnabled(context: Context, enabled: Boolean) {
         val edit = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
@@ -832,8 +830,8 @@ object AirPlayPersistence {
     fun loadDiLink4ClusterRouteEnabled(context: Context): Boolean =
         loadAdbClusterEnabled(context) || loadLegacyClusterEnabled(context)
 
-    fun loadLegacyClusterEnabled(context: Context): Boolean = loadClusterMapEnabled(context) &&
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean("platform21_cluster_enabled", false)
+    @Suppress("UNUSED_PARAMETER")
+    fun loadLegacyClusterEnabled(context: Context): Boolean = false
 
     fun saveLegacyClusterEnabled(context: Context, enabled: Boolean) {
         val edit = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
@@ -866,8 +864,8 @@ object AirPlayPersistence {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_LAUNCHER_MAP_SHARING, enabled).apply()
     }
 
-    fun loadClusterSpeedometerEnabled(context: Context): Boolean =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean("cluster_speedometer_enabled", false)
+    @Suppress("UNUSED_PARAMETER")
+    fun loadClusterSpeedometerEnabled(context: Context): Boolean = false
 
     fun saveClusterSpeedometerEnabled(context: Context, enabled: Boolean) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
@@ -1081,7 +1079,6 @@ object AirPlayPersistence {
                 ClusterTurnCardOverlay.snap(percent, CarPlayClusterDisplay.markerYPercents)).apply()
     }
 
-
     /** Small-window card theme: 0 follow the full-screen card theme, 1 always day, 2 always night. */
     fun loadClusterSmallWindowCardTheme(context: Context): Int =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -1250,9 +1247,8 @@ object AirPlayPersistence {
     }
 
     /** 0 off, 1 always small-window positions, 2 auto from the cluster. Default off. */
-    fun loadClusterSmallWindowMode(context: Context): Int =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getInt(KEY_CLUSTER_SMALL_WINDOW_MODE, 0).coerceIn(0, 2)
+    @Suppress("UNUSED_PARAMETER")
+    fun loadClusterSmallWindowMode(context: Context): Int = 0
 
     fun saveClusterSmallWindowMode(context: Context, mode: Int) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()

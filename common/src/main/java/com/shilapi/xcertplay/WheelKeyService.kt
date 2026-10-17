@@ -110,7 +110,6 @@ class WheelKeyService : AccessibilityService() {
         NavigationWheelSettings.recordAuthorization(this)
         CarPlayCallKeys.install(this)
         // Lets the watcher for other apps' calls run whenever this accessibility service does.
-        PhoneAudioRoute.attach(this)
         refreshEligibility()
         handler.removeCallbacks(pollEligibility)
         handler.postDelayed(pollEligibility, ELIGIBILITY_POLL_MILLIS)
@@ -996,7 +995,7 @@ object WheelZoomSettings {
     /** The mode key switches zoom mode until pressed again, or turns it on for a few seconds. */
     enum class Behaviour { TOGGLE, TIMED }
 
-    fun enabled(context: Context): Boolean = prefs(context).getBoolean(KEY_ENABLED, false)
+    fun enabled(context: Context): Boolean = false
 
     fun setEnabled(context: Context, enabled: Boolean) {
         prefs(context).edit().putBoolean(KEY_ENABLED, enabled).apply()
@@ -1011,7 +1010,7 @@ object WheelZoomSettings {
         WheelKeyService.settingsChanged()
     }
 
-    fun joystick(context: Context): Boolean = prefs(context).getBoolean(KEY_JOYSTICK, false)
+    fun joystick(context: Context): Boolean = false
 
     fun setJoystick(context: Context, enabled: Boolean) {
         prefs(context).edit().putBoolean(KEY_JOYSTICK, enabled).apply()
@@ -1035,7 +1034,7 @@ object WheelZoomSettings {
     }
 
     /** With this on, only the wheel's long press opens Siri; a short press of the voice key does nothing. */
-    fun siriLongPressOnly(context: Context): Boolean = prefs(context).getBoolean(KEY_SIRI_LONG_ONLY, false)
+    fun siriLongPressOnly(context: Context): Boolean = false
 
     fun setSiriLongPressOnly(context: Context, enabled: Boolean) {
         prefs(context).edit().putBoolean(KEY_SIRI_LONG_ONLY, enabled).apply()

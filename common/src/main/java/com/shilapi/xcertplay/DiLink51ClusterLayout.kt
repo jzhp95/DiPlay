@@ -37,7 +37,8 @@ internal object DiLink51ClusterLayout {
         STREAM_WIDTH, STREAM_HEIGHT, scalePercent = 100,
     ).copy(safeArea = null)
 
-    fun supported(fingerprint: String = Build.FINGERPRINT): Boolean = fingerprint in FINGERPRINTS
+    @Suppress("UNUSED_PARAMETER")
+    fun supported(fingerprint: String = Build.FINGERPRINT): Boolean = false
     fun theme(context: Context): Theme = Theme.entries.firstOrNull {
         it.name == context.getSharedPreferences(PREFS, 0).getString("theme", null)
     } ?: Theme.SCENARIO

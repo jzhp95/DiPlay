@@ -15,7 +15,7 @@ import android.widget.TextView
 import com.shilapi.xcertplay.host.R
 import com.shilapi.xcertplay.airplay.AirPlaySession
 import com.shilapi.xcertplay.airplay.CarPlayMediaButton
-import com.shilapi.xcertplay.hud.BydCarPlayCall
+import com.shilapi.xcertplay.hud.CarPlayPhoneState
 import com.shilapi.xcertplay.hud.CarPlayCallState
 import com.shilapi.xcertplay.iap2.message.Iap2Messages
 import com.shilapi.xcertplay.orchestration.CarPlayController
@@ -42,7 +42,7 @@ class WheelSiriWindowTest {
     private lateinit var controller: CarPlayController
 
     @Before fun setUp() {
-        BydCarPlayCall.end()
+        CarPlayPhoneState.end()
         CarPlayBackgroundSession.clear()
         host = Robolectric.buildActivity(CarPlayHostActivity::class.java).get()
         settings = Robolectric.buildActivity(DiPlayActivity::class.java).get()
@@ -64,7 +64,7 @@ class WheelSiriWindowTest {
         for ((activity, name) in listOf(host to "mainHandler", settings to "handler")) {
             (activity.javaClass.getDeclaredField(name).apply { isAccessible = true }.get(activity) as Handler).removeCallbacksAndMessages(null)
         }
-        BydCarPlayCall.end()
+        CarPlayPhoneState.end()
         CarPlayBackgroundSession.clear()
         host.getSharedPreferences("xcertplay_airplay", Context.MODE_PRIVATE).edit().clear().commit()
     }
@@ -209,19 +209,6 @@ class WheelSiriWindowTest {
         verify(controller, times(3)).requestSiri()
     }
 
-    @Test fun longPressOnlyMakesTheShortVoiceKeyDoNothingAndKeepsTheLongOne() {
-        WheelZoomSettings.setSiriKey(host, false)
-        WheelZoomSettings.setSiriLongPressOnly(host, true)
-        val short = CarPlayMediaButton.KEYCODE_BYD_AUTO_MEDIA_VOICE
-        assertTrue(host.dispatchKeyEvent(key(short, true)))
-        assertTrue(host.dispatchKeyEvent(key(short, false)))
-        verify(controller, never()).requestSiri()
-        val long = CarPlayMediaButton.KEYCODE_BYD_AUTO_MEDIA_VOICE_LONG
-        assertTrue(host.dispatchKeyEvent(key(long, true)))
-        assertTrue(host.dispatchKeyEvent(key(long, false)))
-        verify(controller, times(1)).requestSiri()
-    }
-
     @Test fun assigningALegacyVoiceKeyBetweenDownAndUpKeepsTheOriginalAction() {
         val code = KeyEvent.KEYCODE_VOICE_ASSIST
         WheelZoomSettings.setSiriKey(host, false)
@@ -233,13 +220,13 @@ class WheelSiriWindowTest {
     }
 
     @Test fun carPlayCallStateBlocksAssignedSiriWhileAndroidModeIsNormal() {
-        BydCarPlayCall.onFrame(Iap2Messages.buildRaw(CarPlayCallState.CALL_STATE_UPDATE) {
+        CarPlayPhoneState.onFrame(Iap2Messages.buildRaw(CarPlayCallState.CALL_STATE_UPDATE) {
             u8(2, 4); string(4, "active-call")
         })
         assertEquals(AudioManager.MODE_NORMAL, host.getSystemService(AudioManager::class.java).mode)
         assertTrue(inCall(host))
         host.dispatchKeyEvent(key(KeyEvent.KEYCODE_F6, true))
-        BydCarPlayCall.end()
+        CarPlayPhoneState.end()
         host.dispatchKeyEvent(key(KeyEvent.KEYCODE_F6, false))
         verify(controller, never()).requestSiri()
     }
@@ -262,33 +249,6 @@ class WheelSiriWindowTest {
         settings.dispatchKeyEvent(key(KeyEvent.KEYCODE_F7, false))
         assertEquals(0, learned)
         assertEquals(KeyEvent.KEYCODE_F6, WheelZoomSettings.key(settings, WheelZoomSettings.Role.SIRI)?.code)
-    }
-
-    @Test fun siriZoomAndJoystickShowTheirSharedServiceSetupOnlyOnce() {
-        settings.setTheme(android.R.style.Theme_Material_NoActionBar)
-        WheelZoomSettings.setEnabled(settings, true)
-        WheelZoomSettings.setJoystick(settings, true)
-        WheelZoomSettings.setSiriKey(settings, true)
-        // A recognized BYD unit offers its wheel controls even without an available map.
-        org.robolectric.Shadows.shadowOf(settings.packageManager)
-            .installPackage(android.content.pm.PackageInfo().apply { packageName = "com.byd.amapservice" })
-        val controls = LinearLayout(settings)
-        settings.javaClass.getDeclaredMethod("wheelKeysSettings", LinearLayout::class.java)
-            .apply { isAccessible = true }.invoke(settings, controls)
-        fun labels(view: View): List<String> = when (view) {
-            is ViewGroup -> (0 until view.childCount).flatMap { labels(view.getChildAt(it)) }
-            is TextView -> listOf(view.text.toString())
-            else -> emptyList()
-        }
-        val texts = labels(controls)
-        for (label in listOf(R.string.wheel_keys_enable_adb, R.string.wheel_keys_open_settings,
-            R.string.wheel_keys_service_off)) {
-            assertEquals(1, texts.count { it == settings.getString(label) })
-        }
-        // The setup sits above the features it serves.
-        assertTrue(texts.indexOf(settings.getString(R.string.wheel_keys_service_off)) <
-            texts.indexOf(settings.getString(R.string.wheel_siri_key)))
-        assertTrue(texts.any { it == settings.getString(R.string.wheel_joystick) })
     }
 
     @Test fun doublePressOptionsAppearDirectlyUnderTheSiriSetting() {
@@ -315,35 +275,6 @@ class WheelSiriWindowTest {
         assertTrue(delay >= 0)
         assertTrue(assignment >= 0)
         assertTrue(delay < assignment)
-    }
-
-    @Test fun nonBydUnitKeepsItsSavedJoystickControlsWithoutOfferingUnavailableMapZoom() {
-        settings.setTheme(android.R.style.Theme_Material_NoActionBar)
-        WheelZoomSettings.setSiriKey(settings, false)
-        WheelZoomSettings.setJoystick(settings, true)
-        val joystickKey = WheelKey(KeyEvent.KEYCODE_F8, 0, "external-wheel")
-        WheelZoomSettings.assign(settings, WheelZoomSettings.Role.JOYSTICK, joystickKey)
-        AirPlayPersistence.saveClusterMapEnabled(settings, false)
-        assertFalse(CarHotspotSetup.isBydHeadUnit(settings))
-
-        val controls = wheelControls()
-        val joystick = views(controls).filterIsInstance<Switch>().single {
-            it.contentDescription == settings.getString(R.string.wheel_joystick)
-        }
-        assertTrue(joystick.isChecked)
-        assertSharedServiceSetupOnce(controls)
-        assertFalse(views(controls).filterIsInstance<Switch>().any {
-            it.contentDescription == settings.getString(R.string.wheel_map_zoom)
-        })
-        assertTrue(views(controls).filterIsInstance<TextView>().any {
-            it.text.toString() == settings.getString(R.string.wheel_key_assign,
-                settings.getString(R.string.wheel_key_role_joystick), joystickKey.toString())
-        })
-
-        joystick.performClick()
-
-        assertFalse(WheelZoomSettings.joystick(settings))
-        assertEquals(joystickKey, WheelZoomSettings.key(settings, WheelZoomSettings.Role.JOYSTICK))
     }
 
     @Test fun removedPlayPauseControlsStayHiddenWithALegacyAssignment() {
@@ -379,36 +310,6 @@ class WheelSiriWindowTest {
         assertTrue(settings.dispatchKeyEvent(key(KeyEvent.KEYCODE_F9, false)))
         assertEquals(WheelKey(KeyEvent.KEYCODE_F9, 0, "?"), learned)
         assertEquals(learned, WheelZoomSettings.key(settings, WheelZoomSettings.Role.MEDIA_PLAY_PAUSE))
-    }
-
-    @Test fun nonBydUnitWithThePreviouslySupportedClusterDisplayKeepsWheelControls() {
-        settings.setTheme(android.R.style.Theme_Material_NoActionBar)
-        WheelZoomSettings.setSiriKey(settings, false)
-        AirPlayPersistence.saveClusterMapEnabled(settings, true)
-        val displayId = ShadowDisplayManager.addDisplay("w1920dp-h720dp-mdpi", 5)
-        shadowOf(settings.getSystemService(DisplayManager::class.java).getDisplay(displayId)).apply {
-            setName(DiLink4ClusterDisplay.NAME)
-            setFlags(Display.FLAG_PRESENTATION)
-        }
-        try {
-            assertFalse(CarHotspotSetup.isBydHeadUnit(settings))
-            assertEquals(displayId, ClusterMapPresentation.findDisplay(settings)?.displayId)
-            val controls = wheelControls()
-            val zoom = views(controls).filterIsInstance<Switch>().single {
-                it.contentDescription == settings.getString(R.string.wheel_map_zoom)
-            }
-            assertFalse(zoom.isChecked)
-            assertTrue(views(controls).filterIsInstance<Switch>().any {
-                it.contentDescription == settings.getString(R.string.wheel_joystick)
-            })
-
-            zoom.performClick()
-
-            assertTrue(WheelZoomSettings.enabled(settings))
-            assertSharedServiceSetupOnce(wheelControls())
-        } finally {
-            ShadowDisplayManager.removeDisplay(displayId)
-        }
     }
 
     private fun wheelControls() = LinearLayout(settings).also { controls ->

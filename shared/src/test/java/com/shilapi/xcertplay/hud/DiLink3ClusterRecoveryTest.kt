@@ -43,18 +43,18 @@ class DiLink3ClusterRecoveryTest {
         ReflectionHelpers.setField(output, "context", null)
     }
 
-    @Test fun appOpeningRecoversAnInterruptedClusterEvenWhenNavigationIsDisabled() {
+    @Test fun explicitRecoveryCanRestoreAJournalButAppOpeningDoesNotTouchTheCluster() {
         prefs.edit().putBoolean("restore_stock_mode", true).commit()
         BydOutputSettings.setEnabled(app, false)
         Shell.response = { null }
         BydNavigationOutputs.onAppOpened(app)
         drain()
-        assertEquals(listOf(stock), Shell.commands.toList())
+        assertTrue(Shell.commands.isEmpty())
         assertTrue(prefs.getBoolean("restore_stock_mode", false))
         Shell.response = { "Result: Parcel(00000000 00000000 '........')" }
         output.restoreIfNeeded(app)
         drain()
-        assertEquals(listOf(stock, stock), Shell.commands.toList())
+        assertEquals(listOf(stock), Shell.commands.toList())
         assertFalse(prefs.contains("restore_stock_mode"))
     }
 
@@ -101,7 +101,7 @@ class DiLink3ClusterRecoveryTest {
             .putBoolean("adb_cluster_activity_enabled", false).commit()
         output.restoreIfNeeded(app)
         drain()
-        assertEquals(listOf(stock), Shell.commands.toList())
+        assertTrue(Shell.commands.isEmpty())
         assertFalse(prefs.contains("restore_stock_mode"))
     }
 

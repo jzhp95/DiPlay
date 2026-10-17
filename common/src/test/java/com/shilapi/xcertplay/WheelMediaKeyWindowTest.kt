@@ -8,7 +8,7 @@ import android.view.KeyEvent
 import com.shilapi.xcertplay.airplay.AirPlaySession
 import com.shilapi.xcertplay.airplay.CarPlayMediaButton
 import com.shilapi.xcertplay.airplay.AirPlayKnobState
-import com.shilapi.xcertplay.hud.BydCarPlayCall
+import com.shilapi.xcertplay.hud.CarPlayPhoneState
 import com.shilapi.xcertplay.hud.CarPlayCallState
 import com.shilapi.xcertplay.iap2.message.Iap2Messages
 import com.shilapi.xcertplay.orchestration.CarPlayController
@@ -39,7 +39,7 @@ class WheelMediaKeyWindowTest {
     private lateinit var controller: CarPlayController
 
     @Before fun setUp() {
-        BydCarPlayCall.end()
+        CarPlayPhoneState.end()
         CarPlayBackgroundSession.clear()
         host = Robolectric.buildActivity(CarPlayHostActivity::class.java).get()
         host.getSharedPreferences("diplay_wheel_map_zoom", Context.MODE_PRIVATE).edit().clear().commit()
@@ -58,7 +58,7 @@ class WheelMediaKeyWindowTest {
         }
         (host.javaClass.getDeclaredField("mainHandler").apply { isAccessible = true }.get(host) as Handler)
             .removeCallbacksAndMessages(null)
-        BydCarPlayCall.end()
+        CarPlayPhoneState.end()
         CarPlayBackgroundSession.clear()
         host.getSharedPreferences("xcertplay_airplay", Context.MODE_PRIVATE).edit().clear().commit()
     }
@@ -80,7 +80,7 @@ class WheelMediaKeyWindowTest {
     }
 
     @Test fun theKeysKeepTheCarsOwnActionDuringACall() {
-        BydCarPlayCall.onFrame(Iap2Messages.buildRaw(CarPlayCallState.CALL_STATE_UPDATE) {
+        CarPlayPhoneState.onFrame(Iap2Messages.buildRaw(CarPlayCallState.CALL_STATE_UPDATE) {
             u8(2, 4); string(4, "active-call")
         })
         assertEquals(AudioManager.MODE_NORMAL, host.getSystemService(AudioManager::class.java).mode)
@@ -119,7 +119,7 @@ class WheelMediaKeyWindowTest {
         field("activeAirPlaySession", null)
         assertFalse(host.dispatchKeyEvent(key(KeyEvent.KEYCODE_F9, true)))
         field("activeAirPlaySession", mock(AirPlaySession::class.java))
-        BydCarPlayCall.onFrame(Iap2Messages.buildRaw(CarPlayCallState.CALL_STATE_UPDATE) {
+        CarPlayPhoneState.onFrame(Iap2Messages.buildRaw(CarPlayCallState.CALL_STATE_UPDATE) {
             u8(2, 4); string(4, "call")
         })
         assertFalse(host.dispatchKeyEvent(key(KeyEvent.KEYCODE_F9, true)))

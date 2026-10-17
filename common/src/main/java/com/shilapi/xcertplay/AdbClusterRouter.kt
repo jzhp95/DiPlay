@@ -11,16 +11,8 @@ internal object AdbClusterRouter {
     data class Result(val success: Boolean, val report: String)
 
     /** Known 5/5.1 displays win; the explicit legacy route may own the measured projection task. */
-    fun enabled(context: Context): Boolean {
-        if (DiLink51ClusterLayout.supported()) return false
-        val public = ClusterMapPresentation.findDisplay(context)
-        if (AirPlayPersistence.loadLegacyClusterEnabled(context)) {
-            // Only the measured projection may use the independent task; public 5/5.1 wins.
-            return public == null || DiLink4ClusterDisplay.matches(public.name,
-                ClusterMapPresentation.sizeOf(public).x, ClusterMapPresentation.sizeOf(public).y)
-        }
-        return AirPlayPersistence.loadAdbClusterEnabled(context) && public == null
-    }
+    @Suppress("UNUSED_PARAMETER")
+    fun enabled(context: Context): Boolean = false
 
     // Match only the base logical display, not a device's layer-stack number or override record.
     internal fun displayId(dump: String): Int? {

@@ -19,7 +19,9 @@ import com.shilapi.xcertplay.airplay.ClusterSpeedometerOverlay
 internal class ClusterSpeedometerView(
     context: Context,
     private val observeSpeed: ((Int?) -> Unit) -> (() -> Unit) = { changed ->
-        com.shilapi.xcertplay.hud.BydClusterSpeedReader.observe(context, changed)
+        changed(null)
+        val stop: () -> Unit = {}
+        stop
     },
 ) : View(context) {
 

@@ -17,7 +17,7 @@ object AmbientMusicSettings {
         val color = integer("color", 1).coerceIn(1, 31)
         val palette = runCatching { p.getStringSet("selectedColors", null)?.mapNotNull { it.toIntOrNull() } }.getOrNull()
         return Values(
-            enabled = boolean("enabled", false),
+            enabled = false,
             music = boolean("music", true),
             colorMode = runCatching { AmbientColorMode.valueOf(text("colorMode", "BEAT")) }.getOrDefault(AmbientColorMode.BEAT),
             speed = runCatching { AmbientColorSpeed.valueOf(text("speed", "STANDARD")) }.getOrDefault(AmbientColorSpeed.STANDARD),

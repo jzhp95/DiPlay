@@ -133,6 +133,7 @@ object PhoneAudioRoute {
     /** Safe to call often; the first call sets everything up and later ones re-read the settings. */
     @Synchronized
     fun attach(context: Context) {
+        if (!BydOutputSettings.phoneAudioRoute(context) && !BydOutputSettings.phoneAudioRouteApps(context)) return
         val app = context.applicationContext
         if (controller == null) {
             controller = PhoneAudioRouteController(
