@@ -16,24 +16,22 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [29])
 class CarPlayHomeLayoutTest {
-    @Test fun iconAndBrandShareTheSameFiveTapEntry() {
+    @Test fun textOnlyBrandKeepsTheFiveTapEntry() {
         val context = RuntimeEnvironment.getApplication()
         var opened = 0
         val layout = CarPlayHomeLayout(context, DiPlayPalette.LIGHT,
             { title, _, click -> Button(context).apply { text = title; setOnClickListener { click() } } },
             { title, _, _, _ -> TextView(context).apply { text = title } })
         val header = layout.header(View(context), {}, {}, {}, {}, { opened++ })
-        val logo = descendants(header.root).filterIsInstance<android.widget.ImageView>().single {
-            it.contentDescription == context.getString(R.string.carplay)
-        }
+        assertFalse("home brand must not show a logo", descendants(header.root).any { it is android.widget.ImageView })
         val brand = descendants(header.root).filterIsInstance<TextView>().single {
-            it.text == context.getString(R.string.carplay)
+            it.text == "Apple CarPlay"
         }
-        repeat(4) { if (it % 2 == 0) logo.performClick() else brand.performClick() }
+        repeat(4) { brand.performClick() }
         assertEquals(0, opened)
         brand.performClick()
         assertEquals(1, opened)
-        logo.performClick()
+        brand.performClick()
         assertEquals(1, opened)
     }
     @Config(qualifiers = "zh-rCN-w1100dp-h700dp-land")

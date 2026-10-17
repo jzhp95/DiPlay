@@ -41,12 +41,15 @@ class AppUpdateRemovedTest {
         }
     }
 
-    @Test fun aboutKeepsBackupWithoutAnyUpdateControls() {
+    @Test fun aboutShowsAppDetailsWithoutBackupOrUpdateControls() {
         val activity = Robolectric.buildActivity(DiPlayActivity::class.java).get()
         activity.setTheme(android.R.style.Theme_Material_NoActionBar)
         try {
             val text = texts(render(activity, "about"))
-            assertTrue(text.contains(activity.getString(R.string.backup_open)))
+            assertTrue(text.contains(activity.getString(R.string.settings_about_summary)))
+            assertTrue(text.contains(activity.getString(R.string.settings_about_features_summary)))
+            assertTrue(text.contains(activity.getString(R.string.receiver_based_on_xcertplay_licensed_under_gpl_3_0_diplay)))
+            assertFalse(text.any { it.contains("备份") || it.contains("恢复") })
             for (removed in listOf("Check for updates", "Check for updates in the background", "Download update")) {
                 assertFalse(removed, text.contains(removed))
             }

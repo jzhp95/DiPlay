@@ -645,7 +645,7 @@ object AirPlayPersistence {
 
     fun loadFps(context: Context): Int = AirPlayDisplaySettings.sanitizeFps(
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getInt(KEY_FPS, 30),
+            .getInt(KEY_FPS, AirPlayDisplaySettings.DEFAULT_FPS),
     )
 
     /** Music buffer for the session's transport. Wireless and wired USB have separate settings. */

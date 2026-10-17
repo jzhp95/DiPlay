@@ -1,4 +1,4 @@
-package com.shilapi.xcertplay.backup
+package com.shilapi.xcertplay.reportshare
 
 import com.shilapi.xcertplay.airplay.RtspMessage
 import java.io.ByteArrayOutputStream
@@ -19,26 +19,24 @@ import java.util.concurrent.SynchronousQueue
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 
-data class SettingsBackupEndpoint(val port: Int, val token: String, val code: String = "") {
-    fun url(address: String) = "http://$address:$port/b/$token/"
+data class ReportShareEndpoint(val port: Int, val token: String, val code: String = "") {
+    fun url(address: String) = "http://$address:$port/r/$token/"
 
     /** What someone without a camera types; a browser adds the scheme. The page it opens asks for [code]. */
     fun typedAddress(address: String) = "$address:$port"
 }
 
 /**
- * One-request-per-connection HTTP transport that serves the settings backup page.
+ * One-request-per-connection HTTP transport that serves the diagnostic report page.
  *
  * Each connection is read on its own thread. A browser opens spare connections before it needs
  * them and may never use them; read in turn, one of those would hold up every request behind it
  * until it timed out. The requests themselves are still answered one at a time.
  */
-class SettingsBackupServer(
+class ReportShareServer(
     private val page: ByteArray,
-    private val export: () -> ByteArray,
-    private val import: (ByteArray) -> SettingsImportOutcome,
-    /** The diagnostic report as text, or null when the page has none to offer. */
-    private val report: (() -> ByteArray)? = null,
+    /** The diagnostic report as UTF-8 text. Settings are never imported or exported. */
+    private val report: () -> ByteArray,
     /** The page that asks for the typed code, or null when the address cannot be typed. */
     private val codePage: ByteArray? = null,
 ) {
@@ -51,13 +49,10 @@ class SettingsBackupServer(
     private var code: String = ""
     @Volatile private var wrongCodes = 0
     @Volatile private var closed = true
-    /** Where the typed code leads on the page, for example "#report". */
-    @Volatile var landing = ""
     /** False once too many wrong codes were typed. The link in the QR code keeps working. */
     val codeEntryOpen: Boolean get() = codePage != null && wrongCodes < MAX_WRONG_CODES
     /** Called on a connection thread when the last allowed wrong code was typed. */
     var onCodeEntryClosed: (() -> Unit)? = null
-    var onImported: ((SettingsImportOutcome) -> Unit)? = null
     /** Called on the server thread when nobody used the page for [idleTimeoutMillis]. */
     var onIdle: (() -> Unit)? = null
     var idleTimeoutMillis = IDLE_TIMEOUT_MILLIS
@@ -80,7 +75,7 @@ class SettingsBackupServer(
         }
     }
 
-    fun start(): SettingsBackupEndpoint? {
+    fun start(): ReportShareEndpoint? {
         // A typed address is worth keeping the same: the browser remembers it, and next time only the
         // code has to be typed. The link in the QR code does not care which port it carries.
         val bound = (if (codePage != null) listen(typedPort) else null) ?: listen(0) ?: return null
@@ -92,11 +87,11 @@ class SettingsBackupServer(
         wrongCodes = 0
         server = bound
         connections = ThreadPoolExecutor(0, MAX_CONNECTIONS, 30L, TimeUnit.SECONDS, SynchronousQueue()) { task ->
-            Thread(task, "settings-backup-connection").apply { isDaemon = true }
+            Thread(task, "report-share-connection").apply { isDaemon = true }
         }
         closed = false
-        thread = Thread({ loop() }, "settings-backup").apply { isDaemon = true; start() }
-        return SettingsBackupEndpoint(bound.localPort, token, if (codePage != null) code else "")
+        thread = Thread({ loop() }, "report-share").apply { isDaemon = true; start() }
+        return ReportShareEndpoint(bound.localPort, token, if (codePage != null) code else "")
     }
 
     fun stop() {
@@ -198,23 +193,14 @@ class SettingsBackupServer(
             return Triple(200, mapOf("Content-Type" to "text/html; charset=utf-8", "Cache-Control" to "no-store"), codePage)
         }
         if (codePage != null && path == "/code" && request.method == "POST") return checkCode(request.body)
-        val prefix = "/b/$token"
+        val prefix = "/r/$token"
         val authorized = path == prefix || path.startsWith("$prefix/")
         if (!authorized) return notFound()
         val route = path.removePrefix("$prefix/").trimEnd('/')
         return when {
             route.isEmpty() && request.method == "GET" ->
                 Triple(200, mapOf("Content-Type" to "text/html; charset=utf-8", "Cache-Control" to "no-store"), page)
-            route == "export" && request.method == "GET" -> Triple(
-                200,
-                mapOf(
-                    "Content-Type" to "application/json",
-                    "Content-Disposition" to "attachment; filename=\"$EXPORT_FILE\"",
-                    "Cache-Control" to "no-store",
-                ),
-                export(),
-            )
-            route == "report" && request.method == "GET" && report != null -> Triple(
+            route == "report" && request.method == "GET" -> Triple(
                 200,
                 mapOf(
                     "Content-Type" to "text/plain; charset=utf-8",
@@ -223,16 +209,6 @@ class SettingsBackupServer(
                 ),
                 report(),
             )
-            route == "import" && request.method == "POST" -> {
-                val outcome = import(request.body)
-                onImported?.invoke(outcome)
-                Triple(
-                    200,
-                    mapOf("Content-Type" to "application/json", "Cache-Control" to "no-store"),
-                    "{\"applied\":${outcome.applied},\"skipped\":${outcome.skipped},\"invalid\":${outcome.invalid}}"
-                        .toByteArray(Charsets.UTF_8),
-                )
-            }
             else -> notFound()
         }
     }
@@ -246,7 +222,7 @@ class SettingsBackupServer(
         fun answer(status: Int, json: String) = Triple(status, headers, json.toByteArray(Charsets.UTF_8))
         if (wrongCodes >= MAX_WRONG_CODES) return answer(403, "{\"locked\":true}")
         val typed = String(body, 0, minOf(body.size, MAX_TYPED_BYTES), Charsets.UTF_8).filter { it in '0'..'9' }
-        if (typed.length == CODE_DIGITS && tokenMatches(code, typed)) return answer(200, "{\"path\":\"/b/$token/$landing\"}")
+        if (typed.length == CODE_DIGITS && tokenMatches(code, typed)) return answer(200, "{\"path\":\"/r/$token/\"}")
         wrongCodes++
         if (wrongCodes < MAX_WRONG_CODES) return answer(403, "{\"left\":${MAX_WRONG_CODES - wrongCodes}}")
         onCodeEntryClosed?.invoke()
@@ -265,7 +241,6 @@ class SettingsBackupServer(
         const val IDLE_TIMEOUT_MILLIS = 10 * 60_000
         private const val ACCEPT_POLL_MILLIS = 250
         private const val MAX_REQUEST = 2 shl 20
-        const val EXPORT_FILE = "diplay-settings.json"
         const val REPORT_FILE = "diplay-report.txt"
         const val CODE_DIGITS = 6
         private const val CODE_SPACE = 1_000_000

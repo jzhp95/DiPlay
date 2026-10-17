@@ -2,6 +2,10 @@ package com.shilapi.xcertplay
 
 import android.app.AlertDialog
 import android.app.Activity
+import android.graphics.drawable.ColorDrawable
+import android.content.res.Configuration
+import android.os.Handler
+import android.os.Looper
 import android.content.Context
 import android.media.AudioManager
 import android.os.Bundle
@@ -9,13 +13,25 @@ import android.view.KeyEvent
 import android.widget.Toast
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.core.view.WindowInsetsCompat
 import com.shilapi.xcertplay.host.R
 
 /** A test never outlives this screen or silently replaces a live CarPlay session. */
-class WheelTestActivity : Activity() {
+class WheelTestActivity : Activity(), AppAppearanceOwner {
+    override var currentAppNight: Boolean = true
+        private set
+    private var appearanceObserverRemoval: (() -> Unit)? = null
     private lateinit var controller: WheelTestController
     private lateinit var views: WheelTestLayout.Views
+    private val appearanceHandler = Handler(Looper.getMainLooper())
+    private val appearancePoll = object : Runnable {
+        override fun run() {
+            if (!foreground) return
+            checkAppearance()
+            appearanceHandler.postDelayed(this, 5_000L)
+        }
+    }
     private var foreground = false
     private var startGeneration = 0
     private var disconnectDialog: AlertDialog? = null
@@ -26,7 +42,21 @@ class WheelTestActivity : Activity() {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         controller = WheelTestController(this, ::showState)
-        views = WheelTestLayout(this, DiPlayPalette.DARK).build(DetailedDebugLog.enabled(this), { enabled ->
+        renderAppearance()
+    }
+
+    private fun renderAppearance() {
+        val scrollY = if (::views.isInitialized) views.root.scrollY else 0
+        currentAppNight = resolveAppNightNow()
+        val palette = DiPlayPalette.of(currentAppNight)
+        window.setBackgroundDrawable(ColorDrawable(palette.background))
+        window.statusBarColor = palette.systemBar
+        window.navigationBarColor = palette.systemBar
+        WindowInsetsControllerCompat(window, window.decorView).apply {
+            isAppearanceLightStatusBars = palette.systemBarIconsAreDark
+            isAppearanceLightNavigationBars = palette.systemBarIconsAreDark
+        }
+        views = WheelTestLayout(this, palette).build(DetailedDebugLog.enabled(this), { enabled ->
             DetailedDebugLog.setEnabled(this, enabled)
             Toast.makeText(this, if (enabled) R.string.settings_detailed_debug_started else R.string.settings_detailed_debug_stopped, Toast.LENGTH_SHORT).show()
         }, ::action)
@@ -37,9 +67,32 @@ class WheelTestActivity : Activity() {
         }
         setContentView(views.root)
         showState(controller.snapshot())
+        val root = views.root
+        root.post { root.scrollTo(0, scrollY) }
     }
 
-    override fun onResume() { super.onResume(); foreground = true; showState(controller.snapshot()) }
+    override fun onResume() {
+        super.onResume()
+        foreground = true
+        appearanceObserverRemoval?.invoke()
+        appearanceObserverRemoval = AppAppearanceRuntime.observeHost {
+            runOnUiThread {
+                checkAppearance()
+            }
+        }
+        appearanceHandler.removeCallbacks(appearancePoll)
+        appearanceHandler.postDelayed(appearancePoll, 5_000L)
+        showState(controller.snapshot())
+    }
+
+    private fun checkAppearance() {
+        if (foreground && !isFinishing && !isDestroyed && currentAppNight != resolveAppNightNow()) renderAppearance()
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        checkAppearance()
+    }
 
     private fun action(action: WheelTestLayout.Action) {
         when (action) {
@@ -113,6 +166,9 @@ class WheelTestActivity : Activity() {
 
     override fun onStop() {
         foreground = false
+        appearanceHandler.removeCallbacks(appearancePoll)
+        appearanceObserverRemoval?.invoke()
+        appearanceObserverRemoval = null
         startGeneration++
         disconnectDialog?.dismiss()
         disconnectDialog = null

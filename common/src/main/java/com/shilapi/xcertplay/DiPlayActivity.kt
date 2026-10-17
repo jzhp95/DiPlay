@@ -50,10 +50,9 @@ import com.shilapi.xcertplay.airplay.CarPlayClusterDisplay
 import com.shilapi.xcertplay.airplay.CarPlayDisplayScale
 import com.shilapi.xcertplay.airplay.ClusterSpeedometerOverlay
 import com.shilapi.xcertplay.airplay.ClusterTurnCardOverlay
-import com.shilapi.xcertplay.backup.SettingsBackupCodec
-import com.shilapi.xcertplay.backup.SettingsBackupEndpoint
-import com.shilapi.xcertplay.backup.SettingsBackupServer
-import com.shilapi.xcertplay.backup.SettingsQrCode
+import com.shilapi.xcertplay.reportshare.ReportShareEndpoint
+import com.shilapi.xcertplay.reportshare.ReportShareServer
+import com.shilapi.xcertplay.reportshare.ReportShareQrCode
 import com.shilapi.xcertplay.compat.closeCompat
 import com.shilapi.xcertplay.hud.BydAdbAccess
 import com.shilapi.xcertplay.hud.BydNavigationOutputs
@@ -215,11 +214,8 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
     private var vehicleProbeOutcome: BydVehicleProbeOutcome? = null
     private var adbCheckGeneration = 0
     private var adbStatus: TextView? = null
-    @Volatile private var backupServer: SettingsBackupServer? = null
-    @Volatile private var backupEndpoint: SettingsBackupEndpoint? = null
-    /** The Settings category that opened the phone page, and the one to go back to. */
-    private var backupOpenedFrom = SettingsCategory.ABOUT
-    @Volatile private var backupSummary: String? = null
+    @Volatile private var reportShareServer: ReportShareServer? = null
+    @Volatile private var reportShareEndpoint: ReportShareEndpoint? = null
     private var carButtonCard: LinearLayout? = null
     private var bydAdbControls: LinearLayout? = null
     private var adbSwitchChangePending = false
@@ -527,7 +523,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         hotspotJoinControls?.close()
         cancelUsbPermissionSetup()
         cancelKeyLearning()
-        stopBackupServer()
+        stopReportShareServer()
         handler.removeCallbacks(automaticVehicleValidation)
         adbCheckGeneration++
         synchronized(vehicleOperationLock) {
@@ -612,8 +608,8 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         applyWindowAppearance()
         // A pending assignment belongs to the widgets being replaced, never to another page.
         if (!appearanceOnly) cancelKeyLearning()
-        // The backup server lives only while its page is shown, however the driver left it.
-        if (page != "backup" && backupServer != null) stopBackupServer()
+        // The report server lives only while its page is shown, however the driver left it.
+        if (page != "report-share" && reportShareServer != null) stopReportShareServer()
         val focusSnapshot = if (appearanceOnly) {
             currentFocus?.let { focused ->
                 FocusSnapshot(
@@ -683,7 +679,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             when (page) {
                 "connection" -> connectionSetup(content)
                 "settings" -> settingsCategoryContent(content)
-                "backup" -> backup(content)
+                "report-share" -> reportShare(content)
                 else -> home(content)
             }
             if (page == "home") homeLayout().screen(scroll, content, checkNotNull(homeCards)) else scroll
@@ -779,10 +775,10 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         }
         val returnCategory = connectionSettingsReturnCategory
         when {
-            page == "backup" -> {
-                stopBackupServer()
+            page == "report-share" -> {
+                stopReportShareServer()
                 page = "settings"
-                settingsCategory = backupOpenedFrom
+                settingsCategory = SettingsCategory.DIAGNOSTICS
             }
             page == "connection" && returnCategory != null -> {
                 page = "settings"
@@ -1638,7 +1634,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             }.apply { isEnabled = !exportInProgress }
             card.addView(exportButton, matchButton(10, 60))
             card.addView(button(getString(R.string.choose_save_location), false) { chooseReportDestination() }, matchButton(10, 60))
-            card.addView(button(getString(R.string.settings_report_on_phone), false) { openBackup(SettingsCategory.DIAGNOSTICS) }, matchButton(10, 60))
+            card.addView(button(getString(R.string.settings_report_on_phone), false) { openReportShare() }, matchButton(10, 60))
             val destination = getString(R.string.reports_save_to_downloads_diplay)
             card.addView(label(destination + getString(R.string.nothing_is_sent_automatically_protocol_payloads_and_creden), 14, MUTED).apply { setPadding(0, dp(12), 0, 0) })
             toggle(card, getString(R.string.settings_fps_counter), getString(R.string.settings_fps_counter_description),
@@ -2321,71 +2317,57 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
     }
 
     private fun about(content: LinearLayout) {
-        settingsPageTitle(content, getString(R.string.about_diplay), getString(R.string.carplay_at_home_in_your_car))
-        section(content, getString(R.string.about_public_preview_prefix, version())) { card ->
-            card.addView(label(getString(R.string.an_independent_carplay_receiver_for_android_head_units_wir), 17, TEXT))
+        settingsPageTitle(content, getString(R.string.about_diplay), getString(R.string.settings_about_subtitle))
+        section(content, getString(R.string.app_name)) { card ->
+            card.addView(label(getString(R.string.settings_about_version, version()), 18, ACCENT, true))
+            card.addView(label(getString(R.string.settings_about_summary), 18, MUTED))
         }
-        section(content, getString(R.string.backup_title)) { card ->
-            card.addView(button(getString(R.string.backup_open), false) { openBackup() }, matchButton(0, 60))
-            card.addView(label(getString(R.string.backup_open_description), 14, MUTED).apply { setPadding(0, dp(10), 0, 0) })
+        section(content, getString(R.string.settings_about_features_title)) { card ->
+            card.addView(label(getString(R.string.settings_about_features_summary), 18, TEXT))
         }
         section(content, getString(R.string.made_possible_by_open_source)) { card ->
             card.addView(label(getString(R.string.receiver_based_on_xcertplay_licensed_under_gpl_3_0_diplay), 16, MUTED))
         }
     }
 
-    private fun openBackup(from: SettingsCategory = SettingsCategory.ABOUT) {
-        backupOpenedFrom = from
-        page = "backup"
+    private fun openReportShare() {
+        page = "report-share"
         render()
     }
 
-    private fun backup(content: LinearLayout) {
+    private fun reportShare(content: LinearLayout) {
         val preferredPrefix = when (AirPlayPersistence.loadWirelessHotspotMode(this)) {
             WirelessHotspotMode.WIFI_P2P -> "p2p"
             WirelessHotspotMode.LOCAL_ONLY_HOTSPOT -> "ap"
             WirelessHotspotMode.MANUAL, WirelessHotspotMode.EXISTING_WIFI -> "wlan"
         }
-        val addresses = SettingsBackupServer.addressCandidates(preferredPrefix)
-        // The same page serves both; opened from Diagnostics, it says what the driver came for.
-        val forReport = backupOpenedFrom == SettingsCategory.DIAGNOSTICS
-        content.addView(label(getString(if (forReport) R.string.settings_report_on_phone else R.string.backup_title), 40, TEXT, true))
-        var endpoint = backupEndpoint
+        val addresses = ReportShareServer.addressCandidates(preferredPrefix)
+        content.addView(label(getString(R.string.settings_report_on_phone), 40, TEXT, true))
+        var endpoint = reportShareEndpoint
         // A running endpoint can outlive its last network interface. Re-rendering must not
         // index an empty address list; keep the endpoint available if the network returns.
         if (addresses.isEmpty()) {
             content.addView(space(SETTINGS_BLOCK_GAP_DP))
-            content.addView(label(getString(R.string.backup_no_network), 16, MUTED))
+            content.addView(label(getString(R.string.settings_report_no_network), 16, MUTED))
             return
         }
-        if (backupServer == null || endpoint == null) {
-            val created = SettingsBackupServer(
-                page = backupPageHtml(),
-                export = { SettingsBackupCodec.export(this, version()) },
-                import = { SettingsBackupCodec.import(this, it) },
+        if (reportShareServer == null || endpoint == null) {
+            val created = ReportShareServer(
+                page = reportSharePageHtml(),
                 report = { diagnosticReportText(applicationContext).toByteArray(Charsets.UTF_8) },
-                codePage = assets.open("settings-code.html").use { it.readBytes() },
+                codePage = assets.open("report-code.html").use { it.readBytes() },
             )
             created.onCodeEntryClosed = {
                 runOnUiThread {
-                    if (!isFinishing && !isDestroyed && backupServer === created) render()
+                    if (!isFinishing && !isDestroyed && reportShareServer === created) render()
                 }
             }
             created.onIdle = {
                 runOnUiThread {
-                    if (isFinishing || isDestroyed || backupServer !== created) return@runOnUiThread
-                    stopBackupServer()
+                    if (isFinishing || isDestroyed || reportShareServer !== created) return@runOnUiThread
+                    stopReportShareServer()
                     page = "settings"
-                    settingsCategory = backupOpenedFrom
-                    render()
-                }
-            }
-            created.onImported = { outcome ->
-                runOnUiThread {
-                    if (isFinishing || isDestroyed) return@runOnUiThread
-                    backupSummary = if (outcome.invalid) getString(R.string.backup_import_invalid)
-                    else getString(R.string.backup_summary, outcome.applied, outcome.skipped)
-                    if (!outcome.invalid && outcome.applied > 0) markReconnectNeeded()
+                    settingsCategory = SettingsCategory.DIAGNOSTICS
                     render()
                 }
             }
@@ -2393,41 +2375,36 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             if (endpoint == null) {
                 created.stop()
                 content.addView(space(SETTINGS_BLOCK_GAP_DP))
-                content.addView(label(getString(R.string.backup_no_network), 16, MUTED))
+                content.addView(label(getString(R.string.settings_report_no_network), 16, MUTED))
                 return
             }
-            backupServer = created
-            backupEndpoint = endpoint
-            backupSummary = null
+            reportShareServer = created
+            reportShareEndpoint = endpoint
         }
         val active = endpoint
-        backupServer?.landing = if (forReport) "#report" else ""
         val qr = ImageView(this).apply {
             val side = dp(240)
-            setImageBitmap(SettingsQrCode.encode(active.url(addresses.first()) + if (forReport) "#report" else "", side))
+            setImageBitmap(ReportShareQrCode.encode(active.url(addresses.first()), side))
             scaleType = ImageView.ScaleType.FIT_CENTER
         }
         content.addView(space(SETTINGS_BLOCK_GAP_DP))
         content.addView(card().apply {
-            addView(label(getString(if (forReport) R.string.settings_report_on_phone_hint else R.string.backup_page_hint), 16, MUTED))
+            addView(label(getString(R.string.settings_report_on_phone_hint), 16, MUTED))
             addView(qr, LinearLayout.LayoutParams(dp(240) + dp(24), dp(240) + dp(24)).apply {
                 topMargin = dp(SETTINGS_BLOCK_GAP_DP); gravity = Gravity.CENTER_HORIZONTAL
             })
-            backupSummary?.let {
-                addView(label(it, 15, TEXT).apply { setPadding(0, dp(16), 0, 0) })
-            }
             // For a computer, or a phone whose camera will not read the code.
             addView(label(
-                if (backupServer?.codeEntryOpen == true) {
-                    getString(R.string.backup_type_address, active.typedAddress(addresses.first()),
+                if (reportShareServer?.codeEntryOpen == true) {
+                    getString(R.string.settings_report_type_address, active.typedAddress(addresses.first()),
                         active.code.chunked(3).joinToString(" "))
-                } else getString(R.string.backup_code_entry_closed),
+                } else getString(R.string.settings_report_code_entry_closed),
                 16,
                 TEXT,
             ).apply { setPadding(0, dp(16), 0, 0) })
             if (addresses.size > 1) {
                 addView(label(
-                    addresses.drop(1).joinToString("\n") { getString(R.string.backup_other_addresses, it) },
+                    addresses.drop(1).joinToString("\n") { getString(R.string.settings_report_other_addresses, it) },
                     14,
                     MUTED,
                 ).apply { setPadding(0, dp(16), 0, 0) })
@@ -2435,14 +2412,13 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         })
     }
 
-    private fun stopBackupServer() {
-        backupServer?.stop()
-        backupServer = null
-        backupEndpoint = null
-        backupSummary = null
+    private fun stopReportShareServer() {
+        reportShareServer?.stop()
+        reportShareServer = null
+        reportShareEndpoint = null
     }
 
-    private fun backupPageHtml(): ByteArray = assets.open("settings-backup.html").use { it.readBytes() }
+    private fun reportSharePageHtml(): ByteArray = assets.open("report-share.html").use { it.readBytes() }
 
     /** Retire jobs persisted by versions that still offered online updates. */
     private fun cancelLegacyUpdateChecks() {

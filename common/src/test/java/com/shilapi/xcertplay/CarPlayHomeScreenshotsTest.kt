@@ -87,7 +87,7 @@ class CarPlayHomeScreenshotsTest {
                 assertTrue("Text outside window: ${text.text}", bounds.left >= 0 && bounds.right <= width)
                 assertTrue("Empty text control: ${text.text}; case=$name/$fontScale", text.width > 0)
                 text.layout?.let { lines ->
-                    if (text.text == localized.getString(com.shilapi.xcertplay.host.R.string.carplay)) {
+                    if (text.text == localized.getString(com.shilapi.xcertplay.host.R.string.app_name)) {
                         assertTrue("Brand truncated: $name/$fontScale", lines.lineCount == 1 &&
                             lines.getLineWidth(0) <= text.width - text.compoundPaddingLeft - text.compoundPaddingRight)
                     }

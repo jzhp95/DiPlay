@@ -1,4 +1,4 @@
-package com.shilapi.xcertplay.backup
+package com.shilapi.xcertplay.reportshare
 
 import android.graphics.Bitmap
 import android.graphics.Color
@@ -10,8 +10,8 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sqrt
 
-/** Renders backup URLs as QR codes on a rounded card. */
-object SettingsQrCode {
+/** Renders diagnostic report URLs as QR codes on a rounded card. */
+object ReportShareQrCode {
     fun encode(content: String, sizePx: Int): Bitmap {
         val matrix = QRCodeWriter().encode(
             content,

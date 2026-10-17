@@ -24,14 +24,16 @@ import org.robolectric.annotation.GraphicsMode
 class WheelTestLayoutTest {
     @Test fun allControlsWorkAndRemainReadableOnCarAndCompactScreens() {
         val base = RuntimeEnvironment.getApplication()
-        for (width in listOf(900, 400)) for (scale in listOf(1f, 1.3f)) {
+        for (width in listOf(900, 400)) for (scale in listOf(1f, 1.5f)) for (night in listOf(false, true)) for (rtl in listOf(false, true)) {
             val height = if (width == 900) 400 else 700
             val context = base.createConfigurationContext(Configuration(base.resources.configuration).apply {
                 screenWidthDp = width; screenHeightDp = height; fontScale = scale
+                setLayoutDirection(if (rtl) java.util.Locale.forLanguageTag("ar") else java.util.Locale.SIMPLIFIED_CHINESE)
             })
             val actions = mutableListOf<WheelTestLayout.Action>()
             var debug = false
-            val ui = WheelTestLayout(context, DiPlayPalette.DARK).build(false, { debug = it }, { actions += it })
+            val ui = WheelTestLayout(context, DiPlayPalette.of(night)).build(false, { debug = it }, { actions += it })
+            assertEquals(DiPlayPalette.of(night).accent, ui.event.currentTextColor)
             ui.event.text = context.getString(R.string.wheel_test_event, context.getString(R.string.wheel_test_next_label),
                 context.getString(R.string.wheel_test_real), 3)
             ui.status.text = context.getString(R.string.wheel_test_status, "已开启", "已获得", "已获得")
@@ -42,6 +44,7 @@ class WheelTestLayoutTest {
             ui.root.measure(View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY),
                 View.MeasureSpec.makeMeasureSpec(h, View.MeasureSpec.EXACTLY))
             ui.root.layout(0, 0, w, h)
+            assertEquals(1, descendants(ui.root).filterIsInstance<Button>().single { it.text == context.getString(R.string.back) }.lineCount)
             descendants(ui.root).filterIsInstance<Button>().filterNot { it is Switch }.forEach { it.performClick() }
             assertEquals(WheelTestLayout.Action.entries.toSet(), actions.toSet())
             descendants(ui.root).filterIsInstance<Switch>().single().performClick()
@@ -58,7 +61,7 @@ class WheelTestLayoutTest {
             try {
                 ui.root.draw(Canvas(bitmap))
                 val folder = File("build/reports/wheel-test-ui").apply { mkdirs() }
-                File(folder, "$width-$scale.png").outputStream().use {
+                File(folder, "$width-$scale-${if (night) "dark" else "light"}${if (rtl) "-rtl" else ""}.png").outputStream().use {
                     assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it))
                 }
             } finally { bitmap.recycle() }

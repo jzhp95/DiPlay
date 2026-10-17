@@ -70,14 +70,9 @@ internal class CarPlayHomeLayout(
         val brandClick = View.OnClickListener {
             if (taps.tap(android.os.SystemClock.elapsedRealtime())) wheelTest()
         }
-        val logoSize = if (compact) 36 else 48
-        top.addView(ImageView(context).apply {
-            setImageResource(R.drawable.ic_carplay)
-            contentDescription = context.getString(R.string.carplay)
-            setOnClickListener(brandClick)
-        }, LinearLayout.LayoutParams(dp(logoSize), dp(logoSize)))
-        val brand = label(R.string.carplay, if (compact) 22 else 30).apply {
-            setPadding(dp(12), 0, dp(8), 0)
+        val brand = label(R.string.app_name, if (compact) 22 else 30).apply {
+            setPaddingRelative(0, 0, dp(8), 0)
+            minHeight = dp(48)
             setSingleLine(true)
             setOnClickListener(brandClick)
         }
@@ -97,7 +92,7 @@ internal class CarPlayHomeLayout(
             val natural = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
             val actionWidth = buttons.sumOf { it.measure(natural, natural); it.measuredWidth }
             val brandWidth = android.text.Layout.getDesiredWidth(brand.text, brand.paint).roundToInt()
-            return actionWidth + brandWidth + dp(logoSize + 20 + 48 + gap * buttons.size) <= dp(width - 64)
+            return actionWidth + brandWidth + dp(8 + 48 + gap * buttons.size) <= dp(width - 64)
         }
         val allInHeader = width >= 850 && fits(chooseButton, disconnectButton, settingsButton, carHomeButton)
         if (allInHeader) {

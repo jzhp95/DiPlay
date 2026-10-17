@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Apple CarPlay · 诊断报告</title>
+<style>
+:root { color-scheme: light dark; --bg:#f2f3f6; --card:#fff; --text:#202124; --muted:#62656c; --accent:#1368fb; }
+@media (prefers-color-scheme:dark) { :root { --bg:#121212; --card:#1f1f22; --text:#f2f3f6; --muted:#a6a8af; --accent:#8eb8ff; } }
+* { box-sizing:border-box; }
+body { margin:0; padding:32px 20px; background:var(--bg); color:var(--text); font:18px/1.6 -apple-system,"Segoe UI",sans-serif; }
+main { max-width:560px; margin:auto; }
+h1 { margin:0; font-size:28px; }
+section { background:var(--card); border-radius:24px; padding:24px; margin-top:24px; }
+h2 { font-size:22px; margin:0 0 12px; }
+p { color:var(--muted); margin:0 0 24px; }
+a { display:block; padding:16px; border-radius:16px; background:var(--accent); color:var(--bg); font-weight:600; text-align:center; text-decoration:none; }
+a:active { opacity:.7; }
+</style>
+</head>
+<body><main>
+<h1>Apple CarPlay</h1>
+<section>
+<h2>诊断报告</h2>
+<p>下载车机当前的诊断报告，用于分析连接、媒体焦点和方向盘按键问题。详细日志需先在车机设置中开启记录。</p>
+<a href="report" download>下载诊断报告</a>
+</section>
+<section><p>请保持手机与车机处于同一网络。车机离开此页面或长时间无人访问后，下载服务会自动关闭。</p></section>
+</main></body>
+</html>

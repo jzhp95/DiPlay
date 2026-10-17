@@ -1,10 +1,9 @@
-package com.shilapi.xcertplay.backup
+package com.shilapi.xcertplay.reportshare
 
 import java.io.ByteArrayOutputStream
 import java.net.HttpURLConnection
 import java.net.Socket
 import java.net.URL
-import java.util.concurrent.atomic.AtomicReference
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -12,21 +11,14 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
-class SettingsBackupServerTest {
-    private lateinit var server: SettingsBackupServer
-    private lateinit var endpoint: SettingsBackupEndpoint
-    private val imported = AtomicReference<SettingsImportOutcome?>()
+class ReportShareServerTest {
+    private lateinit var server: ReportShareServer
+    private lateinit var endpoint: ReportShareEndpoint
 
     @Before
     fun startServer() {
-        server = SettingsBackupServer(
-            page = "<html>backup-page</html>".toByteArray(),
-            export = { "{\"exported\":true}".toByteArray() },
-            import = { document ->
-                val outcome = SettingsImportOutcome(4, 1, invalid = false)
-                imported.set(outcome)
-                outcome
-            },
+        server = ReportShareServer(
+            page = "<html>report-page</html>".toByteArray(),
             report = { "Apple CarPlay diagnostic report\n診斷".toByteArray(Charsets.UTF_8) },
         )
         val started = server.start()
@@ -59,8 +51,7 @@ class SettingsBackupServerTest {
     @Test
     fun stopsByItselfWhenNobodyUsesThePage() {
         val idle = java.util.concurrent.CountDownLatch(1)
-        val quiet = SettingsBackupServer(page = ByteArray(0), export = { ByteArray(0) },
-            import = { SettingsImportOutcome(0, 0, invalid = false) })
+        val quiet = ReportShareServer(page = ByteArray(0), report = { ByteArray(0) })
         quiet.idleTimeoutMillis = 200
         quiet.onIdle = { idle.countDown() }
         val started = quiet.start()!!
@@ -74,38 +65,32 @@ class SettingsBackupServerTest {
 
     @Test
     fun servesThePageOnlyUnderTheTokenPath() {
-        val (status, body) = get("/b/${endpoint.token}/")
+        val (status, body) = get("/r/${endpoint.token}/")
         assertEquals(200, status)
-        assertTrue(body.contains("backup-page"))
+        assertTrue(body.contains("report-page"))
         assertEquals(404, get("/").first)
-        assertEquals(404, get("/b/wrong-token/").first)
+        assertEquals(404, get("/r/wrong-token/").first)
         assertEquals(404, get("/export").first)
     }
 
-    @Test
-    fun exportReturnsTheDocumentAsAnAttachment() {
-        val (status, body) = get("/b/${endpoint.token}/export")
-        assertEquals(200, status)
-        assertEquals("{\"exported\":true}", body)
-    }
 
     @Test
     fun reportReturnsTheTextOnlyUnderTheTokenPath() {
-        val (status, body) = get("/b/${endpoint.token}/report")
+        val (status, body) = get("/r/${endpoint.token}/report")
         assertEquals(200, status)
         assertEquals("Apple CarPlay diagnostic report\n診斷", body)
         assertEquals(404, get("/report").first)
-        assertEquals(404, get("/b/wrong-token/report").first)
-        assertEquals(404, get("/b/${endpoint.token}/report", method = "POST", body = ByteArray(0)).first)
+        assertEquals(404, get("/r/wrong-token/report").first)
+        assertEquals(404, get("/r/${endpoint.token}/report", method = "POST", body = ByteArray(0)).first)
     }
 
     @Test
     fun reportIsADownloadableTextFile() {
-        val connection = URL("http://127.0.0.1:${endpoint.port}/b/${endpoint.token}/report").openConnection() as HttpURLConnection
+        val connection = URL("http://127.0.0.1:${endpoint.port}/r/${endpoint.token}/report").openConnection() as HttpURLConnection
         try {
             assertEquals(200, connection.responseCode)
             assertEquals("text/plain; charset=utf-8", connection.getHeaderField("Content-Type"))
-            assertTrue(connection.getHeaderField("Content-Disposition").contains(SettingsBackupServer.REPORT_FILE))
+            assertTrue(connection.getHeaderField("Content-Disposition").contains(ReportShareServer.REPORT_FILE))
             assertEquals("no-store", connection.getHeaderField("Cache-Control"))
         } finally {
             connection.disconnect()
@@ -117,11 +102,10 @@ class SettingsBackupServerTest {
     fun aLargeReportArrivesWhole() {
         val line = "12:00:00.000  wireless bring-up generation=1 starting 診斷\n".toByteArray(Charsets.UTF_8)
         val big = ByteArray(line.size * 60_000).also { all -> repeat(60_000) { line.copyInto(all, it * line.size) } }
-        val large = SettingsBackupServer(page = ByteArray(0), export = { ByteArray(0) },
-            import = { SettingsImportOutcome(0, 0, invalid = false) }, report = { big })
+        val large = ReportShareServer(page = ByteArray(0), report = { big })
         val started = large.start()!!
         try {
-            val connection = URL("http://127.0.0.1:${started.port}/b/${started.token}/report").openConnection() as HttpURLConnection
+            val connection = URL("http://127.0.0.1:${started.port}/r/${started.token}/report").openConnection() as HttpURLConnection
             connection.connectTimeout = 5000
             connection.readTimeout = 15000
             assertEquals(200, connection.responseCode)
@@ -135,11 +119,10 @@ class SettingsBackupServerTest {
 
     @Test
     fun aReportThatCannotBeBuiltIsAnErrorNotAnEmptyDownload() {
-        val failing = SettingsBackupServer(page = ByteArray(0), export = { ByteArray(0) },
-            import = { SettingsImportOutcome(0, 0, invalid = false) }, report = { error("logs unreadable") })
+        val failing = ReportShareServer(page = ByteArray(0), report = { error("logs unreadable") })
         val started = failing.start()!!
         try {
-            val connection = URL("http://127.0.0.1:${started.port}/b/${started.token}/report").openConnection() as HttpURLConnection
+            val connection = URL("http://127.0.0.1:${started.port}/r/${started.token}/report").openConnection() as HttpURLConnection
             connection.connectTimeout = 5000
             connection.readTimeout = 5000
             assertEquals(500, connection.responseCode)
@@ -149,35 +132,18 @@ class SettingsBackupServerTest {
         }
     }
 
-    // A page opened by a build that has no report to give does not grow a dead link's worth of route.
+
+
     @Test
-    fun aServerWithoutAReportHasNoReportRoute() {
-        val plain = SettingsBackupServer(page = ByteArray(0), export = { ByteArray(0) },
-            import = { SettingsImportOutcome(0, 0, invalid = false) })
-        val started = plain.start()!!
-        try {
-            val connection = URL("http://127.0.0.1:${started.port}/b/${started.token}/report").openConnection() as HttpURLConnection
-            assertEquals(404, connection.responseCode)
-            connection.disconnect()
-        } finally {
-            plain.stop()
+    fun settingsImportAndExportAreUnavailableEvenWithAValidToken() {
+        for (route in listOf("export", "import")) {
+            assertEquals(404, get("/r/${endpoint.token}/$route").first)
+            assertEquals(404, get("/r/${endpoint.token}/$route", "POST", "{}".toByteArray()).first)
         }
     }
 
-    @Test
-    fun importAppliesTheDocumentAndReportsTheOutcome() {
-        val document = "{\"format\":\"diplay-settings\",\"version\":1,\"settings\":{}}"
-        val (status, body) = get("/b/${endpoint.token}/import", method = "POST", body = document.toByteArray())
-        assertEquals(200, status)
-        assertTrue(body.contains("\"applied\":4"))
-        assertTrue(body.contains("\"skipped\":1"))
-        assertTrue(body.contains("\"invalid\":false"))
-        assertEquals(4, imported.get()?.applied)
-    }
-
-    private fun withTypedCode(test: (SettingsBackupServer, SettingsBackupEndpoint, (String) -> Pair<Int, String>) -> Unit) {
-        val typed = SettingsBackupServer(page = "<html>backup-page</html>".toByteArray(), export = { ByteArray(0) },
-            import = { SettingsImportOutcome(0, 0, invalid = false) }, codePage = "<html>code-page</html>".toByteArray())
+    private fun withTypedCode(test: (ReportShareServer, ReportShareEndpoint, (String) -> Pair<Int, String>) -> Unit) {
+        val typed = ReportShareServer(page = "<html>report-page</html>".toByteArray(), report = { ByteArray(0) }, codePage = "<html>code-page</html>".toByteArray())
         typed.typedPort = 0
         val started = typed.start()!!
         fun request(path: String, method: String, body: ByteArray?): Pair<Int, String> {
@@ -198,7 +164,7 @@ class SettingsBackupServerTest {
         try {
             test(typed, started) { code -> request("/code", "POST", code.toByteArray()) }
             // Whatever was typed, the link from the QR code still opens the page.
-            assertEquals(200, request("/b/${started.token}/", "GET", null).first)
+            assertEquals(200, request("/r/${started.token}/", "GET", null).first)
         } finally {
             typed.stop()
         }
@@ -235,11 +201,10 @@ class SettingsBackupServerTest {
 
     @Test
     fun theRightCodeLeadsToThePage() = withTypedCode { typed, endpoint, enter ->
-        assertEquals(200 to "{\"path\":\"/b/${endpoint.token}/\"}", enter(endpoint.code))
-        typed.landing = "#report"
+        assertEquals(200 to "{\"path\":\"/r/${endpoint.token}/\"}", enter(endpoint.code))
         // Typed the way the head unit shows it, in two groups.
         val spaced = endpoint.code.chunked(3).joinToString(" ")
-        assertEquals(200 to "{\"path\":\"/b/${endpoint.token}/#report\"}", enter(spaced))
+        assertEquals(200 to "{\"path\":\"/r/${endpoint.token}/\"}", enter(spaced))
         assertTrue(typed.codeEntryOpen)
     }
 
@@ -268,8 +233,7 @@ class SettingsBackupServerTest {
 
     @Test
     fun aNewStartGivesTheCodeItsTriesBack() {
-        val typed = SettingsBackupServer(page = ByteArray(0), export = { ByteArray(0) },
-            import = { SettingsImportOutcome(0, 0, invalid = false) }, codePage = ByteArray(0))
+        val typed = ReportShareServer(page = ByteArray(0), report = { ByteArray(0) }, codePage = ByteArray(0))
         typed.typedPort = 0
         try {
             typed.start()!!
@@ -282,8 +246,7 @@ class SettingsBackupServerTest {
         }
     }
 
-    private fun typedServer() = SettingsBackupServer(page = ByteArray(0), export = { ByteArray(0) },
-        import = { SettingsImportOutcome(0, 0, invalid = false) }, codePage = ByteArray(0))
+    private fun typedServer() = ReportShareServer(page = ByteArray(0), report = { ByteArray(0) }, codePage = ByteArray(0))
 
     private fun freePort(): Int = java.net.ServerSocket(0).use { it.localPort }
 
@@ -321,7 +284,7 @@ class SettingsBackupServerTest {
 
     @Test
     fun theFixedPortIsOneABrowserAndAnAppMayUse() {
-        assertTrue(SettingsBackupServer.TYPED_PORT in 1024..9999)
+        assertTrue(ReportShareServer.TYPED_PORT in 1024..9999)
     }
 
     // Without the page there is nothing to type a code into, and the address gives nothing away.
@@ -353,10 +316,10 @@ class SettingsBackupServerTest {
         Socket("127.0.0.1", endpoint.port).use {
             Thread.sleep(200)
             val started = System.nanoTime()
-            val (status, body) = get("/b/${endpoint.token}/")
+            val (status, body) = get("/r/${endpoint.token}/")
             val millis = (System.nanoTime() - started) / 1_000_000
             assertEquals(200, status)
-            assertTrue(body.contains("backup-page"))
+            assertTrue(body.contains("report-page"))
             assertTrue("the page took $millis ms behind an idle connection", millis < 2_000)
         }
     }
@@ -366,7 +329,7 @@ class SettingsBackupServerTest {
         val idle = List(6) { Socket("127.0.0.1", endpoint.port) }
         try {
             Thread.sleep(200)
-            assertEquals(200, get("/b/${endpoint.token}/export").first)
+            assertEquals(200, get("/r/${endpoint.token}/report").first)
         } finally {
             idle.forEach { it.close() }
         }
@@ -388,8 +351,7 @@ class SettingsBackupServerTest {
     @Test
     fun stopDoesNotFailWhileConnectionsAreEnding() {
         repeat(1000) {
-            val busy = SettingsBackupServer(page = ByteArray(0), export = { ByteArray(0) },
-                import = { SettingsImportOutcome(0, 0, invalid = false) })
+            val busy = ReportShareServer(page = ByteArray(0), report = { ByteArray(0) })
             val started = busy.start()!!
             val sockets = List(3) { Socket("127.0.0.1", started.port) }
             sockets.forEach { it.close() }
@@ -400,17 +362,16 @@ class SettingsBackupServerTest {
     // Without an answer the browser shows a connection that opened and then gave nothing.
     @Test
     fun aFailureWhilePreparingTheAnswerIsReportedToTheBrowser() {
-        val failing = SettingsBackupServer(page = ByteArray(0), export = { error("storage unavailable") },
-            import = { SettingsImportOutcome(0, 0, invalid = false) })
+        val failing = ReportShareServer(page = ByteArray(0), report = { error("storage unavailable") })
         val started = failing.start()!!
         try {
-            val connection = URL("http://127.0.0.1:${started.port}/b/${started.token}/export").openConnection() as HttpURLConnection
+            val connection = URL("http://127.0.0.1:${started.port}/r/${started.token}/report").openConnection() as HttpURLConnection
             connection.connectTimeout = 5000
             connection.readTimeout = 5000
             assertEquals(500, connection.responseCode)
             connection.disconnect()
             // The page still answers afterwards.
-            val page = URL("http://127.0.0.1:${started.port}/b/${started.token}/").openConnection() as HttpURLConnection
+            val page = URL("http://127.0.0.1:${started.port}/r/${started.token}/").openConnection() as HttpURLConnection
             assertEquals(200, page.responseCode)
             page.disconnect()
         } finally {
@@ -420,8 +381,8 @@ class SettingsBackupServerTest {
 
     @Test
     fun unknownRoutesAreNotFound() {
-        assertEquals(404, get("/b/${endpoint.token}/settings").first)
-        assertEquals(404, get("/b/${endpoint.token}/export", method = "POST", body = ByteArray(0)).first)
+        assertEquals(404, get("/r/${endpoint.token}/settings").first)
+        assertEquals(404, get("/r/${endpoint.token}/export", method = "POST", body = ByteArray(0)).first)
     }
 
     @Test
@@ -435,22 +396,22 @@ class SettingsBackupServerTest {
 
     @Test
     fun rankPrefersHotspotThenP2pThenStationInterfaces() {
-        assertEquals(1, SettingsBackupServer.rank("ap0", null))
-        assertEquals(1, SettingsBackupServer.rank("swlan0", null))
-        assertEquals(2, SettingsBackupServer.rank("p2p0", null))
-        assertEquals(3, SettingsBackupServer.rank("wlan0", null))
-        assertEquals(3, SettingsBackupServer.rank("wlan1", null))
-        assertEquals(4, SettingsBackupServer.rank("rmnet_data0", null))
-        assertEquals(4, SettingsBackupServer.rank("lo", null))
+        assertEquals(1, ReportShareServer.rank("ap0", null))
+        assertEquals(1, ReportShareServer.rank("swlan0", null))
+        assertEquals(2, ReportShareServer.rank("p2p0", null))
+        assertEquals(3, ReportShareServer.rank("wlan0", null))
+        assertEquals(3, ReportShareServer.rank("wlan1", null))
+        assertEquals(4, ReportShareServer.rank("rmnet_data0", null))
+        assertEquals(4, ReportShareServer.rank("lo", null))
     }
 
     @Test
     fun rankPutsThePreferredModeInterfaceFirst() {
-        assertEquals(0, SettingsBackupServer.rank("p2p0", "p2p"))
-        assertEquals(0, SettingsBackupServer.rank("ap0", "ap"))
-        assertEquals(0, SettingsBackupServer.rank("wlan0", "wlan"))
-        assertEquals(2, SettingsBackupServer.rank("p2p0", "ap"))
-        assertEquals(3, SettingsBackupServer.rank("wlan1", "p2p"))
-        assertEquals(4, SettingsBackupServer.rank("rmnet_data0", "p2p"))
+        assertEquals(0, ReportShareServer.rank("p2p0", "p2p"))
+        assertEquals(0, ReportShareServer.rank("ap0", "ap"))
+        assertEquals(0, ReportShareServer.rank("wlan0", "wlan"))
+        assertEquals(2, ReportShareServer.rank("p2p0", "ap"))
+        assertEquals(3, ReportShareServer.rank("wlan1", "p2p"))
+        assertEquals(4, ReportShareServer.rank("rmnet_data0", "p2p"))
     }
 }

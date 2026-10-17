@@ -1218,7 +1218,7 @@ class AdaptiveSettingsUiTest {
         texts(screen).first { it.text == screen.getString(R.string.settings_report_on_phone) }.performClick()
         // The phone page, under the name the driver tapped.
         assertTrue(texts(screen).any { it.text == screen.getString(R.string.settings_report_on_phone) })
-        assertFalse(texts(screen).any { it.text == screen.getString(R.string.backup_title) })
+        assertFalse(texts(screen).any { it.text == "备份设置" })
         assertFalse(texts(screen).any { it.text == screen.getString(R.string.save_diagnostic_report) })
         screen.onBackPressedDispatcher.onBackPressed()
         assertTrue(texts(screen).any { it.text == screen.getString(R.string.save_diagnostic_report) })
