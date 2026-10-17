@@ -31,14 +31,14 @@ import kotlin.math.min
 internal object CarDialogStyle {
     private const val MAX_WIDTH_DP = 760
     private const val WINDOW_MARGIN_DP = 16
-    private const val CORNER_DP = 24
-    private const val BUTTON_HEIGHT_DP = 72
+    private const val CORNER_DP = FlymeAutoStyle.CARD_CORNER_DP
+    private const val BUTTON_HEIGHT_DP = FlymeAutoStyle.DIALOG_CONTROL_HEIGHT_DP
     private const val ROW_HEIGHT_DP = 68
     private const val INPUT_HEIGHT_DP = 64
     private const val ACTION_GAP_DP = 12
     private const val BUTTON_PADDING_DP = 20
     private const val TITLE_SP = 26f
-    private const val BODY_SP = 20f
+    private const val BODY_SP = FlymeAutoStyle.BUTTON_TEXT_SP
     private const val INPUT_SP = 22f
 
     fun install(dialog: Dialog, palette: DiPlayPalette) {

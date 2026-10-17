@@ -28,15 +28,8 @@ internal class WheelTestLayout(private val context: Context, private val palette
             setPadding(dp(24), dp(16), dp(24), dp(24))
         }
         fun button(id: Int, key: Action) = Button(context).apply {
-            setText(id); isAllCaps = false; textSize = 18f
-            minHeight = dp(60)
-            setTextColor(if (key == Action.ACQUIRE) palette.onAccent else palette.primaryText)
-            background = GradientDrawable().apply {
-                setColor(if (key == Action.ACQUIRE) palette.accent else palette.surface)
-                cornerRadius = dp(16).toFloat()
-                setStroke(dp(1), palette.outline)
-            }
-            setPadding(dp(10), dp(8), dp(10), dp(8))
+            setText(id)
+            FlymeAutoStyle.button(this, palette, primary = key == Action.ACQUIRE)
             setOnClickListener { action(key) }
         }
         content.addView(LinearLayout(context).apply {
@@ -83,9 +76,9 @@ internal class WheelTestLayout(private val context: Context, private val palette
         content.addView(text(R.string.wheel_test_description, 16f))
         content.addView(Switch(context).apply {
             setText(R.string.settings_detailed_debug)
-            textSize = 18f
+            textSize = FlymeAutoStyle.BUTTON_TEXT_SP
             setTextColor(palette.primaryText)
-            minHeight = dp(60)
+            minHeight = dp(FlymeAutoStyle.CONTROL_HEIGHT_DP)
             isChecked = debugEnabled
             setOnCheckedChangeListener { _, checked -> debugChanged(checked) }
         })

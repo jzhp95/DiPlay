@@ -24,6 +24,8 @@ internal class DiPlayButton(context: Context) : Button(context) {
     init {
         isAllCaps = false
         stateListAnimator = null
+        textSize = FlymeAutoStyle.BUTTON_TEXT_SP
+        minHeight = FlymeAutoStyle.dp(context, FlymeAutoStyle.COMPACT_CONTROL_HEIGHT_DP)
         typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
     }
 
@@ -71,7 +73,7 @@ internal class DiPlayButton(context: Context) : Button(context) {
                 stroke = ColorUtils.blendARGB(surface, palette.overlayDanger, 0.48f)
             }
         }
-        val radius = minOf(24f * density, (if (height > 0) height else minHeight) * 20f / 56)
+        val radius = FlymeAutoStyle.radius(context, if (height > 0) height else minHeight)
         setTextColor(text)
         background = RippleDrawable(
             ColorStateList.valueOf(palette.ripple),

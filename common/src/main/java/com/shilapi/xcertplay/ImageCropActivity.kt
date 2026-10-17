@@ -53,10 +53,12 @@ class ImageCropActivity : Activity() {
             return
         }
 
+        val palette = DiPlayPalette.of(resolveAppNightNow())
         cropView = SquareCropView(this)
         statusView = TextView(this).apply {
-            setTextColor(Color.WHITE)
-            textSize = 16f
+            setTextColor(palette.primaryText)
+            background = FlymeAutoStyle.card(this@ImageCropActivity, palette)
+            textSize = FlymeAutoStyle.BODY_TEXT_SP
             gravity = Gravity.CENTER
             setPadding(dp(12), dp(8), dp(12), dp(8))
             text = getString(R.string.loading_image)
@@ -70,7 +72,7 @@ class ImageCropActivity : Activity() {
         controls.addView(
             Button(this).apply {
                 text = getString(R.string.cancel)
-                isAllCaps = false
+                FlymeAutoStyle.button(this, palette)
                 setOnClickListener {
                     setResult(RESULT_CANCELED)
                     finish()
@@ -81,7 +83,7 @@ class ImageCropActivity : Activity() {
         controls.addView(
             Button(this).apply {
                 text = getString(R.string.save_1_1)
-                isAllCaps = false
+                FlymeAutoStyle.button(this, palette, primary = true)
                 setOnClickListener { saveCrop() }
             },
             LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {

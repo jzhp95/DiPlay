@@ -2020,16 +2020,16 @@ class CarPlayHostActivity : ComponentActivity() {
             panel.setPadding(dp(24), spacing(16f, 32f), dp(24), spacing(16f, 32f))
             val iconSize = spacing(54f, 88f)
             icon.layoutParams = LinearLayout.LayoutParams(iconSize, iconSize)
-            title.textSize = size(26f, 34f)
+            title.textSize = size(28f, 34f)
             title.setPadding(0, spacing(8f, 18f), 0, spacing(6f, 14f))
-            stage.textSize = size(19f, 22f)
-            instructions.textSize = size(15f, 17f)
+            stage.textSize = size(20f, 24f)
+            instructions.textSize = size(16f, 18f)
             instructions.setPadding(0, spacing(8f, 14f), 0, spacing(12f, 24f))
-            help.textSize = size(15f, 17f)
+            help.textSize = size(16f, 18f)
             help.setPadding(0, spacing(8f, 14f), 0, spacing(12f, 24f))
             for (button in listOf(back, recovery, retry)) {
-                button.textSize = size(17f, 18f)
-                button.layoutParams = button.layoutParams.apply { this.height = spacing(50f, 64f) }
+                button.textSize = size(18f, 20f)
+                button.layoutParams = button.layoutParams.apply { this.height = spacing(56f, 64f) }
             }
             gestureHint.textSize = size(12.5f, 13f)
             gestureHint.setPadding(0, spacing(10f, 20f), 0, 0)
@@ -2753,12 +2753,12 @@ class CarPlayHostActivity : ComponentActivity() {
         minOf(dp(MAX_SETTINGS_MENU_WIDTH_DP), (availableWidth - dp(SWIPE_PANEL_MARGIN_DP * 2)).coerceAtLeast(1))
 
     private fun swipeMenuChrome(topCornersOnly: Boolean = false, bottomCornersOnly: Boolean = false): GradientDrawable {
-        val base = ColorUtils.blendARGB(MENU_BACKGROUND, overlayPalette.surface, if (appNight) 0.48f else 0.38f)
-        val highlight = ColorUtils.blendARGB(base, Color.WHITE, if (appNight) 0.10f else 0.28f)
+        val base = overlayPalette.surface
         val radius = dp(SWIPE_PANEL_RADIUS_DP).toFloat()
         val top = if (bottomCornersOnly) 0f else radius
         val bottom = if (topCornersOnly) 0f else radius
-        return GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(highlight, base)).apply {
+        return GradientDrawable().apply {
+            setColor(base)
             cornerRadii = floatArrayOf(top, top, top, top, bottom, bottom, bottom, bottom)
             setStroke(dp(SWIPE_BORDER_WIDTH_DP), ColorUtils.blendARGB(overlayPalette.outline,
                 Color.WHITE, if (appNight) 0.12f else 0.30f))
@@ -2817,7 +2817,7 @@ class CarPlayHostActivity : ComponentActivity() {
         if (sessionDisplay?.viewAreas?.sidePanel() != null) {
             pageFor("advanced").addView(DiPlayButton(this).apply {
                 text = getString(if (sidePanelShown) R.string.side_panel_full_screen else R.string.side_panel_show)
-                textSize = 17f
+                textSize = FlymeAutoStyle.BUTTON_TEXT_SP
                 minHeight = dp(52)
                 style(DiPlayButtonKind.SECONDARY, overlayPalette, overlay = true)
                 setOnClickListener {
@@ -3145,21 +3145,21 @@ class CarPlayHostActivity : ComponentActivity() {
         content = pageFor("more")
         val save = DiPlayButton(this).apply {
             text = getString(R.string.save_and_reconnect)
-            textSize = 17f
+            textSize = FlymeAutoStyle.BUTTON_TEXT_SP
             minHeight = dp(SWIPE_ACTION_HEIGHT_DP)
             style(DiPlayButtonKind.PRIMARY, overlayPalette, overlay = true)
             setOnClickListener { saveSettingsAndReconnect() }
         }
         val exitApplicationButton = DiPlayButton(this).apply {
             text = getString(R.string.exit_application)
-            textSize = 17f
+            textSize = FlymeAutoStyle.BUTTON_TEXT_SP
             minHeight = dp(SWIPE_ACTION_HEIGHT_DP)
             style(DiPlayButtonKind.TONAL_DANGER, overlayPalette, overlay = true)
             setOnClickListener { exitApplication() }
         }
 
         val gestureButton = DiPlayButton(this).apply {
-            textSize = 17f
+            textSize = FlymeAutoStyle.BUTTON_TEXT_SP
             minHeight = dp(52)
             style(DiPlayButtonKind.SECONDARY, overlayPalette, overlay = true)
             setOnClickListener {
@@ -3172,7 +3172,7 @@ class CarPlayHostActivity : ComponentActivity() {
 
         val openDiPlaySettingsButton = DiPlayButton(this).apply {
             text = "${getString(R.string.app_name)} ${getString(R.string.settings)}"
-            textSize = 17f
+            textSize = FlymeAutoStyle.BUTTON_TEXT_SP
             minHeight = dp(52)
             style(DiPlayButtonKind.SECONDARY, overlayPalette, overlay = true)
             setOnClickListener {

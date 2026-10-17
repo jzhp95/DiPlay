@@ -16,6 +16,7 @@ import android.widget.SeekBar
 import android.widget.Switch
 import android.widget.TextView
 import androidx.core.graphics.ColorUtils
+import com.shilapi.xcertplay.FlymeAutoStyle
 import com.shilapi.xcertplay.airplay.CarPlayDisplayScale
 import com.shilapi.xcertplay.host.R
 import kotlin.math.roundToInt
@@ -55,7 +56,7 @@ object SettingsWidgets {
         theme: SettingsTheme = SettingsTheme.OVERLAY,
     ): TextView = TextView(context).apply {
         text = title
-        textSize = if (theme.isOverlay) 16f else 22f
+        textSize = if (theme.isOverlay) FlymeAutoStyle.BUTTON_TEXT_SP else 22f
         setTextColor(if (theme.isOverlay) theme.accent else theme.textPrimary)
         applyTextStyle(context, theme, bold = true)
     }
@@ -119,14 +120,14 @@ object SettingsWidgets {
             this.contentDescription = contentDescription
             isEnabled = enabled
             applyLargeSwitchStyle(this, theme.accent, theme.textSecondary, theme.accentTrack, theme.trackOff)
-            if (!theme.isOverlay) minHeight = theme.dp(context, 56)
+            minHeight = theme.dp(context, FlymeAutoStyle.CONTROL_HEIGHT_DP)
             setOnCheckedChangeListener { _, isChecked -> onChanged(isChecked) }
         }
 
         if (theme.isOverlay) {
             val labelView = TextView(context).apply {
                 text = label
-                textSize = labelSizeSp
+                textSize = maxOf(labelSizeSp, FlymeAutoStyle.BUTTON_TEXT_SP)
                 setTextColor(theme.textSecondary)
                 applyTextStyle(context, theme)
             }
@@ -139,13 +140,13 @@ object SettingsWidgets {
             }
             val labelView = TextView(context).apply {
                 text = label
-                textSize = labelSizeSp
+                textSize = maxOf(labelSizeSp, FlymeAutoStyle.BUTTON_TEXT_SP)
                 setTextColor(theme.textPrimary)
                 applyTextStyle(context, theme, bold = true)
             }
             val descView = TextView(context).apply {
                 text = description
-                textSize = 14f
+                textSize = FlymeAutoStyle.SECONDARY_TEXT_SP
                 setTextColor(theme.textSecondary)
                 setPadding(0, theme.dp(context, 6), theme.dp(context, 16), 0)
                 applyTextStyle(context, theme)
@@ -195,7 +196,7 @@ object SettingsWidgets {
         }
         val labelView = TextView(context).apply {
             text = label
-            textSize = 18f
+            textSize = FlymeAutoStyle.BUTTON_TEXT_SP
             setTextColor(if (theme.isOverlay) theme.textSecondary else theme.textPrimary)
             applyTextStyle(context, theme, bold = !theme.isOverlay)
         }
@@ -215,7 +216,8 @@ object SettingsWidgets {
             val button = RadioButton(context).apply {
                 id = View.generateViewId()
                 this.text = text
-                textSize = 17f
+                textSize = FlymeAutoStyle.BUTTON_TEXT_SP
+                minHeight = theme.dp(context, FlymeAutoStyle.COMPACT_CONTROL_HEIGHT_DP)
                 setTextColor(theme.textSecondary)
                 buttonTintList = ColorStateList(
                     arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()),

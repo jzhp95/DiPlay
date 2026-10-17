@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedTextField
@@ -59,6 +61,8 @@ class MainActivity : ComponentActivity() {
                         Button(
                             onClick = { runSelfCheck(devicePath) },
                             enabled = status !is DiagnosticStatus.Running,
+                            modifier = Modifier.fillMaxWidth().heightIn(min = FlymeAutoStyle.CONTROL_HEIGHT_DP.dp),
+                            shape = RoundedCornerShape(FlymeAutoStyle.CARD_CORNER_DP.dp),
                         ) {
                             Text("Run MFi self-check")
                         }

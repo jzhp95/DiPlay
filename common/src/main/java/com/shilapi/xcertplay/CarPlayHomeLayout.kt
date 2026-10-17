@@ -40,7 +40,6 @@ internal class CarPlayHomeLayout(
     private val compact get() = context.resources.configuration.screenHeightDp < 500 ||
         context.resources.configuration.screenWidthDp < 600
     private val shortScreen get() = context.resources.configuration.screenHeightDp < 500
-    private val night get() = !palette.systemBarIconsAreDark
     private val gap get() = if (compact) 12 else 24
     private fun dp(value: Int) = (value * context.resources.displayMetrics.density).roundToInt()
     private fun column() = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
@@ -57,20 +56,10 @@ internal class CarPlayHomeLayout(
         makeLabel(context.getString(id), size, if (muted) palette.secondaryText else palette.primaryText, !muted)
     private fun action(id: Int, hero: Boolean = false, click: () -> Unit) =
         makeButton(context.getString(id), hero, click).apply {
-            // The shared button factory also styles on layout; register after it so these home-only
-            // pill shapes win, without changing settings buttons or their keyboard focus handling.
-            fun style() {
-                val shape = if (hero) GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                    intArrayOf(-15299340, -16750637)) else GradientDrawable().apply { setColor(palette.surface) }
-                shape.cornerRadius = dp(if (hero) 36 else 32).toFloat()
-                shape.setStroke(dp(1), if (hero) -16753735 else palette.outline)
-                background = RippleDrawable(ColorStateList.valueOf(palette.ripple), shape, null)
-                if (hero) setTextColor(Color.WHITE)
-            }
-            textSize = if (shortScreen) 15f else if (compact) 16f else 17f
-            minHeight = dp(if (hero) (if (shortScreen) 48 else if (compact) 56 else 64) else 54)
-            style()
-            doOnLayout { style() }
+            FlymeAutoStyle.button(this, palette, primary = hero, compact = compact)
+            // The activity factory has its own first-layout hook; keep the shared Flyme style last.
+            doOnLayout { background = FlymeAutoStyle.control(context, palette, hero, height) }
+
         }
 
     fun header(appearance: View, choose: () -> Unit, disconnect: () -> Unit,
@@ -128,20 +117,15 @@ internal class CarPlayHomeLayout(
         return Header(root, disconnectButton)
     }
 
-    fun background() = GradientDrawable(GradientDrawable.Orientation.TL_BR,
-        if (night) intArrayOf(-15721682, -15718869, -15001815)
-        else intArrayOf(-2627588, -1444623, -923396))
+    fun background() = android.graphics.drawable.ColorDrawable(palette.background)
 
     private fun connectionCard(icon: Int, title: Int) = column().apply {
         gravity = Gravity.CENTER_HORIZONTAL
         val padding = if (shortScreen) 16 else if (compact) 20 else 32
         val verticalPadding = if (shortScreen) 16 else if (compact) 24 else 36
         setPadding(dp(padding), dp(verticalPadding), dp(padding), dp(verticalPadding))
-        background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
-            if (night) intArrayOf(-15062464, -14801351) else intArrayOf(-656385, -131841)).apply {
-            cornerRadius = dp(34).toFloat()
-            setStroke(dp(1), palette.outline)
-        }
+        background = FlymeAutoStyle.card(context, palette)
+
         val iconSize = if (shortScreen) 40 else if (compact) 56 else 76
         addView(ImageView(context).apply {
             setImageResource(icon)
@@ -152,8 +136,8 @@ internal class CarPlayHomeLayout(
             setPadding(inset, inset, inset, inset)
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
-                setColor(if (night) -14072733 else -1838593)
-                setStroke(dp(1), palette.outline)
+                setColor(palette.railSelected)
+                setStroke(dp(1), palette.railSelectedOutline)
             }
         }, LinearLayout.LayoutParams(dp(iconSize), dp(iconSize)))
         addView(label(title, if (shortScreen) 20 else if (compact) 24 else 28).apply { gravity = Gravity.CENTER },

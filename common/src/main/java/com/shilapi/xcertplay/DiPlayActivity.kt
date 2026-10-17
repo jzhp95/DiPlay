@@ -974,7 +974,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
     }
 
     private fun settingsRail(): LinearLayout = column().apply {
-        background = rounded(SURFACE, BORDER)
+        background = FlymeAutoStyle.card(this@DiPlayActivity, palette)
         setPadding(dp(12), dp(12), dp(12), dp(12))
         SettingsCategory.entries.forEach { category ->
             addView(settingsRailDestination(category), matchButton(0, 52).apply {
@@ -1015,7 +1015,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                 imageTintList = ColorStateList.valueOf(if (selected) ACCENT else TEXT)
                 importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
             }, LinearLayout.LayoutParams(dp(26), dp(26)).apply { marginEnd = dp(12) })
-            addView(label(title, 16, if (selected) ACCENT else TEXT, true,
+            addView(label(title, FlymeAutoStyle.NAVIGATION_TEXT_SP.toInt(), if (selected) ACCENT else TEXT, true,
                 centreGlyphs = usesChineseGlyphAlignment(resources.configuration.locales[0].language, title)),
                 LinearLayout.LayoutParams(0, -1, 1f))
             setOnClickListener {
@@ -5611,7 +5611,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         }
         parent.addView(button, matchButton(0, 60)); parent.addView(space(12))
     }
-    private fun card() = column().apply { background = rounded(SURFACE, BORDER); setPadding(dp(24), dp(24), dp(24), dp(24)) }
+    private fun card() = column().apply { background = FlymeAutoStyle.card(this@DiPlayActivity, palette); setPadding(dp(FlymeAutoStyle.CARD_PADDING_DP), dp(FlymeAutoStyle.CARD_PADDING_DP), dp(FlymeAutoStyle.CARD_PADDING_DP), dp(FlymeAutoStyle.CARD_PADDING_DP)) }
     private fun column() = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; layoutParams = LinearLayout.LayoutParams(-1, -2) }
     private fun row() = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; layoutParams = LinearLayout.LayoutParams(-1, -2) }
     private class SettingsSearchEditText(context: android.content.Context) : EditText(context) {
@@ -5681,7 +5681,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
 
     private fun label(value: String, size: Int, color: Int, bold: Boolean = false, centreGlyphs: Boolean = false) =
         (if (centreGlyphs) HeaderTitleView(this) else TextView(this)).apply {
-        text = value; textSize = size.toFloat(); setTextColor(color); gravity = Gravity.CENTER_VERTICAL
+        text = value; textSize = if (size in 14..15) FlymeAutoStyle.SECONDARY_TEXT_SP else size.toFloat(); setTextColor(color); gravity = Gravity.CENTER_VERTICAL
         typeface = if (bold) Typeface.create("sans-serif-medium", Typeface.NORMAL) else Typeface.create("sans-serif", Typeface.NORMAL)
         setLineSpacing(dp(3).toFloat(), 1f)
     }
@@ -5689,7 +5689,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
 
     private fun headerButton(title: String, icon: Int, compact: Boolean, click: () -> Unit) = button(title, false, click).apply {
         alignVisibleGlyphs = false
-        if (compact) textSize = 16f
+        if (compact) textSize = FlymeAutoStyle.NAVIGATION_TEXT_SP
         includeFontPadding = false
         setTextColor(TEXT)
         setSingleLine(true)
@@ -5717,11 +5717,11 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
 
     private fun layoutCornerRadius(): Float {
         val compact = isCompactLayout && (page != "settings" || !SettingsLayoutPreferences.isActive(this))
-        return dp(if (compact) 44 else 52) * 20f / 56
+        return FlymeAutoStyle.radius(this, dp(if (compact) FlymeAutoStyle.COMPACT_CONTROL_HEIGHT_DP else FlymeAutoStyle.CONTROL_HEIGHT_DP))
     }
 
     private fun buttonShape(color: Int, stroke: Int, heightPx: Int = 0) = rounded(color, stroke).apply {
-        cornerRadius = if (heightPx > 0) minOf(dp(24).toFloat(), heightPx * 20f / 56) else layoutCornerRadius()
+        cornerRadius = if (heightPx > 0) FlymeAutoStyle.radius(this@DiPlayActivity, heightPx) else layoutCornerRadius()
     }
 
     private fun buttonFocusRing() = focusRing(
@@ -5729,10 +5729,11 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
     )
 
     private fun button(title: String, primary: Boolean, click: () -> Unit) = SettingButton(this, MUTED, ACCENT).apply {
-        isAllCaps = false; textSize = 18f; setTextColor(if (primary) ON_ACCENT else TEXT)
+        FlymeAutoStyle.button(this, palette, primary, compact = isCompactLayout)
+        isAllCaps = false
         typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-        background = android.graphics.drawable.RippleDrawable(ColorStateList.valueOf(RIPPLE), buttonShape(if (primary) ACCENT else BUTTON, if (primary) ACCENT else BORDER), null)
-        setPadding(dp(16), 0, dp(16), 0); minHeight = dp(56); stateListAnimator = null
+        background = FlymeAutoStyle.control(this@DiPlayActivity, palette, primary, dp(FlymeAutoStyle.CONTROL_HEIGHT_DP))
+        setPadding(dp(16), dp(8), dp(16), dp(8)); minHeight = dp(if (isCompactLayout) FlymeAutoStyle.COMPACT_CONTROL_HEIGHT_DP else FlymeAutoStyle.CONTROL_HEIGHT_DP); stateListAnimator = null
         compoundDrawablePadding = dp(12)
         foreground = buttonFocusRing()
         text = title
@@ -5740,7 +5741,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         setOnClickListener { click() }
         doOnLayout {
             val shape = buttonShape(if (primary) ACCENT else BUTTON, if (primary) ACCENT else BORDER, height)
-            background = android.graphics.drawable.RippleDrawable(ColorStateList.valueOf(RIPPLE), shape, null)
+            background = FlymeAutoStyle.control(this@DiPlayActivity, palette, primary, height)
             foreground = focusRing((shape.cornerRadius / resources.displayMetrics.density).roundToInt())
         }
     }
@@ -5862,7 +5863,8 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             val lp = child.layoutParams as? LinearLayout.LayoutParams ?: continue
             when {
                 child is Button -> {
-                    lp.height = dp(CONTROL_HEIGHT_DP); lp.topMargin = 0
+                    lp.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                    child.minHeight = dp(CONTROL_HEIGHT_DP); lp.topMargin = 0
                     lp.bottomMargin = dp(if (isNote(next)) NOTE_ATTACH_GAP_DP else CONTROL_GAP_DP)
                 }
                 // Toggle rows carried their own vertical padding, which doubled the gap after a button.
@@ -6051,11 +6053,11 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         private const val VALUE_SEPARATOR = " · "
         private const val SEARCH_HIGHLIGHT_MILLIS = 900L
         private const val SPACER = "spacer"
-        private const val CONTROL_HEIGHT_DP = 60
-        private const val CONTROL_GAP_DP = 12
+        private const val CONTROL_HEIGHT_DP = FlymeAutoStyle.CONTROL_HEIGHT_DP
+        private const val CONTROL_GAP_DP = FlymeAutoStyle.CONTROL_GAP_DP
         private const val GROUP_GAP_DP = 20
         private const val NOTE_LINE_GAP_DP = 4
         private const val NOTE_ATTACH_GAP_DP = 6
-        private const val SETTINGS_BLOCK_GAP_DP = 16
+        private const val SETTINGS_BLOCK_GAP_DP = FlymeAutoStyle.BLOCK_GAP_DP
     }
 }
