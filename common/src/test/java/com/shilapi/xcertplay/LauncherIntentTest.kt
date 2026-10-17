@@ -41,7 +41,7 @@ class LauncherIntentTest {
     private fun launcher() = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
 
     @Test
-    fun onlyAPlainLauncherIntentReturnsToCarPlay() {
+    fun onlyAPlainLauncherIntentIsRecognizedAsLauncher() {
         assertTrue(DiPlayActivity.isLauncherIntent(launcher()))
         assertFalse(DiPlayActivity.isLauncherIntent(launcher().putExtra("page", "settings")))
         assertFalse(DiPlayActivity.isLauncherIntent(launcher().putExtra("page", null as String?)))
@@ -50,17 +50,21 @@ class LauncherIntentTest {
         assertFalse(DiPlayActivity.isLauncherIntent(Intent().putExtra("page", "connection")))
     }
 
-    @Test fun freshLauncherReturnsToTheExistingHostWithoutStoppingTheSession() {
+    @Test fun freshLauncherShowsHomeAndAllowsExplicitDisconnect() {
         controller = Robolectric.buildActivity(DiPlayActivity::class.java, launcher()).create()
         val activity = controller!!.get()
-        assertTrue(activity.isFinishing)
-        assertEquals(CarPlayHostActivity::class.java.name,
-            shadowOf(activity).nextStartedActivity?.component?.className)
+        assertFalse(activity.isFinishing)
+        assertEquals("home", ReflectionHelpers.getField<String>(activity, "page"))
+        assertNull(shadowOf(activity).nextStartedActivity)
         assertTrue(CarPlayBackgroundSession.hasSession())
         assertEquals(0, stops)
+        val disconnect = ReflectionHelpers.getField<android.widget.Button>(activity, "disconnectButton")
+        assertEquals(android.view.View.VISIBLE, disconnect.visibility)
+        disconnect.performClick()
+        assertEquals(1, stops)
     }
 
-    @Test fun launcherDeliveredToExistingSettingsOpensProjectionAndClearsReturnNavigation() {
+    @Test fun launcherDeliveredToExistingSettingsShowsHomeWithoutStoppingSession() {
         controller = Robolectric.buildActivity(DiPlayActivity::class.java,
             Intent().putExtra("page", "settings")).create()
         val activity = controller!!.get()
@@ -69,8 +73,8 @@ class LauncherIntentTest {
             ReflectionHelpers.ClassParameter(Intent::class.java, launcher()))
         assertEquals("home", ReflectionHelpers.getField<String>(activity, "page"))
         assertNull(ReflectionHelpers.getField<SettingsCategory?>(activity, "connectionSettingsReturnCategory"))
-        assertEquals(CarPlayHostActivity::class.java.name,
-            shadowOf(activity).nextStartedActivity?.component?.className)
+        assertNull(shadowOf(activity).nextStartedActivity)
+        assertTrue(CarPlayBackgroundSession.hasSession())
         assertEquals(0, stops)
         ReflectionHelpers.callInstanceMethod<Unit>(activity, "onNewIntent",
             ReflectionHelpers.ClassParameter(Intent::class.java, launcher().putExtra("page", "settings")))

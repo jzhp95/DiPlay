@@ -340,15 +340,18 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         cancelLegacyUpdateChecks()
-        // Back on the home page finishes this activity while the session runs on, so the icon lands here.
-        if (savedInstanceState == null && isLauncherIntent(intent) && CarPlayBackgroundSession.hasSession()) {
-            openProjection(); finish(); return
-        }
+        // Keep the session running but expose its Open/Disconnect controls from the launcher.
+        val returningToSession = savedInstanceState == null && isLauncherIntent(intent) &&
+            CarPlayBackgroundSession.hasSession()
         enforceInterfaceSize()
         refreshAppearance()
         rememberLaunchAppearance()
         languagePreferenceAtCreate = AppLocale.preference(this)
-        com.shilapi.xcertplay.hud.BydNavigationOutputs.onAppOpened(applicationContext)
+        // Startup recovery restores stale OEM cluster leases. A live CarPlay session still owns
+        // its lease, so visiting Home must not release it or hand the cluster back to the stock map.
+        if (!CarPlayBackgroundSession.hasSession()) {
+            com.shilapi.xcertplay.hud.BydNavigationOutputs.onAppOpened(applicationContext)
+        }
         PhoneAudioRoute.attach(applicationContext)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         if (Build.VERSION.SDK_INT >= 28) {
@@ -370,7 +373,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             ?.let { runCatching { SettingsCategory.valueOf(it) }.getOrNull() }
         setupStep = savedInstanceState?.getInt("setup_step") ?: SetupGuide.STEP_CAR
         setupFromSettings = savedInstanceState?.getBoolean("setup_from_settings") ?: false
-        page = savedInstanceState?.getString("page") ?: intent.getStringExtra("page")
+        page = if (returningToSession) "home" else savedInstanceState?.getString("page") ?: intent.getStringExtra("page")
             ?: if (setupError == null && SetupGuide.shouldOpenOnLaunch(SetupGuide.seen(this),
                     DiPlayPreferences.phoneAddress(this) != null)) "setup" else "home"
         render()
@@ -394,11 +397,8 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent); setIntent(intent)
         connectionSettingsReturnCategory = null
-        // CarPlay runs in its own task, so the launcher icon resumes this one. Settings opened from
-        // CarPlay carry a "page" extra, which isLauncherIntent rejects.
-        if (isLauncherIntent(intent) && CarPlayBackgroundSession.hasSession()) {
-            page = "home"; render(); openProjection(); return
-        }
+        // A launcher tap opens Home even with a live session. Only the explicit Open CarPlay
+        // button returns to projection; the adjacent Disconnect button stops the session.
         page = intent.getStringExtra("page") ?: "home"; render()
         automaticVehicleValidationStarted = false
         scheduleAutomaticVehicleValidation()
