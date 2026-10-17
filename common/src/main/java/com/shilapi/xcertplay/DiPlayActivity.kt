@@ -893,7 +893,8 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                 CarPlayBackgroundSession.stop { runOnUiThread { refreshStatus() } }
             },
             settings = { page = "settings"; render() },
-            carHome = { startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)) })
+            carHome = { startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)) },
+            wheelTest = { startActivity(Intent(this, WheelTestActivity::class.java)) })
         disconnectButton = header.disconnect
         return header.root
     }

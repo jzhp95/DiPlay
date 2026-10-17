@@ -16,6 +16,26 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [29])
 class CarPlayHomeLayoutTest {
+    @Test fun iconAndBrandShareTheSameFiveTapEntry() {
+        val context = RuntimeEnvironment.getApplication()
+        var opened = 0
+        val layout = CarPlayHomeLayout(context, DiPlayPalette.LIGHT,
+            { title, _, click -> Button(context).apply { text = title; setOnClickListener { click() } } },
+            { title, _, _, _ -> TextView(context).apply { text = title } })
+        val header = layout.header(View(context), {}, {}, {}, {}, { opened++ })
+        val logo = descendants(header.root).filterIsInstance<android.widget.ImageView>().single {
+            it.contentDescription == context.getString(R.string.carplay)
+        }
+        val brand = descendants(header.root).filterIsInstance<TextView>().single {
+            it.text == context.getString(R.string.carplay)
+        }
+        repeat(4) { if (it % 2 == 0) logo.performClick() else brand.performClick() }
+        assertEquals(0, opened)
+        brand.performClick()
+        assertEquals(1, opened)
+        logo.performClick()
+        assertEquals(1, opened)
+    }
     @Config(qualifiers = "zh-rCN-w1100dp-h700dp-land")
     @Test fun wideHomeHasTwoConnectionCardsAndKeepsEveryAction() = verify(wide = true)
 

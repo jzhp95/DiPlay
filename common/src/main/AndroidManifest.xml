@@ -30,6 +30,7 @@
         </intent>
     </queries>
     <application>
+        <activity android:name="com.shilapi.xcertplay.WheelTestActivity" android:exported="false" />
         <provider
             android:name="com.shilapi.xcertplay.CrashRecordInstaller"
             android:authorities="${applicationId}.crash-record"

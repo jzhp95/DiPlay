@@ -99,6 +99,7 @@ public final class FlymeWheelBridge implements AutoCloseable {
   if(!allow)note("suppress duplicate hardware media="+action);
   return allow;
  }
+ public boolean ownsFocus(){return owned&&!closed;}
  @Override public void close(){
   // Invalidate callback eligibility synchronously, even when detach runs off the main thread.
   if(closed)return;closed=true;owned=false;

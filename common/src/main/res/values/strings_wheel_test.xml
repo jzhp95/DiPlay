@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="wheel_test_title">方控测试</string>
+    <string name="wheel_test_description">无需连接 iPhone。获取焦点后按实体方向盘按键，观察下方大字与接收计数。页面模拟仅验证反馈，不代表实体方控已生效。</string>
+    <string name="wheel_test_waiting">等待方向盘按键</string>
+    <string name="wheel_test_acquire">获取焦点</string>
+    <string name="wheel_test_release">停止焦点</string>
+    <string name="wheel_test_next">模拟下一曲</string>
+    <string name="wheel_test_previous">模拟上一曲</string>
+    <string name="wheel_test_play">模拟播放</string>
+    <string name="wheel_test_pause">模拟暂停</string>
+    <string name="wheel_test_toggle">模拟播放 / 暂停</string>
+    <string name="wheel_test_siri">模拟语音键</string>
+    <string name="wheel_test_play_label">播放</string>
+    <string name="wheel_test_pause_label">暂停</string>
+    <string name="wheel_test_toggle_label">播放 / 暂停</string>
+    <string name="wheel_test_next_label">下一曲</string>
+    <string name="wheel_test_previous_label">上一曲</string>
+    <string name="wheel_test_siri_label">语音键</string>
+    <string name="wheel_test_raw_label">按键码 %1$d</string>
+    <string name="wheel_test_event">%1$s · %2$s（%3$d）</string>
+    <string name="wheel_test_real">接口接收</string>
+    <string name="wheel_test_simulated">页面模拟</string>
+    <string name="wheel_test_count">接口接收 %1$d 次 · 页面模拟 %2$d 次\n来源：%3$s\n回调也可能来自系统媒体控件，验证时请只按方向盘。</string>
+    <string name="wheel_test_status">监听：%1$s\nAndroid 焦点：%2$s\nFlyme EAS 焦点：%3$s</string>
+    <string name="wheel_test_running">已开启</string>
+    <string name="wheel_test_stopped">已停止</string>
+    <string name="wheel_test_granted">已获得</string>
+    <string name="wheel_test_other_focus">未确认属于本应用（普通版不启用 EAS）</string>
+    <string name="wheel_test_result">未获得（request=%1$s，change=%2$s）</string>
+    <string name="wheel_test_log_hint">完整过程请开启“详细调试日志”。测试结束后返回首页 → 设置 → 诊断，保存诊断报告。离开测试页或切到后台会自动停止测试焦点。</string>
+    <string name="wheel_test_disconnect_message">当前存在 CarPlay 会话。独立焦点测试需要先断开，避免测试与当前会话争用焦点。</string>
+    <string name="wheel_test_disconnect_and_start">断开并测试</string>
+</resources>

@@ -74,17 +74,23 @@ internal class CarPlayHomeLayout(
         }
 
     fun header(appearance: View, choose: () -> Unit, disconnect: () -> Unit,
-        settings: () -> Unit, carHome: () -> Unit): Header {
+        settings: () -> Unit, carHome: () -> Unit, wheelTest: () -> Unit = {}): Header {
         val root = column()
         val top = row()
+        val taps = FiveTapGate()
+        val brandClick = View.OnClickListener {
+            if (taps.tap(android.os.SystemClock.elapsedRealtime())) wheelTest()
+        }
         val logoSize = if (compact) 36 else 48
         top.addView(ImageView(context).apply {
             setImageResource(R.drawable.ic_carplay)
             contentDescription = context.getString(R.string.carplay)
+            setOnClickListener(brandClick)
         }, LinearLayout.LayoutParams(dp(logoSize), dp(logoSize)))
         val brand = label(R.string.carplay, if (compact) 22 else 30).apply {
             setPadding(dp(12), 0, dp(8), 0)
             setSingleLine(true)
+            setOnClickListener(brandClick)
         }
         top.addView(brand, LinearLayout.LayoutParams(0, -2, 1f))
         top.addView(appearance, LinearLayout.LayoutParams(dp(48), dp(48)))
