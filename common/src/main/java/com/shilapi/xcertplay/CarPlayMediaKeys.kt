@@ -144,7 +144,9 @@ internal object CarPlayMediaKeys {
                         update.artworkTransferId?.let { ambientColorCache[it] })
                     artwork = nextArtwork(update.artworkTransferId, artworkCache, artwork)
                 }
-                if (nowPlaying.elapsedMillis != update.elapsedMillis) elapsedUpdatedAt = SystemClock.elapsedRealtime()
+                elapsedUpdatedAt = playbackPositionUpdatedAt(
+                    nowPlaying, update, elapsedUpdatedAt, SystemClock.elapsedRealtime(),
+                )
                 val metadataChanged = metadataChanged(nowPlaying, update) || artwork !== previousArtwork
                 nowPlaying = update
                 if (metadataChanged) ClusterMusicState.publish(update, update.artworkTransferId?.let { artworkCache[it] })
