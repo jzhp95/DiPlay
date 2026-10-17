@@ -201,3 +201,17 @@ Windows 脚本与 shell 脚本采用同样的构建、签名和校验步骤；�
 5. 断开 CarPlay 后检查焦点及方控释放。无论媒体信息是否显示，都导出诊断报告用于对照。若 `eas_metadata` 的 title 始终为空，需继续检查 iPhone 元数据；有标题且受理仍不显示，则进一步检查厂商媒体源过滤与界面展示规则。
 
 不要把修复后的局部协议测试结果当作车机媒体展示已通过。当前没有修改 Siri 映射。
+
+## Flyme 语音键 → Siri（尝试适配，待实车验证）
+
+- 标准语音键 `231` 和参考包中的厂商候选 `200231` 接到现有 `requestSiri()`。前台收到完整按下/松开后请求一次；重复按下和没有对应按下的松开不会重复请求。未连接或通话时不发 Siri 请求。
+- 系统 UID 版的有效 EAS 会话会额外尝试反射调用原包所用的 `com.ecarx.xui.adaptapi.input.Input.create()`、`requestKeysInterception()`，请求语音键，不拦截音量和切歌。`KEYCODE_R_VOICE_ASSIST` 优先使用固件常量，缺失时回退到 `200231`。
+- 同时兼容 `onKeyPressed/Released` 和 `onKeyShortPressed/Released`、`onKeyLongPressed/Released` 回调。一次按住只处理一次；Siri 请求在主线程再次检查会话和通话状态，并沿用现有跨来源语音键去重。
+- 没有引入厂商 SDK/DEX；独立模块里的 `FlymeVoiceInput.java` 负责这条可选接入，断开时使旧回调立即失效并异步调用 `abandonKeysInterception()`。接口不存在或权限不足会记录原因，不阻断媒体方控。
+- **厂商接口返回注册结果不代表一定派发按键。** 已分析的部分 OTA 中该接口可能不产生实际回调；原车助手是否同时响应，仍需实测。
+- 独立方控测试页收到厂商语音回调时，只显示“语音键”和真实键码，不调用 Siri。正式 CarPlay 会话才会发送唤醒请求。
+- 诊断日志中查找 `voice interception`（注册/释放）、`voice callback`（真实派发）、`flyme-siri`（去重及发送结果）。`sent=true` 表示请求已入发送队列，不是 iPhone 的成功确认。
+
+车测时先连接 iPhone，在 CarPlay 画面按一次方向盘语音键，再测试长按、切到车机首页但保留连接、以及断开后的原车语音功能。若 Siri 未出现，导出报告区分：前台是否收到键码、厂商接口是否存在、是否实际回调、Siri 请求是否入队。
+
+本次同时移除“方向盘按键”菜单中的“方向盘播放／暂停按钮”（含其选择按键入口）和“外接控制器（实验性）”。Siri、自定义 Siri 按键和其他车辆控制选项保留。

@@ -69,6 +69,30 @@ class WheelSiriWindowTest {
         host.getSharedPreferences("xcertplay_airplay", Context.MODE_PRIVATE).edit().clear().commit()
     }
 
+    @Test fun flymeVoiceKeysRequestSiriOnceAndRespectSessionAndCalls() {
+        for (code in listOf(231, 200231)) {
+            org.robolectric.util.ReflectionHelpers.setField(VoiceKeyPair.shared, "carPlayKeyMillis", null)
+            org.robolectric.util.ReflectionHelpers.setField(VoiceKeyPair.shared, "genericKeyMillis", null)
+            clearInvocations(controller)
+            field("activeAirPlaySession", mock(AirPlaySession::class.java))
+            host.getSystemService(AudioManager::class.java).mode = AudioManager.MODE_NORMAL
+            assertTrue(host.dispatchKeyEvent(key(code, true)))
+            assertTrue(host.dispatchKeyEvent(key(code, true, repeat = 1)))
+            assertTrue(host.dispatchKeyEvent(key(code, false)))
+            verify(controller, times(1)).requestSiri()
+            host.dispatchKeyEvent(key(code, false)) // An orphan release must not toggle Siri again.
+            verify(controller, times(1)).requestSiri()
+            host.dispatchKeyEvent(key(code, true))
+            host.getSystemService(AudioManager::class.java).mode = AudioManager.MODE_IN_CALL
+            host.dispatchKeyEvent(key(code, false))
+            verify(controller, times(1)).requestSiri()
+            host.getSystemService(AudioManager::class.java).mode = AudioManager.MODE_NORMAL
+            field("activeAirPlaySession", null)
+            host.dispatchKeyEvent(key(code, true)); host.dispatchKeyEvent(key(code, false))
+            verify(controller, times(1)).requestSiri()
+        }
+    }
+
     @Test fun heldAssignedKeyKeepsItsReleaseAfterCallSessionAndSettingChanges() {
         assertTrue(host.dispatchKeyEvent(key(KeyEvent.KEYCODE_F6, true)))
         WheelZoomSettings.setSiriKey(host, false)
@@ -322,7 +346,7 @@ class WheelSiriWindowTest {
         assertEquals(joystickKey, WheelZoomSettings.key(settings, WheelZoomSettings.Role.JOYSTICK))
     }
 
-    @Test fun nonBydUnitCanAssignPlayPauseWithoutEnablingSiriOrMapZoom() {
+    @Test fun removedPlayPauseControlsStayHiddenWithALegacyAssignment() {
         settings.setTheme(android.R.style.Theme_Material_NoActionBar)
         WheelZoomSettings.setSiriKey(settings, false)
         WheelZoomSettings.setEnabled(settings, false)
@@ -330,10 +354,10 @@ class WheelSiriWindowTest {
         val key = WheelKey(KeyEvent.KEYCODE_F9, 0, "?")
         WheelZoomSettings.assign(settings, WheelZoomSettings.Role.MEDIA_PLAY_PAUSE, key)
         val controls = wheelControls()
-        assertTrue(views(controls).filterIsInstance<Switch>().any {
+        assertFalse(views(controls).filterIsInstance<Switch>().any {
             it.contentDescription == settings.getString(R.string.wheel_media_play_pause) && it.isChecked
         })
-        assertTrue(views(controls).filterIsInstance<TextView>().any {
+        assertFalse(views(controls).filterIsInstance<TextView>().any {
             it.text.toString() == settings.getString(R.string.wheel_key_assign,
                 settings.getString(R.string.wheel_key_role_media_play_pause), key.toString())
         })

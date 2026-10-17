@@ -15,6 +15,8 @@ public final class FlymeWheelBridge implements AutoCloseable {
   void mediaButton(int index);
   PlaybackSnapshot playback();
   default void diagnostic(String message) {}
+  default boolean canHandleVoiceKey(){return false;}
+  default void voiceKey(int keyCode){}
  }
  private static final String TAG="FlymeWheel";
  private static final String PERMISSION="ecarx.oem.permission.OPENAPI_MEDIACENTER_PERMISSION";
@@ -28,6 +30,7 @@ public final class FlymeWheelBridge implements AutoCloseable {
  private volatile boolean closed;
  private volatile boolean owned;
  private EasAdapter adapter;
+ private FlymeVoiceInput voiceInput;
  private boolean attempted;
  private boolean eligible;
  private long lastMetadataPoll;
@@ -64,7 +67,13 @@ public final class FlymeWheelBridge implements AutoCloseable {
   }catch(Exception e){note("capability blocked: "+e);return false;}
  }
  private void connect(){
+  if(closed)return;
   note("register source=36 package="+context.getPackageName());
+  voiceInput=new FlymeVoiceInput(context,code->{
+   if(closed||!host.ready()||!host.canHandleVoiceKey())return false;
+   main.post(()->{if(!closed&&host.ready()&&host.canHandleVoiceKey())host.voiceKey(code);});
+   return true;
+  },this::note);
   adapter=new EasAdapter(context,new EasAdapter.Sink(){
    private void deliver(Runnable action){main.post(()->{if(!closed)action.run();});}
    public void event(int action,int raw,String source){deliver(()->{
@@ -109,6 +118,7 @@ public final class FlymeWheelBridge implements AutoCloseable {
   // Invalidate callback eligibility synchronously, even when detach runs off the main thread.
   if(closed)return;closed=true;owned=false;
   main.post(()->{gate.stop();main.removeCallbacksAndMessages(null);
+   if(voiceInput!=null){voiceInput.close();voiceInput=null;}
    if(adapter!=null){adapter.close();adapter=null;}state("lifecycle","session stopped; unregister queued; no focus retry");
   });
  }

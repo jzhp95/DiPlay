@@ -90,6 +90,22 @@ class WheelTestControllerTest {
         }
     }
 
+    @Test fun vendorVoiceCallbackIsOnlyRecordedInTheStandaloneProbe() {
+        controller.start()
+        val bridge = org.robolectric.util.ReflectionHelpers.getField<com.shilapi.flymeeas.FlymeWheelBridge>(controller, "bridge")
+        val host = org.robolectric.util.ReflectionHelpers.getField<com.shilapi.flymeeas.FlymeWheelBridge.Host>(bridge, "host")
+        assertTrue(host.canHandleVoiceKey())
+        host.voiceKey(200231)
+        assertEquals(6, controller.snapshot().event?.media)
+        assertEquals(200231, controller.snapshot().event?.raw)
+        assertEquals(1, controller.snapshot().received)
+        assertEquals(0, controller.snapshot().simulated)
+        controller.stop()
+        assertFalse(host.canHandleVoiceKey())
+        host.voiceKey(231)
+        assertEquals(1, controller.snapshot().received)
+    }
+
     @Test fun owningEasFocusKeepsVoiceInputAndPairsToggleWithEasPlayback() {
         controller.start()
         val bridge = org.robolectric.util.ReflectionHelpers.getField<Any>(controller, "bridge")

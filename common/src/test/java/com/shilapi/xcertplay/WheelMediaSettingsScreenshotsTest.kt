@@ -11,6 +11,7 @@ import com.shilapi.xcertplay.host.R
 import java.io.File
 import java.io.FileOutputStream
 import java.util.Locale
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -19,12 +20,12 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
-/** Compact/full and RTL screenshots of the optional media-key setting at 1.5x text size. */
+/** Compact/full and RTL screenshots after removing optional controller settings at 1.5x text size. */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [29])
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class WheelMediaSettingsScreenshotsTest {
-    @Test fun mediaKeyControlsRenderAtLargeFontsInThreeLayouts() {
+    @Test fun removedMediaControlsStayAbsentAtLargeFontsInThreeLayouts() {
         val activity = Robolectric.buildActivity(DiPlayActivity::class.java).get()
         activity.setTheme(android.R.style.Theme_Material_NoActionBar)
         WheelZoomSettings.setMediaPlayPause(activity, true)
@@ -42,11 +43,15 @@ class WheelMediaSettingsScreenshotsTest {
                 }
                 @Suppress("DEPRECATION")
                 activity.resources.updateConfiguration(config, activity.resources.displayMetrics)
-                val row = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL }
+                val row = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(DiPlayPalette.DARK.background) }
                 DiPlayActivity::class.java.getDeclaredMethod("wheelKeysSettings", LinearLayout::class.java)
                     .apply { isAccessible = true }.invoke(activity, row)
+                assertFalse(allViews(row).filterIsInstance<TextView>().any {
+                    it.text.toString() == activity.getString(R.string.wheel_media_play_pause) ||
+                        it.text.toString() == activity.getString(R.string.settings_external_controller)
+                })
                 assertTrue(allViews(row).filterIsInstance<TextView>().any {
-                    it.text.toString() == activity.getString(R.string.wheel_media_play_pause)
+                    it.text.toString() == activity.getString(R.string.wheel_siri_key)
                 })
                 val width = (widthDp * activity.resources.displayMetrics.density).toInt()
                 row.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),

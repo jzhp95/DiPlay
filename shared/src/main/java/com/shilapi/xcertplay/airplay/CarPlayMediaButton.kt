@@ -33,11 +33,17 @@ object CarPlayMediaButton {
     const val KEYCODE_BYD_CARPLAY_VOICE = 327
     const val KEYCODE_BYD_CARPLAY_VOICE_LONG = 328
 
+    /** Flyme reference APK fallback for KEYCODE_R_VOICE_ASSIST. */
+    const val KEYCODE_FLYME_VOICE_ASSIST = 200231
+
     /**
      * Whether [keyCode] is a voice key that opens Siri. The BYD wheel sends each press as an
      * instant down/up pair, so a long press arrives as its own key rather than as a held one.
      */
-    fun opensSiri(keyCode: Int): Boolean = keyCode == KeyEvent.KEYCODE_VOICE_ASSIST ||
+    fun isFlymeVoiceKey(keyCode: Int): Boolean =
+        keyCode == KeyEvent.KEYCODE_VOICE_ASSIST || keyCode == KEYCODE_FLYME_VOICE_ASSIST
+
+    fun opensSiri(keyCode: Int): Boolean = isFlymeVoiceKey(keyCode) ||
         keyCode == KEYCODE_BYD_AUTO_MEDIA_VOICE || keyCode == KEYCODE_BYD_AUTO_MEDIA_VOICE_LONG
 
     /** The voice keys BYD sends only for CarPlay; they open Siri while a CarPlay session runs. */

@@ -51,6 +51,13 @@ class CarPlayMediaButtonTest {
         assertNull(CarPlayMediaButton.forKeyCode(304))
     }
 
+    @Test fun flymeReservedVoiceKeyOpensSiriWithoutBecomingAMediaCommand() {
+        assertTrue(CarPlayMediaButton.opensSiri(231))
+        assertTrue(CarPlayMediaButton.opensSiri(200231))
+        assertNull(CarPlayMediaButton.forKeyCode(200231))
+        assertFalse(CarPlayMediaButton.opensSiri(87))
+    }
+
     @Test
     fun otherKeysAreLeftToTheSystem() {
         assertNull(CarPlayMediaButton.forKeyCode(KeyEvent.KEYCODE_VOLUME_UP))

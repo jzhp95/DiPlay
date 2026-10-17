@@ -19,6 +19,13 @@ internal object FlymeWheelIntegration {
                 override fun diagnostic(message: String) { DetailedDebugLog.record("flyme-eas", message) }
                 override fun ready() = !controller.isClosed() && CarPlayBackgroundSession.active &&
                     CarPlayBackgroundSession.snapshot()?.controller === controller
+                override fun canHandleVoiceKey() = ready() && !inCall(context)
+                override fun voiceKey(keyCode: Int) {
+                    if (!canHandleVoiceKey()) return
+                    val paired = VoiceKeyPair.shared.allowCarPlayKey(android.os.SystemClock.uptimeMillis())
+                    val sent = paired && CarPlayMediaKeys.onExternalSiriKey()
+                    DetailedDebugLog.record("flyme-siri", "vendor key=$keyCode deduplicated=${!paired} sent=$sent (queued, not iPhone acknowledgement)")
+                }
                 override fun mediaButton(index: Int) = CarPlayMediaKeys.onExternalMediaKey(index, "flyme-eas")
                 override fun playback(): PlaybackSnapshot {
                     val p = controller.nowPlayingSnapshot()

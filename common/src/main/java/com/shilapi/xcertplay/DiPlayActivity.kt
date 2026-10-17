@@ -3420,25 +3420,12 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             wheelKeyServiceControls(card)
         }
         siriKeyControls(card)
-        toggle(card, getString(R.string.wheel_media_play_pause),
-            getString(R.string.wheel_media_play_pause_description),
-            WheelZoomSettings.mediaPlayPause(this)) {
-            WheelZoomSettings.setMediaPlayPause(this, it)
-            render()
-        }
-        if (WheelZoomSettings.mediaPlayPause(this)) {
-            wheelKeyAssignButton(card, WheelZoomSettings.Role.MEDIA_PLAY_PAUSE,
-                getString(R.string.wheel_key_role_media_play_pause))
-        }
         // It acts on BYD's short voice keys (327, 304) only, which other head units never send. Once on it
         // stays reachable, like the controls below, in case the package check misses the car.
         if (byd || WheelZoomSettings.siriLongPressOnly(this)) {
             toggle(card, getString(R.string.wheel_siri_long_press_only), getString(R.string.wheel_siri_long_press_only_description),
                 WheelZoomSettings.siriLongPressOnly(this)) { WheelZoomSettings.setSiriLongPressOnly(this, it) }
         }
-        // Any head unit: a paired keyboard, remote or rotary controller works alongside touch.
-        toggle(card, getString(R.string.settings_external_controller), getString(R.string.settings_external_controller_description),
-            AirPlayPersistence.loadExternalController(this)) { AirPlayPersistence.saveExternalController(this, it) }
         // Keep previously configured controls reachable even if package detection misses the car.
         if (byd || zoomAvailable || WheelZoomSettings.joystick(this)) wheelKeyControls(card)
     }
