@@ -1411,12 +1411,12 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         filteredSection(content, SettingsSection.CONNECTION_SETUP,
             getString(R.string.connection_setup), R.drawable.ic_dp_connection) { card ->
             wirelessConnectionChoice(card)
-            // Also here, not only in the CarPlay menu: with the CH341 removed CarPlay cannot connect,
-            // so that menu could not be reached to switch back (#696).
-            val mfiTargets = listOf(MfiTarget.LOCAL, MfiTarget.USB_CH341)
+            // Keep automatic and explicit authentication choices available before connecting.
+            val mfiTargets = listOf(MfiTarget.AUTO, MfiTarget.LOCAL, MfiTarget.USB_CH341)
             val storedMfiTarget = AirPlayPersistence.loadMfiTarget(this)
             if (storedMfiTarget in mfiTargets) {
                 choice(card, getString(R.string.mfi_certificate_signing_target), listOf(
+                    getString(R.string.settings_mfi_auto),
                     getString(R.string.local_offline),
                     getString(R.string.usb_ch341),
                 ), mfiTargets.indexOf(storedMfiTarget)) { index ->

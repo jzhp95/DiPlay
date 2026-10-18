@@ -35,9 +35,10 @@ class DiPlayAuthenticationTest {
             .setBoolean(null, false)
     }
 
-    @Test fun freshInstallStillDefaultsToLocalAuthentication() {
-        assertEquals(MfiTarget.LOCAL, AirPlayPersistence.loadMfiTarget(context))
-        assertThrows(Exception::class.java) { DiPlayBootstrap.ensure(context, MfiTarget.LOCAL) }
+    @Test fun freshInstallUsesAutomaticWithoutRequiringOfflineMaterials() {
+        assertEquals(MfiTarget.AUTO, AirPlayPersistence.loadMfiTarget(context))
+        DiPlayBootstrap.ensure(context, MfiTarget.AUTO)
+        assertFalse(directory.exists())
     }
 
     @Test fun savedUsbChoiceSurvivesBootstrapWithoutLocalAssets() {

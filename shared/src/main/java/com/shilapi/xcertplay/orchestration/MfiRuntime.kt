@@ -39,3 +39,27 @@ object MfiRuntime {
 
     private const val MFI_STARTUP_PROBE_TIMEOUT_MILLIS = 15_000L
 }
+
+/** Pins one identity and retires it after the first provider failure. Never retries an exchange. */
+internal class SessionMfiAuthenticator(
+    private val delegate: MfiAuthenticator,
+    private val onFailure: (Exception) -> Unit,
+) : MfiAuthenticator {
+    private val lock = Any()
+    private var failed: Exception? = null
+    private fun <T> call(operation: () -> T): T = synchronized(lock) {
+        failed?.let { throw it }
+        try {
+            operation()
+        } catch (error: Exception) {
+            failed = error
+            onFailure(error)
+            throw error
+        }
+    }
+    override val certificateType get() = call { delegate.certificateType }
+    override fun protocolMajor() = call { delegate.protocolMajor() }
+    override fun readCertificate(maximumOutputLength: Int) = call { delegate.readCertificate(maximumOutputLength) }
+    override fun signChallenge(challenge: ByteArray) = call { delegate.signChallenge(challenge) }
+    override fun baaCertificates() = call { delegate.baaCertificates() }
+}

@@ -52,6 +52,42 @@ class WirelessStartupRecoveryTest {
     }
     private fun budget() = ReflectionHelpers.getField<WirelessStartupRetryBudget>(activity, "startupRetryBudget")
 
+    @Test fun authenticationFailureGetsOnlyOneFreshConnectionRetry() {
+        val auth = CarPlayStatus.Failed("MFi communication failed", authenticationFailure = true)
+        report(status = auth)
+        assertTrue(ReflectionHelpers.getField(activity, "reconnectScheduled"))
+        report(status = auth)
+        assertEquals(1, ReflectionHelpers.getField<Int>(activity, "reconnectAttempts"))
+        ReflectionHelpers.setField(activity, "restartGeneration", 1)
+        ReflectionHelpers.setField(activity, "reconnectScheduled", false)
+        report(1, auth)
+        assertFalse(ReflectionHelpers.getField(activity, "reconnectScheduled"))
+        assertTrue(ReflectionHelpers.getField(activity, "startupRetryStopped"))
+        assertEquals(View.VISIBLE, retry.visibility)
+        report(1, CarPlayStatus.Failed("late cleanup failure"))
+        assertFalse(ReflectionHelpers.getField(activity, "reconnectScheduled"))
+    }
+
+    @Test fun authenticationFailureWhileMenuIsOpenIsRetainedForRecovery() {
+        val auth = CarPlayStatus.Failed("MFi communication failed", authenticationFailure = true)
+        ReflectionHelpers.setField(activity, "menuOpen", true)
+        report(status = auth)
+        assertFalse(ReflectionHelpers.getField(activity, "reconnectScheduled"))
+        ReflectionHelpers.setField(activity, "menuOpen", false)
+        report(status = ReflectionHelpers.getField(activity, "failurePendingAfterMenu"))
+        assertTrue(ReflectionHelpers.getField(activity, "reconnectScheduled"))
+    }
+
+    @Test fun aLateActiveSessionCannotReviveAnAuthenticationFailedConnection() {
+        report(status = CarPlayStatus.Failed("MFi failed", authenticationFailure = true))
+        val listener = ReflectionHelpers.callInstanceMethod<com.shilapi.xcertplay.airplay.AirPlaySessionListener>(
+            activity, "createSessionListener", from(Int::class.javaPrimitiveType, 0))
+        listener.onSessionActive(org.mockito.Mockito.mock(com.shilapi.xcertplay.airplay.AirPlaySession::class.java))
+        assertFalse(CarPlayBackgroundSession.active)
+        assertNull(ReflectionHelpers.getField(activity, "activeAirPlaySession"))
+        assertEquals(1, ReflectionHelpers.getField<Int>(activity, "reconnectAttempts"))
+    }
+
     @Test fun duplicateFailureAndCleanupErrorScheduleOnlyOneRetry() {
         report()
         report()

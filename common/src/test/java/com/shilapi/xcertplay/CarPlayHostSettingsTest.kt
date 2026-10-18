@@ -786,10 +786,10 @@ class CarPlayHostSettingsTest {
         assertEquals(0, field("restartGeneration"))
     }
 
-    @Test fun authenticationChoicesOnlyExposeLocalAndCh341() {
+    @Test fun authenticationChoicesExposeAutomaticLocalAndCh341() {
         invoke("openSettingsMenu")
         val options = views(menu()).filterIsInstance<RadioButton>().filter { it.tag is MfiTarget }.toList()
-        assertEquals(listOf(MfiTarget.LOCAL, MfiTarget.USB_CH341), options.map { it.tag })
+        assertEquals(listOf(MfiTarget.AUTO, MfiTarget.LOCAL, MfiTarget.USB_CH341), options.map { it.tag })
         options.first().performClick()
         invoke("cancelSettingsEdits")
         assertEquals(MfiTarget.USB_CH341, AirPlayPersistence.loadMfiTarget(activity))
@@ -819,6 +819,14 @@ class CarPlayHostSettingsTest {
         assertEquals(MfiTarget.USB_CH341, config.mfiTarget)
         assertEquals(listOf(com.shilapi.xcertplay.transport.UsbDeviceId(0x1a86, 0x5512)), config.ch341Devices)
         assertEquals(1, field("restartGeneration"))
+    }
+
+    @Test fun automaticRuntimeProvidesTheCh341IdentityWithoutRequiringLocalMaterials() {
+        AirPlayPersistence.saveMfiTarget(activity, MfiTarget.AUTO)
+        invoke("loadPersistedSettings")
+        val config = invoke("createRuntimeConfig") as CarPlayRuntimeConfig
+        assertEquals(MfiTarget.AUTO, config.mfiTarget)
+        assertEquals(listOf(com.shilapi.xcertplay.transport.UsbDeviceId(0x1a86, 0x5512)), config.ch341Devices)
     }
 
     @Test fun localRuntimeDoesNotRequestCh341Devices() {

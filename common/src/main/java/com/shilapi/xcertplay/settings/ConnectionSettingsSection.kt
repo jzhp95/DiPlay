@@ -17,6 +17,7 @@ object ConnectionSettingsSection {
         context = context,
         label = context.getString(R.string.mfi_certificate_signing_target),
         options = listOf(
+            MfiTarget.AUTO to context.getString(R.string.settings_mfi_auto),
             MfiTarget.LOCAL to context.getString(R.string.local_offline),
             MfiTarget.USB_CH341 to context.getString(R.string.usb_ch341),
         ),

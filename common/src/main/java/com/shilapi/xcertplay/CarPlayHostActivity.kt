@@ -164,6 +164,11 @@ class CarPlayHostActivity : ComponentActivity() {
     private val legacySiriPresses = mutableSetOf<Triple<Int, Int, Int>>()
     private val startupRetryBudget = WirelessStartupRetryBudget()
     private var startupRetryStopped = false
+    private var authenticationRetryUsed = false
+    private var authenticationFailureGeneration = -1
+    private var authenticationInvalidGeneration = -1
+    private var authenticationReconnectRequiresClosed = false
+    private var retiringAuthenticationController: CarPlayController? = null
     private var startupRetryButton: View? = null
     private var startupFailureGeneration = -1
     private lateinit var airPlayIdentity: AirPlayIdentity
@@ -185,7 +190,7 @@ class CarPlayHostActivity : ComponentActivity() {
         } else null
         return CarPlayRuntimeConfig(
         mfiTarget = mfiTarget,
-        ch341Devices = if (mfiTarget == MfiTarget.USB_CH341) {
+        ch341Devices = if (mfiTarget == MfiTarget.USB_CH341 || mfiTarget == MfiTarget.AUTO) {
             listOf(UsbDeviceId(0x1a86, 0x5512))
         } else {
             emptyList()
@@ -538,7 +543,7 @@ class CarPlayHostActivity : ComponentActivity() {
     private var microphoneAvailable = false
     private var microphonePermissionResolved = false
     private var wirelessEnabled = false
-    private var mfiTarget = MfiTarget.LOCAL
+    private var mfiTarget = MfiTarget.AUTO
     private var mfiI2cPath = AirPlayPersistence.DEFAULT_MFI_I2C_PATH
     private var remoteMfiServer = ""
     private var remoteMfiToken = ""
@@ -1990,6 +1995,7 @@ class CarPlayHostActivity : ComponentActivity() {
                 if (!CarPlayBackgroundSession.isOwner(this@CarPlayHostActivity) ||
                     shuttingDown.get() || menuOpen || handshakeResetInProgress) return@setOnClickListener
                 startupRetryBudget.manualRetry()
+                authenticationRetryUsed = false
                 startupRetryStopped = false
                 reconnectAttempts = 0
                 visibility = View.GONE
@@ -3667,6 +3673,7 @@ class CarPlayHostActivity : ComponentActivity() {
     }
 
     private fun mfiTargetLabel(target: MfiTarget): String = when (target) {
+        MfiTarget.AUTO -> getString(R.string.settings_mfi_auto)
         MfiTarget.LOCAL -> getString(R.string.local_offline)
         MfiTarget.USB_CH341 -> getString(R.string.usb_ch341)
         MfiTarget.I2C -> getString(R.string.i2c)
@@ -5165,7 +5172,8 @@ class CarPlayHostActivity : ComponentActivity() {
             override fun onSessionActive(session: AirPlaySession) {
                 DetailedDebugLog.record("connection", "session active generation=$controllerGeneration current=$restartGeneration")
                 runOnUiThread {
-                    if (controllerGeneration != restartGeneration) {
+                    if (controllerGeneration != restartGeneration || controllerGeneration == authenticationInvalidGeneration ||
+                        shuttingDown.get() || startupRetryStopped) {
                         return@runOnUiThread
                     }
                     activeAirPlaySession = session
@@ -5193,11 +5201,12 @@ class CarPlayHostActivity : ComponentActivity() {
 
             override fun onVideoFrameRendered(session: AirPlaySession) {
                 runOnUiThread {
-                    if (controllerGeneration != restartGeneration || activeAirPlaySession !== session || shuttingDown.get()) return@runOnUiThread
+                    if (controllerGeneration != restartGeneration || controllerGeneration == authenticationInvalidGeneration ||
+                        activeAirPlaySession !== session || shuttingDown.get()) return@runOnUiThread
                     if (!startupRetryBudget.firstFrame(session, android.os.SystemClock.elapsedRealtime())) return@runOnUiThread
                     mainHandler.postDelayed({
-                        if (controllerGeneration == restartGeneration && activeAirPlaySession === session &&
-                            !shuttingDown.get() && CarPlayBackgroundSession.isOwner(this@CarPlayHostActivity) &&
+                        if (controllerGeneration == restartGeneration && controllerGeneration != authenticationInvalidGeneration &&
+                            activeAirPlaySession === session && !shuttingDown.get() && CarPlayBackgroundSession.isOwner(this@CarPlayHostActivity) &&
                             startupRetryBudget.resetIfStable(session, android.os.SystemClock.elapsedRealtime())) {
                             appendLog("wireless startup retry budget reset after stable video session")
                         }
@@ -5290,8 +5299,15 @@ class CarPlayHostActivity : ComponentActivity() {
             callPopupSessionReady = false
             updateCallPopupGuard()
         }
+        if (status is CarPlayStatus.Failed && status.authenticationFailure) {
+            authenticationInvalidGeneration = controllerGeneration
+            authenticationReconnectRequiresClosed = true
+            // Stop all transports promptly, including while the settings menu is open.
+            controller?.close()
+        }
         if (menuOpen) {
-            if (status is CarPlayStatus.Failed) failurePendingAfterMenu = status
+            if (status is CarPlayStatus.Failed &&
+                failurePendingAfterMenu?.authenticationFailure != true) failurePendingAfterMenu = status
             return@report
         }
         updateHotspotStatus(status)
@@ -5302,6 +5318,17 @@ class CarPlayHostActivity : ComponentActivity() {
         // Keep the actionable tip readable while automatic retries are in progress.
         // Only a working AirPlay session, or a new failure, replaces it.
         if (status is CarPlayStatus.Failed) showConnectionHelp(status)
+        if (status is CarPlayStatus.Failed && status.authenticationFailure) {
+            if (!CarPlayBackgroundSession.isOwner(this) || shuttingDown.get() || startupRetryStopped) return@report
+            if (authenticationFailureGeneration == controllerGeneration) return@report
+            authenticationFailureGeneration = controllerGeneration
+            authenticationReconnectRequiresClosed = true
+            if (authenticationRetryUsed) {
+                stopAuthenticationRecovery()
+                return@report
+            }
+            authenticationRetryUsed = true
+        }
         when (status) {
             is CarPlayStatus.Failed -> if (status.wifiResetRequired) {
                 wifiRecoveryButton?.visibility = View.VISIBLE
@@ -5407,7 +5434,8 @@ class CarPlayHostActivity : ComponentActivity() {
 
     private fun startCarPlay(size: DisplaySize) {
         if (CarPlayBackgroundSession.hasSession() && !CarPlayBackgroundSession.isOwner(this)) return
-        if (shuttingDown.get() || menuOpen || handshakeResetInProgress || controller != null) return
+        if (shuttingDown.get() || menuOpen || handshakeResetInProgress || controller != null ||
+            CarPlayBackgroundSession.authenticationTeardownPending()) return
         val controllerGeneration = restartGeneration
         // Settings → Connection can change the target while this screen stays open (#696).
         mfiTarget = AirPlayPersistence.loadMfiTarget(this)
@@ -5782,7 +5810,12 @@ class CarPlayHostActivity : ComponentActivity() {
     }
 
     private fun maybeStartCarPlay() {
-        if (shuttingDown.get()) return
+        if (shuttingDown.get() || startupRetryStopped ||
+            CarPlayBackgroundSession.authenticationTeardownPending()) return
+        retiringAuthenticationController?.let { retiring ->
+            if (!retiring.awaitClosed(0)) return
+            retiringAuthenticationController = null
+        }
         if (CarPlayBackgroundSession.hasSession() && !CarPlayBackgroundSession.isOwner(this)) {
             if (!adoptBackgroundSession()) mainHandler.postDelayed({ maybeStartCarPlay() }, 500)
             return
@@ -5821,6 +5854,14 @@ class CarPlayHostActivity : ComponentActivity() {
             return
         }
         startCarPlay(size)
+    }
+
+    private fun stopAuthenticationRecovery() {
+        startupRetryStopped = true
+        reconnectScheduled = false
+        startupRetryButton?.visibility = View.VISIBLE
+        setConnectionStage(getString(R.string.mfi_authentication_retry_stopped))
+        appendLog("MFi recovery stopped; manual retry required")
     }
 
     private fun reconnectAfterLoss(
@@ -5907,7 +5948,7 @@ class CarPlayHostActivity : ComponentActivity() {
         handshakeResetInProgress = true
         callPopupSessionReady = false
         updateCallPopupGuard()
-        val oldController = controller
+        val oldController = controller ?: retiringAuthenticationController
         val oldSink = sink
         CarPlayMediaKeys.detach(oldController)
         CarPlayBackgroundSession.clear(oldController, keepOwner = true)
@@ -5918,6 +5959,11 @@ class CarPlayHostActivity : ComponentActivity() {
         clearIphoneCornerMask()
         discardLastPicture()
         val diagnosticLog = sessionLog
+        val requireClosed = authenticationReconnectRequiresClosed || retiringAuthenticationController != null
+        if (requireClosed) {
+            retiringAuthenticationController = oldController
+            CarPlayBackgroundSession.retainAuthenticationTeardown(oldController)
+        }
         teardownExecutor.execute {
             val started = System.nanoTime()
             oldController?.close()
@@ -5932,6 +5978,12 @@ class CarPlayHostActivity : ComponentActivity() {
             runOnUiThread {
                 if (!shuttingDown.get() && generation == restartGeneration) {
                     handshakeResetInProgress = false
+                    if (requireClosed && !completed) {
+                        stopAuthenticationRecovery()
+                        return@runOnUiThread
+                    }
+                    authenticationReconnectRequiresClosed = false
+                    retiringAuthenticationController = null
                     // The display can rotate again while the old stack is closing. Use the
                     // latest accepted size, and wait for any pending resize to settle first.
                     maybeStartCarPlay()
@@ -6085,9 +6137,10 @@ class CarPlayHostActivity : ComponentActivity() {
         recoveryPendingAfterMenu = false
         if (reconnect) {
             startupRetryBudget.manualRetry()
+            authenticationRetryUsed = false
             startupRetryStopped = false
         }
-        if (failure?.startupFailure != null && !reconnect) {
+        if ((failure?.startupFailure != null || failure?.authenticationFailure == true) && !reconnect) {
             createStatusReporter(restartGeneration)(failure)
         } else if (failure?.wifiResetRequired == true && (!reconnect || wirelessEnabled)) {
             createStatusReporter(restartGeneration)(failure)
@@ -6116,7 +6169,7 @@ class CarPlayHostActivity : ComponentActivity() {
         startupRetryBudget.disconnected()
         restartGeneration += 1
         mainHandler.removeCallbacks(applyDisplaySize)
-        val oldController = controller
+        val oldController = controller ?: retiringAuthenticationController
         val oldSink = sink
         CarPlayMediaKeys.detach(oldController)
         CarPlayBackgroundSession.clear(oldController)
@@ -6711,6 +6764,17 @@ internal object CarPlayBackgroundSession {
     private var stopAction: (((() -> Unit)) -> Unit)? = null
     private var stopping = false
     private var owner: Any? = null
+    // Survives Activity replacement and clear(): a new owner must not overlap an old MFi identity.
+    private var authenticationRetiringController: CarPlayController? = null
+    @Synchronized fun retainAuthenticationTeardown(controller: CarPlayController?) {
+        if (controller != null) authenticationRetiringController = controller
+    }
+    @Synchronized fun authenticationTeardownPending(): Boolean {
+        val retiring = authenticationRetiringController ?: return false
+        if (!retiring.awaitClosed(0)) return true
+        authenticationRetiringController = null
+        return false
+    }
     @Synchronized fun isOwner(candidate: Any): Boolean = owner === candidate
     @Synchronized fun hasSession(): Boolean = stopAction != null || stopping
     private val stopWaiters = mutableListOf<() -> Unit>()

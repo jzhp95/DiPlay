@@ -12,6 +12,7 @@ enum class CarPlayTransport {
 }
 
 enum class MfiTarget {
+    AUTO,
     LOCAL,
     USB_CH341,
     I2C,

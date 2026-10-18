@@ -75,6 +75,8 @@ class CarPlayHostDisplaySizeTest {
         (getField("sink") as? AndroidMediaSink)?.close()
         (getField("teardownExecutor") as ExecutorService).shutdownNow()
         (getField("airPlayCommandExecutor") as ExecutorService).shutdownNow()
+        CarPlayBackgroundSession::class.java.getDeclaredField("authenticationRetiringController")
+            .apply { isAccessible = true }.set(CarPlayBackgroundSession, null)
         CarPlayBackgroundSession.clear()
         controllerConstruction.close()
     }
@@ -434,6 +436,85 @@ class CarPlayHostDisplaySizeTest {
         assertSessionSize(1920, 990)
         assertNull(getField("pendingDisplaySize"))
         assertEquals(1, getField("restartGeneration"))
+    }
+
+    @Test @Config(sdk = [30]) fun authenticationRecoveryWaitsForOldResourcesBeforeStartingAgain() {
+        allowStartup()
+        AirPlayPersistence.saveMfiTarget(activity, MfiTarget.AUTO)
+        startSession()
+        activity.javaClass.getDeclaredMethod("startCarPlay", sizeClass)
+            .apply { isAccessible = true }.invoke(activity, size(1920, 990))
+        val old = controllerConstruction.constructed().last()
+        org.mockito.Mockito.`when`(old.awaitClosed(4_000L)).thenReturn(true)
+        org.mockito.Mockito.`when`(old.awaitClosed(0)).thenReturn(true)
+        val report = activity.javaClass.getDeclaredMethod("createStatusReporter", Int::class.javaPrimitiveType)
+            .apply { isAccessible = true }.invoke(activity, 0) as (com.shilapi.xcertplay.orchestration.CarPlayStatus) -> Unit
+        report(com.shilapi.xcertplay.orchestration.CarPlayStatus.Failed("MFi failed", authenticationFailure = true))
+        assertEquals(1, controllerConstruction.constructed().size)
+        activity.javaClass.getDeclaredMethod("restartCarPlay", String::class.java)
+            .apply { isAccessible = true }.invoke(activity, "Authentication recovery")
+        assertNull(getField("controller"))
+        assertEquals(1, controllerConstruction.constructed().size)
+        finishTeardown()
+        assertEquals(2, controllerConstruction.constructed().size)
+    }
+
+    @Test @Config(sdk = [30]) fun authenticationRecoveryCannotStartOverAnUnreleasedController() {
+        allowStartup()
+        AirPlayPersistence.saveMfiTarget(activity, MfiTarget.AUTO)
+        startSession()
+        activity.javaClass.getDeclaredMethod("startCarPlay", sizeClass)
+            .apply { isAccessible = true }.invoke(activity, size(1920, 990))
+        val report = activity.javaClass.getDeclaredMethod("createStatusReporter", Int::class.javaPrimitiveType)
+            .apply { isAccessible = true }.invoke(activity, 0) as (com.shilapi.xcertplay.orchestration.CarPlayStatus) -> Unit
+        report(com.shilapi.xcertplay.orchestration.CarPlayStatus.Failed("MFi failed", authenticationFailure = true))
+        activity.javaClass.getDeclaredMethod("restartCarPlay", String::class.java)
+            .apply { isAccessible = true }.invoke(activity, "Authentication recovery")
+        finishTeardown() // Mock awaitClosed defaults to false.
+        assertNull(getField("controller"))
+        assertTrue(getField("startupRetryStopped") as Boolean)
+        activity.javaClass.getDeclaredMethod("maybeStartCarPlay").apply { isAccessible = true }.invoke(activity)
+        assertEquals(1, controllerConstruction.constructed().size)
+        // A manual retry resets the budget, but must still wait for the same retiring controller.
+        setField("startupRetryStopped", false)
+        setField("authenticationRetryUsed", false)
+        activity.javaClass.getDeclaredMethod("restartCarPlay", String::class.java)
+            .apply { isAccessible = true }.invoke(activity, "Manual authentication retry")
+        finishTeardown()
+        assertTrue(getField("startupRetryStopped") as Boolean)
+        assertEquals(1, controllerConstruction.constructed().size)
+        val old = controllerConstruction.constructed().first()
+        org.mockito.Mockito.`when`(old.awaitClosed(4_000L)).thenReturn(true)
+        org.mockito.Mockito.`when`(old.awaitClosed(0)).thenReturn(true)
+        setField("startupRetryStopped", false)
+        activity.javaClass.getDeclaredMethod("restartCarPlay", String::class.java)
+            .apply { isAccessible = true }.invoke(activity, "Manual retry after release")
+        finishTeardown()
+        assertEquals(2, controllerConstruction.constructed().size)
+    }
+
+    @Test @Config(sdk = [30]) fun menuAuthenticationFailureKeepsTheGateAcrossOwners() {
+        allowStartup()
+        AirPlayPersistence.saveMfiTarget(activity, MfiTarget.AUTO)
+        startSession()
+        activity.javaClass.getDeclaredMethod("startCarPlay", sizeClass)
+            .apply { isAccessible = true }.invoke(activity, size(1920, 990))
+        val old = controllerConstruction.constructed().single()
+        setField("menuOpen", true)
+        val report = activity.javaClass.getDeclaredMethod("createStatusReporter", Int::class.javaPrimitiveType)
+            .apply { isAccessible = true }.invoke(activity, 0) as (com.shilapi.xcertplay.orchestration.CarPlayStatus) -> Unit
+        report(com.shilapi.xcertplay.orchestration.CarPlayStatus.Failed("MFi failed", authenticationFailure = true))
+        setField("menuOpen", false)
+        setField("authenticationRetryUsed", false) // Apply and reconnect is an explicit manual retry.
+        activity.javaClass.getDeclaredMethod("restartCarPlay", String::class.java)
+            .apply { isAccessible = true }.invoke(activity, "Settings saved; reconnecting")
+        finishTeardown()
+        assertTrue(getField("startupRetryStopped") as Boolean)
+        assertTrue(CarPlayBackgroundSession.authenticationTeardownPending())
+        CarPlayBackgroundSession.clear()
+        assertTrue("A replacement host must keep waiting", CarPlayBackgroundSession.authenticationTeardownPending())
+        org.mockito.Mockito.`when`(old.awaitClosed(0)).thenReturn(true)
+        assertFalse(CarPlayBackgroundSession.authenticationTeardownPending())
     }
 
     @Test @Config(sdk = [30]) fun teardownRechecksStartupPrerequisites() {

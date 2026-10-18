@@ -326,14 +326,20 @@ object AirPlayPersistence {
     }
 
     fun loadMfiTarget(context: Context): MfiTarget {
-        val stored = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getString(KEY_MFI_TARGET, null)
-        return MfiTarget.entries.firstOrNull { it.name == stored } ?: MfiTarget.LOCAL
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val explicit = prefs.getString("mfi_target_selection", null)
+        if (explicit != null) return MfiTarget.entries.firstOrNull { it.name == explicit } ?: MfiTarget.AUTO
+        // Preserve the legacy key for rollback. Old local/USB choices adopt automatic selection.
+        return when (prefs.getString(KEY_MFI_TARGET, null)) {
+            "I2C" -> MfiTarget.I2C
+            "REMOTE" -> MfiTarget.REMOTE
+            else -> MfiTarget.AUTO
+        }
     }
 
     fun saveMfiTarget(context: Context, target: MfiTarget) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .putString(KEY_MFI_TARGET, target.name)
+            .putString("mfi_target_selection", target.name)
             .apply()
     }
 
