@@ -287,7 +287,14 @@ internal class CarHotspotSettingsUi(
                 fields.addView(this, gap())
             }
         }
-        choice(R.string.settings_hotspot_security, securityTitles, securities.indexOf(security)) { security = securities[it] }
+        fields.addView(SettingsWidgets.createChoiceRow(
+            context = activity,
+            label = activity.getString(R.string.settings_hotspot_security),
+            options = securities.zip(securityTitles),
+            selected = security,
+            theme = SettingsTheme.card(palette),
+            onSelected = { security = it },
+        ).container, gap())
         choice(R.string.settings_hotspot_band, bandTitles, bands.indexOf(band)) {
             val next = bands[it]
             if (band != next) {

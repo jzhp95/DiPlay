@@ -2,7 +2,7 @@
 <resources>
     <string name="settings_about_subtitle">车机上的 CarPlay 连接与控制</string>
     <string name="settings_about_version">当前版本 · %1$s</string>
-    <string name="settings_about_summary">已同步 DiPlay 0.2.21 分支</string>
+    <string name="settings_about_summary">将 iPhone 的 CarPlay 画面和声音接入 Android 车机，让连接、媒体播放与方向盘操作融入日常驾驶。\n\n已同步 DiPlay 0.2.21 分支</string>
     <string name="settings_about_features_title">连接与操作</string>
     <string name="settings_about_features_summary">连接：支持无线与 USB 有线方式。\n\n方控：在兼容车机上接收上一曲、下一曲和播放／暂停按键。\n\n诊断：支持记录连接、媒体焦点与按键日志，并导出报告。</string>
 </resources>
