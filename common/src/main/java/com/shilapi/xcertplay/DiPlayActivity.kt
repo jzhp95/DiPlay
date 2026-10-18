@@ -2385,6 +2385,16 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             override fun afterTextChanged(s: android.text.Editable?) = updateNameWarning()
         })
         fields.addView(ssid); fields.addView(nameWarning); fields.addView(password)
+        val hotspotInterface = if (existingWifi) null else EditText(dialogContext).apply {
+            hint = getString(R.string.settings_hotspot_interface)
+            setText(AirPlayPersistence.loadManualHotspotInterface(this@DiPlayActivity))
+            setSingleLine()
+            inputType = android.text.InputType.TYPE_CLASS_TEXT
+        }
+        if (hotspotInterface != null) {
+            fields.addView(hotspotInterface)
+            fields.addView(label(getString(R.string.settings_hotspot_interface_description), 14, MUTED))
+        }
         fields.addView(CheckBox(dialogContext).apply {
             text = getString(R.string.show_password)
             setOnCheckedChangeListener { _, checked ->
@@ -2441,6 +2451,9 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                 if (problem != null) error.text = problem
                 else {
                     val security = if (secret.isEmpty()) ManualHotspotSecurity.OPEN else protectedSecurity
+                    if (!existingWifi) {
+                        AirPlayPersistence.saveManualHotspotInterface(this, hotspotInterface?.text?.toString().orEmpty())
+                    }
                     hideKeyboard(); dialog.dismiss(); done(name, secret, security)
                 }
             }
@@ -3518,6 +3531,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         appendLine("CarPlay size: ${com.shilapi.xcertplay.airplay.CarPlaySize.fromWidthMillimeters(AirPlayPersistence.loadWidthPhysicalMm(appContext)).label}")
         appendLine("Saved resolution preference (may differ from active session): ${AirPlayPersistence.loadDisplayScalePercent(appContext)}%")
         appendLine("Session: ${if (CarPlayBackgroundSession.active) "active" else if (CarPlayBackgroundSession.hasSession()) "connecting" else "stopped"}")
+        appendLine(com.shilapi.xcertplay.BluetoothDiagnosticSnapshot.report(appContext))
         appendLine(PhoneWakeDiagnostics.report(appContext))
         appendLine("Head-unit board: ${Build.BOARD}; hardware: ${Build.HARDWARE}; build: ${Build.DISPLAY}")
         appendLine()

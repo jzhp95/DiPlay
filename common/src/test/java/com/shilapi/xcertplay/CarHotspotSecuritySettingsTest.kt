@@ -80,18 +80,43 @@ class CarHotspotSecuritySettingsTest {
         assertEquals(ManualHotspotSecurity.OPEN, AirPlayPersistence.loadManualHotspotSecurity(app))
     }
 
+    @Test fun interfaceOverrideIsSavedOnlyWithValidatedCredentialsAndCancelKeepsTheOldValue() {
+        AirPlayPersistence.saveManualHotspotInterface(app, "eth0.3")
+        fun interfaceInput(dialog: AlertDialog) = inputs(dialog).single {
+            it.hint == activity.getString(com.shilapi.xcertplay.host.R.string.settings_hotspot_interface)
+        }
+        val cancelled = editCredentials()
+        assertEquals("eth0.3", interfaceInput(cancelled).text.toString())
+        interfaceInput(cancelled).setText("eth0.4")
+        cancelled.getButton(AlertDialog.BUTTON_NEGATIVE).performClick()
+        assertEquals("eth0.3", AirPlayPersistence.loadManualHotspotInterface(app))
+        val edited = editCredentials()
+        interfaceInput(edited).setText("  eth0.4  ")
+        inputs(edited)[0].setText("")
+        save(edited)
+        assertTrue(edited.isShowing)
+        assertEquals("eth0.3", AirPlayPersistence.loadManualHotspotInterface(app))
+        inputs(edited)[0].setText("Car hotspot")
+        save(edited)
+        assertEquals("eth0.4", AirPlayPersistence.loadManualHotspotInterface(app))
+        val automatic = editCredentials()
+        interfaceInput(automatic).setText("")
+        save(automatic)
+        assertEquals("", AirPlayPersistence.loadManualHotspotInterface(app))
+    }
+
     private fun editCredentials(): AlertDialog {
         val parent = LinearLayout(activity)
         DiPlayActivity::class.java.getDeclaredMethod("wirelessLinkControls", LinearLayout::class.java)
             .apply { isAccessible = true }.invoke(activity, parent)
         activity.setContentView(parent)
-        descendants(parent).filterIsInstance<Button>().first { it.text.startsWith("Edit saved hotspot") }.performClick()
+        descendants(parent).filterIsInstance<Button>().first { it.text.startsWith(activity.getString(com.shilapi.xcertplay.host.R.string.edit_saved_hotspot_prefix)) }.performClick()
         shadowOf(Looper.getMainLooper()).idle()
         return ShadowAlertDialog.getLatestAlertDialog()
     }
 
     private fun securityButton(dialog: AlertDialog): Button = descendants(dialog.window!!.decorView)
-        .filterIsInstance<Button>().first { it.text.startsWith("Security ·") }
+        .filterIsInstance<Button>().first { it.text.startsWith("${activity.getString(com.shilapi.xcertplay.host.R.string.security)} ·") }
 
     private fun chooseSecurity(dialog: AlertDialog, name: String) {
         securityButton(dialog).performClick()
@@ -100,7 +125,7 @@ class CarHotspotSecuritySettingsTest {
         choices.listView.performItemClick(null, index, index.toLong())
         choices.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
         shadowOf(Looper.getMainLooper()).idle()
-        assertEquals("Security · $name", securityButton(dialog).text.toString())
+        assertEquals("${activity.getString(com.shilapi.xcertplay.host.R.string.security)} · $name", securityButton(dialog).text.toString())
     }
 
     private fun inputs(dialog: AlertDialog) = descendants(dialog.window!!.decorView).filterIsInstance<EditText>().toList()

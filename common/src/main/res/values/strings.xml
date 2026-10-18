@@ -966,4 +966,8 @@
     <string name="iphone_corner_mask_mode">iPhone 遮罩（实验性）</string>
     <string name="settings_enter_carplay_on_open">打开 APP 时自动进入 CarPlay</string>
     <string name="settings_enter_carplay_on_open_description">仅在 CarPlay 已连接时生效。开启后，从车机桌面点击应用图标会直接进入 CarPlay；关闭时进入应用首页，可手动断开连接。未连接时仍按原有自动连接设置执行。立即生效。</string>
+    <string name="connection_help_wifi_direct_beside_hotspot">请关闭车载热点后点“重新连接”；或在“连接设置”中选择“车载热点”，并保存热点名称和密码。</string>
+    <string name="settings_hotspot_interface">热点网络接口（可选）</string>
+    <string name="settings_hotspot_interface_description">仅用于把热点放在 Android 不认为是 Wi-Fi 热点的网络接口上的车机，例如部分吉利、领克及其它高通车机上的 eth0.3。留空则自动查找。</string>
+    <string name="wifi_direct_refused_beside_hotspot">车载热点已开启，Wi-Fi Direct 无法同时启动</string>
 </resources>
