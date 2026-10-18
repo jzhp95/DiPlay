@@ -297,7 +297,8 @@ class AdaptiveSettingsUiTest {
         assertTrue(texts(screen).any { it.text == screen.getString(R.string.setup_needs_attention) })
         assertFalse(texts(screen).any { it.text == screen.getString(R.string.ready) })
         texts(screen).single { it.text == screen.getString(R.string.open_connection_setup) }.performClick()
-        assertEquals("connection", ReflectionHelpers.getField<String>(screen, "page"))
+        assertEquals("settings", ReflectionHelpers.getField<String>(screen, "page"))
+        assertEquals(SettingsCategory.CONNECTION, ReflectionHelpers.getField<SettingsCategory>(screen, "settingsCategory"))
         screen.onBackPressedDispatcher.onBackPressed()
         assertEquals("settings", ReflectionHelpers.getField<String>(screen, "page"))
     }
@@ -582,34 +583,39 @@ class AdaptiveSettingsUiTest {
         assertEquals(true, fullScreen.isChecked)
     }
 
-    @Test fun systemBackFromConnectionSetupReturnsToConnectionSettings() {
-        val screen = openConnectionSetupFromSettings()
-
+    @Test fun systemBackFromFlattenedConnectionSettingsReturnsToOverview() {
+        val screen = openConnectionSettings()
         screen.onBackPressedDispatcher.onBackPressed()
-
         assertEquals("settings", ReflectionHelpers.getField<String>(screen, "page"))
-        assertTrue(texts(screen).any { it.text == screen.getString(R.string.connection_setup) })
-        assertFalse(texts(screen).any { it.text == screen.getString(R.string.settings_quick_settings) })
+        assertEquals(SettingsCategory.OVERVIEW, ReflectionHelpers.getField<SettingsCategory>(screen, "settingsCategory"))
     }
 
-    @Test fun toolbarBackFromConnectionSetupReturnsToConnectionSettings() {
-        val screen = openConnectionSetupFromSettings()
-
+    @Test fun toolbarBackFromFlattenedConnectionSettingsReturnsToOverview() {
+        val screen = openConnectionSettings()
         texts(screen).single { it.text == screen.getString(R.string.back) }.performClick()
-
         assertEquals("settings", ReflectionHelpers.getField<String>(screen, "page"))
-        assertTrue(texts(screen).any { it.text == screen.getString(R.string.connection_setup) })
+        assertEquals(SettingsCategory.OVERVIEW, ReflectionHelpers.getField<SettingsCategory>(screen, "settingsCategory"))
     }
 
-    @Test fun connectionSetupOpenedDirectlyStillReturnsHome() {
+    @Test fun oldConnectionPageIntentOpensTheConnectionCategory() {
         val screen = Robolectric.buildActivity(
             DiPlayActivity::class.java,
             Intent(context, DiPlayActivity::class.java).putExtra("page", "connection"),
         ).setup().get().also { activity = it }
-
+        assertEquals("settings", ReflectionHelpers.getField<String>(screen, "page"))
+        assertEquals(SettingsCategory.CONNECTION, ReflectionHelpers.getField<SettingsCategory>(screen, "settingsCategory"))
         screen.onBackPressedDispatcher.onBackPressed()
+        assertEquals(SettingsCategory.OVERVIEW, ReflectionHelpers.getField<SettingsCategory>(screen, "settingsCategory"))
+    }
 
-        assertEquals("home", ReflectionHelpers.getField<String>(screen, "page"))
+    @Test fun connectionCategoryShowsAllConnectionControlsWithoutASecondPage() {
+        val screen = openConnectionSettings()
+        for (id in listOf(R.string.s_1_choose_your_connection, R.string.s_2_pair_your_iphone,
+            R.string.s_3_connect, R.string.prefer_a_cable, R.string.connect_phone, R.string.connect_with_usb)) {
+            assertTrue("Missing inline connection control: $id", texts(screen).any { it.text == screen.getString(id) })
+        }
+        assertFalse(texts(screen).any { it.text == screen.getString(R.string.open_connection_setup) })
+        assertEquals(SettingsCategory.CONNECTION, ReflectionHelpers.getField<SettingsCategory>(screen, "settingsCategory"))
     }
 
     @Test fun advancedContainsOnlyExpertSections() {
@@ -1181,13 +1187,14 @@ class AdaptiveSettingsUiTest {
         Intent(context, DiPlayActivity::class.java).putExtra("page", "settings"),
     ).setup().get().also { activity = it }
 
-    private fun openConnectionSetupFromSettings(): DiPlayActivity = openSettings().also { screen ->
+    private fun openConnectionSettings(): DiPlayActivity = openSettings().also { screen ->
         descendants(screen.window.decorView)
             .single { it.contentDescription == screen.getString(R.string.settings_open_category,
                 screen.getString(R.string.connection)) }
             .performClick()
-        texts(screen).single { it.text == screen.getString(R.string.open_connection_setup) }.performClick()
-        assertEquals("connection", ReflectionHelpers.getField<String>(screen, "page"))
+        assertFalse(texts(screen).any { it.text == screen.getString(R.string.open_connection_setup) })
+        assertEquals("settings", ReflectionHelpers.getField<String>(screen, "page"))
+        assertEquals(SettingsCategory.CONNECTION, ReflectionHelpers.getField<SettingsCategory>(screen, "settingsCategory"))
     }
 
     private fun layoutRoot(screen: DiPlayActivity) {

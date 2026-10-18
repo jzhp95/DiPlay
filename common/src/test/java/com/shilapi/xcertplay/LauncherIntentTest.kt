@@ -68,11 +68,9 @@ class LauncherIntentTest {
         controller = Robolectric.buildActivity(DiPlayActivity::class.java,
             Intent().putExtra("page", "settings")).create()
         val activity = controller!!.get()
-        ReflectionHelpers.setField(activity, "connectionSettingsReturnCategory", SettingsCategory.ADVANCED)
         ReflectionHelpers.callInstanceMethod<Unit>(activity, "onNewIntent",
             ReflectionHelpers.ClassParameter(Intent::class.java, launcher()))
         assertEquals("home", ReflectionHelpers.getField<String>(activity, "page"))
-        assertNull(ReflectionHelpers.getField<SettingsCategory?>(activity, "connectionSettingsReturnCategory"))
         assertNull(shadowOf(activity).nextStartedActivity)
         assertTrue(CarPlayBackgroundSession.hasSession())
         assertEquals(0, stops)

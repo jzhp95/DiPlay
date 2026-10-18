@@ -81,6 +81,10 @@ internal enum class SettingsSection {
     CARPLAY_CONTROLS,
     WHEEL_KEYS,
     CONNECTION_SETUP,
+    CONNECTION_METHOD,
+    IPHONE_PAIRING,
+    WIRELESS_CONNECT,
+    WIRED_CONNECT,
     DIAGNOSTICS,
     AUTOMATIC_CONNECTION,
     USB_CONNECTION,
@@ -101,6 +105,10 @@ internal object SettingsInformationArchitecture {
         SettingsCategory.ABOUT to emptySet(),
         SettingsCategory.CONNECTION to setOf(
             SettingsSection.CONNECTION_SETUP,
+            SettingsSection.CONNECTION_METHOD,
+            SettingsSection.IPHONE_PAIRING,
+            SettingsSection.WIRELESS_CONNECT,
+            SettingsSection.WIRED_CONNECT,
             SettingsSection.AUTOMATIC_CONNECTION,
             SettingsSection.USB_CONNECTION,
             SettingsSection.CAR_HOTSPOT,
@@ -137,7 +145,6 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
     private val endWindowLearning = Runnable { cancelKeyLearning() }
     private var page = "home"
     private var settingsCategory = SettingsCategory.OVERVIEW
-    private var connectionSettingsReturnCategory: SettingsCategory? = null
     private var settingsSectionFilter: Set<SettingsSection>? = null
     private var clusterSafeAreaDialog: Dialog? = null
     private var clusterContentRequestVersion = 0L
@@ -294,8 +301,6 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         settingsCategory = savedInstanceState?.getString("settings_category")
             ?.let { runCatching { SettingsCategory.valueOf(it) }.getOrNull() }
             ?: SettingsCategory.OVERVIEW
-        connectionSettingsReturnCategory = savedInstanceState?.getString("connection_settings_return_category")
-            ?.let { runCatching { SettingsCategory.valueOf(it) }.getOrNull() }
         page = if (returningToSession) "home" else savedInstanceState?.getString("page") ?: intent.getStringExtra("page")
             ?: "home"
         render()
@@ -321,7 +326,6 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent); setIntent(intent)
-        connectionSettingsReturnCategory = null
         if (shouldEnterConnectedCarPlay(intent)) {
             page = "home"; render(); openProjection(); return
         }
@@ -346,7 +350,6 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putString("page", page)
         outState.putString("settings_category", settingsCategory.name)
-        connectionSettingsReturnCategory?.let { outState.putString("connection_settings_return_category", it.name) }
         outState.putBoolean("pending_car_hotspot", pendingCarHotspotSetup)
         super.onSaveInstanceState(outState)
     }
@@ -416,7 +419,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         }
         // Back from the car settings: refresh the car hotspot reminder on the home page.
         if (!initialLaunch &&
-            (page == "home" || page == "settings" || page == "connection")) render()
+            (page == "home" || page == "settings")) render()
         startAppearanceUpdates()
         if (initialLaunch) {
             initialLaunch = false
@@ -515,6 +518,11 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
     private fun render(appearanceOnly: Boolean, preferredFocusTag: Any? = null) {
         // Older saved state or launch intents may still point at the removed guide.
         if (page == "setup") page = "home"
+        // Restore old intents/saved state directly into the flattened connection category.
+        if (page == "connection") {
+            page = "settings"
+            settingsCategory = SettingsCategory.CONNECTION
+        }
         enforceInterfaceSize()
         refreshAppearance()
         applyWindowAppearance()
@@ -586,7 +594,6 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                 bottomMargin = dp(SETTINGS_BLOCK_GAP_DP)
             })
             when (page) {
-                "connection" -> connectionSetup(content)
                 "settings" -> settingsCategoryContent(content)
                 "report-share" -> reportShare(content)
                 else -> home(content)
@@ -679,32 +686,25 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             closeSettingsSearch()
             return
         }
-        val returnCategory = connectionSettingsReturnCategory
         when {
             page == "report-share" -> {
                 stopReportShareServer()
                 page = "settings"
                 settingsCategory = SettingsCategory.DIAGNOSTICS
             }
-            page == "connection" && returnCategory != null -> {
-                page = "settings"
-                settingsCategory = returnCategory
-                connectionSettingsReturnCategory = null
-            }
             page == "settings" && !isExpandedSettingsLayout && settingsCategory != SettingsCategory.OVERVIEW -> {
                 settingsCategory = SettingsCategory.OVERVIEW
             }
             else -> {
                 page = "home"
-                connectionSettingsReturnCategory = null
             }
         }
         render()
     }
 
-    private fun openConnectionSetupFromSettings() {
-        connectionSettingsReturnCategory = settingsCategory
-        page = "connection"
+    private fun openConnectionSettings() {
+        page = "settings"
+        settingsCategory = SettingsCategory.CONNECTION
         render()
     }
 
@@ -1025,7 +1025,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                 choosePhone()
             }, matchButton(12, 56))
             SettingsReadiness.SETUP_ERROR, SettingsReadiness.HOTSPOT_SETUP -> card.addView(button(getString(R.string.open_connection_setup), true) {
-                openConnectionSetupFromSettings()
+                openConnectionSettings()
             }, matchButton(12, 56))
             else -> Unit
         }
@@ -1412,6 +1412,23 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
     }
 
     private fun allSettingsSections(content: LinearLayout) {
+        filteredSection(content, SettingsSection.CONNECTION_METHOD, getString(R.string.s_1_choose_your_connection)) { card -> wirelessLinkControls(card) }
+        filteredSection(content, SettingsSection.IPHONE_PAIRING, getString(R.string.s_2_pair_your_iphone)) { card ->
+            card.addView(label(getString(R.string.keep_bluetooth_and_wi_fi_on_your_iphone_pair_with_the_car), 16, MUTED))
+            card.addView(button(chooseIphoneTitle(), false) { choosePhone() }, matchButton(12, 60))
+            card.addView(button(getString(R.string.review_app_permissions), false) {
+                openSystem(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
+            }, matchButton(12, 60))
+        }
+        filteredSection(content, SettingsSection.WIRELESS_CONNECT, getString(R.string.s_3_connect)) { card ->
+            card.addView(label(getString(R.string.return_from_car_settings_to_diplay_then_connect_accept_the), 16, MUTED))
+            card.addView(button(getString(R.string.connect_phone), true) { connect(true) }, matchButton(12, 60))
+        }
+        filteredSection(content, SettingsSection.WIRED_CONNECT, getString(R.string.prefer_a_cable)) { card ->
+            card.addView(label(getString(R.string.use_a_usb_data_cable_and_the_car_s_usb_data_port_unlock_yo), 16, MUTED))
+            card.addView(button(getString(R.string.connect_with_usb), false) { connect(false) }, matchButton(12, 60))
+        }
+
         filteredSection(content, SettingsSection.CARPLAY_CONTROLS,
             getString(R.string.carplay_controls), R.drawable.ic_dp_controls) { card ->
             val gestureFingers = listOf(0, 2, 3, 4)
@@ -1429,9 +1446,6 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             getString(R.string.settings_wheel_keys), R.drawable.ic_dp_controls, ::wheelKeysSettings)
         filteredSection(content, SettingsSection.CONNECTION_SETUP,
             getString(R.string.connection_setup), R.drawable.ic_dp_connection) { card ->
-            card.addView(label(getString(R.string.choose_how_to_connect_follow_the_setup_steps_and_save_your), 16, MUTED))
-            card.addView(button(getString(R.string.open_connection_setup), false, ::openConnectionSetupFromSettings), matchButton(12, 60))
-            card.addView(space(12))
             // Also here, not only in the CarPlay menu: with the CH341 removed CarPlay cannot connect,
             // so that menu could not be reached to switch back (#696).
             val mfiTargets = listOf(MfiTarget.LOCAL, MfiTarget.USB_CH341)
@@ -2100,28 +2114,6 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         if (DiPlayPreferences.phoneAddress(this) == null) getString(R.string.choose_iphone)
         else "${getString(R.string.choose_iphone_prefix)}${DiPlayPreferences.phoneName(this)}"
 
-    /** The warning and the button that turn both DiLink 4 cluster routes off (saving the ADB route clears both). */
-    private fun connectionSetup(content: LinearLayout) {
-        content.addView(label(getString(R.string.connection_setup), 34, TEXT, true))
-        content.addView(label(getString(R.string.set_up_once_your_details_stay_saved_for_the_next_drive_cha), 17, MUTED).apply { setPadding(0, dp(8), 0, dp(24)) })
-        section(content, getString(R.string.s_1_choose_your_connection)) { card -> wirelessLinkControls(card) }
-        section(content, getString(R.string.s_2_pair_your_iphone)) { card ->
-            card.addView(label(getString(R.string.keep_bluetooth_and_wi_fi_on_your_iphone_pair_with_the_car), 16, MUTED))
-            card.addView(button(chooseIphoneTitle(), false) { choosePhone() }, matchButton(12, 60))
-            card.addView(button(getString(R.string.review_app_permissions), false) {
-                openSystem(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
-            }, matchButton(12, 60))
-        }
-        section(content, getString(R.string.s_3_connect)) { card ->
-            card.addView(label(getString(R.string.return_from_car_settings_to_diplay_then_connect_accept_the), 16, MUTED))
-            card.addView(button(getString(R.string.connect_phone), true) { connect(true) }, matchButton(12, 60))
-        }
-        section(content, getString(R.string.prefer_a_cable)) { card ->
-            card.addView(label(getString(R.string.use_a_usb_data_cable_and_the_car_s_usb_data_port_unlock_yo), 16, MUTED))
-            card.addView(button(getString(R.string.connect_with_usb), false) { connect(false) }, matchButton(12, 60))
-        }
-    }
-
     private fun wirelessLinkControls(parent: LinearLayout) {
         val mode = if (pendingCarHotspotSetup) WirelessHotspotMode.MANUAL else AirPlayPersistence.loadWirelessHotspotMode(this)
         val modes = listOf(WirelessHotspotMode.MANUAL, WirelessHotspotMode.WIFI_P2P, WirelessHotspotMode.EXISTING_WIFI)
@@ -2153,7 +2145,9 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                     pendingCarHotspotSetup = false
                     applyWirelessLink(candidate)
                 }
-            }, matchButton(12, 60))
+            }.apply { if (wide) minLines = 2 }, matchButton(CONTROL_GAP_DP, 60).apply {
+                height = LinearLayout.LayoutParams.WRAP_CONTENT
+            })
             option.addView(label(descriptions[index], 15, MUTED).apply { setPadding(0, dp(6), 0, dp(12)) })
         }
         if (mode == WirelessHotspotMode.MANUAL) {
@@ -3245,14 +3239,13 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
     private fun connect(wireless: Boolean) {
         DetailedDebugLog.record("home", "connect requested wireless=$wireless setupReady=${setupError == null} pendingHotspot=$pendingCarHotspotSetup")
         startupHotspotCancelled = true
-        if (wireless && pendingCarHotspotSetup) { toast(getString(R.string.save_your_hotspot_details_in_connection_setup_first)); page = "connection"; render(); return }
+        if (wireless && pendingCarHotspotSetup) { toast(getString(R.string.save_your_hotspot_details_in_connection_setup_first)); openConnectionSettings(); return }
         if (setupError != null) { toast(setupError!!); return }
         if (wireless && AirPlayPersistence.loadWirelessHotspotMode(this) == WirelessHotspotMode.MANUAL &&
             hotspotError(storedSsid(), storedPassword()) != null) {
             DetailedDebugLog.record("home", "connect waiting reason=hotspot-configuration")
             pendingCarHotspotSetup = true
-            page = "connection"
-            render()
+            openConnectionSettings()
             toast(getString(R.string.save_the_name_and_password_from_the_car_s_hotspot_settings))
             return
         }
