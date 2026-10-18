@@ -608,14 +608,16 @@ class AdaptiveSettingsUiTest {
         assertEquals(SettingsCategory.OVERVIEW, ReflectionHelpers.getField<SettingsCategory>(screen, "settingsCategory"))
     }
 
-    @Test fun connectionCategoryShowsAllConnectionControlsWithoutASecondPage() {
+    @Test fun connectionCategoryUsesAChoiceAndDoesNotDuplicateHomeActions() {
         val screen = openConnectionSettings()
-        for (id in listOf(R.string.s_1_choose_your_connection, R.string.s_2_pair_your_iphone,
-            R.string.s_3_connect, R.string.prefer_a_cable, R.string.connect_phone, R.string.connect_with_usb)) {
-            assertTrue("Missing inline connection control: $id", texts(screen).any { it.text == screen.getString(id) })
+        for (id in listOf(R.string.settings_connection_method, R.string.mfi_certificate_signing_target)) {
+            assertTrue(texts(screen).any { it.text.startsWith(screen.getString(id) + " · ") })
         }
-        assertFalse(texts(screen).any { it.text == screen.getString(R.string.open_connection_setup) })
-        assertEquals(SettingsCategory.CONNECTION, ReflectionHelpers.getField<SettingsCategory>(screen, "settingsCategory"))
+        for (id in listOf(R.string.s_1_choose_your_connection, R.string.s_2_pair_your_iphone,
+            R.string.s_3_connect, R.string.prefer_a_cable, R.string.connect_phone, R.string.connect_with_usb,
+            R.string.choose_iphone, R.string.open_connection_setup)) {
+            assertFalse("Home action still in settings: $id", texts(screen).any { it.text == screen.getString(id) })
+        }
     }
 
     @Test fun advancedContainsOnlyExpertSections() {

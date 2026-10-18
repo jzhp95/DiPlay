@@ -81,14 +81,10 @@ internal enum class SettingsSection {
     CARPLAY_CONTROLS,
     WHEEL_KEYS,
     CONNECTION_SETUP,
-    CONNECTION_METHOD,
-    IPHONE_PAIRING,
-    WIRELESS_CONNECT,
-    WIRED_CONNECT,
+    CONNECTION_DETAILS,
     DIAGNOSTICS,
     AUTOMATIC_CONNECTION,
     USB_CONNECTION,
-    CAR_HOTSPOT,
     DISPLAY_AND_PERFORMANCE,
     EXPERIMENTAL_DISPLAY,
     ADVANCED_MEDIA,
@@ -105,13 +101,9 @@ internal object SettingsInformationArchitecture {
         SettingsCategory.ABOUT to emptySet(),
         SettingsCategory.CONNECTION to setOf(
             SettingsSection.CONNECTION_SETUP,
-            SettingsSection.CONNECTION_METHOD,
-            SettingsSection.IPHONE_PAIRING,
-            SettingsSection.WIRELESS_CONNECT,
-            SettingsSection.WIRED_CONNECT,
+            SettingsSection.CONNECTION_DETAILS,
             SettingsSection.AUTOMATIC_CONNECTION,
             SettingsSection.USB_CONNECTION,
-            SettingsSection.CAR_HOTSPOT,
             SettingsSection.PERMISSIONS_AND_HELP,
         ),
         SettingsCategory.DISPLAY to setOf(SettingsSection.DISPLAY_AND_PERFORMANCE),
@@ -1412,40 +1404,9 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
     }
 
     private fun allSettingsSections(content: LinearLayout) {
-        filteredSection(content, SettingsSection.CONNECTION_METHOD, getString(R.string.s_1_choose_your_connection)) { card -> wirelessLinkControls(card) }
-        filteredSection(content, SettingsSection.IPHONE_PAIRING, getString(R.string.s_2_pair_your_iphone)) { card ->
-            card.addView(label(getString(R.string.keep_bluetooth_and_wi_fi_on_your_iphone_pair_with_the_car), 16, MUTED))
-            card.addView(button(chooseIphoneTitle(), false) { choosePhone() }, matchButton(12, 60))
-            card.addView(button(getString(R.string.review_app_permissions), false) {
-                openSystem(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
-            }, matchButton(12, 60))
-        }
-        filteredSection(content, SettingsSection.WIRELESS_CONNECT, getString(R.string.s_3_connect)) { card ->
-            card.addView(label(getString(R.string.return_from_car_settings_to_diplay_then_connect_accept_the), 16, MUTED))
-            card.addView(button(getString(R.string.connect_phone), true) { connect(true) }, matchButton(12, 60))
-        }
-        filteredSection(content, SettingsSection.WIRED_CONNECT, getString(R.string.prefer_a_cable)) { card ->
-            card.addView(label(getString(R.string.use_a_usb_data_cable_and_the_car_s_usb_data_port_unlock_yo), 16, MUTED))
-            card.addView(button(getString(R.string.connect_with_usb), false) { connect(false) }, matchButton(12, 60))
-        }
-
-        filteredSection(content, SettingsSection.CARPLAY_CONTROLS,
-            getString(R.string.carplay_controls), R.drawable.ic_dp_controls) { card ->
-            val gestureFingers = listOf(0, 2, 3, 4)
-            choice(card, getString(R.string.settings_gesture_fingers_label),
-                gestureFingers.map { if (it == 0) getString(R.string.settings_gesture_disabled) else getString(R.string.settings_gesture_fingers_option, it) },
-                gestureFingers.indexOf(AirPlayPersistence.loadSettingsGestureFingers(this)).coerceAtLeast(0),
-                reconnects = false) {
-                AirPlayPersistence.saveSettingsGestureFingers(this, gestureFingers[it])
-            }
-            card.addView(label(getString(R.string.settings_gesture_fingers_hint), 14, MUTED).apply {
-                setPadding(0, dp(10), 0, 0)
-            })
-        }
-        filteredSection(content, SettingsSection.WHEEL_KEYS,
-            getString(R.string.settings_wheel_keys), R.drawable.ic_dp_controls, ::wheelKeysSettings)
         filteredSection(content, SettingsSection.CONNECTION_SETUP,
             getString(R.string.connection_setup), R.drawable.ic_dp_connection) { card ->
+            wirelessConnectionChoice(card)
             // Also here, not only in the CarPlay menu: with the CH341 removed CarPlay cannot connect,
             // so that menu could not be reached to switch back (#696).
             val mfiTargets = listOf(MfiTarget.LOCAL, MfiTarget.USB_CH341)
@@ -1465,6 +1426,28 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                 card.addView(label(getString(R.string.settings_mfi_target_description), 14, MUTED))
             }
         }
+        filteredSection(content, SettingsSection.CONNECTION_DETAILS,
+            getString(when (selectedWirelessHotspotMode()) {
+                WirelessHotspotMode.MANUAL -> R.string.hotspot_setup
+                WirelessHotspotMode.EXISTING_WIFI -> R.string.settings_existing_wifi_setup
+                else -> R.string.settings_wifi_setup
+            }), R.drawable.ic_dp_connection, ::wirelessLinkControls)
+
+        filteredSection(content, SettingsSection.CARPLAY_CONTROLS,
+            getString(R.string.carplay_controls), R.drawable.ic_dp_controls) { card ->
+            val gestureFingers = listOf(0, 2, 3, 4)
+            choice(card, getString(R.string.settings_gesture_fingers_label),
+                gestureFingers.map { if (it == 0) getString(R.string.settings_gesture_disabled) else getString(R.string.settings_gesture_fingers_option, it) },
+                gestureFingers.indexOf(AirPlayPersistence.loadSettingsGestureFingers(this)).coerceAtLeast(0),
+                reconnects = false) {
+                AirPlayPersistence.saveSettingsGestureFingers(this, gestureFingers[it])
+            }
+            card.addView(label(getString(R.string.settings_gesture_fingers_hint), 14, MUTED).apply {
+                setPadding(0, dp(10), 0, 0)
+            })
+        }
+        filteredSection(content, SettingsSection.WHEEL_KEYS,
+            getString(R.string.settings_wheel_keys), R.drawable.ic_dp_controls, ::wheelKeysSettings)
         filteredSection(content, SettingsSection.DIAGNOSTICS,
             getString(R.string.diagnostics), R.drawable.ic_dp_diagnostics) { card ->
             toggle(card, getString(R.string.settings_detailed_debug), getString(R.string.settings_detailed_debug_description),
@@ -1547,7 +1530,6 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                 })
             }
             card.addView(label(getString(R.string.boot_start_repair_desc), 14, MUTED).apply { setPadding(0, dp(8), 0, dp(6)) })
-            card.addView(button(chooseIphoneTitle(), false) { choosePhone() }, matchButton(12, 60))
         }
         filteredSection(content, SettingsSection.USB_CONNECTION,
             getString(R.string.settings_usb_connection), R.drawable.ic_dp_connection) { card ->
@@ -1562,7 +1544,6 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             }
             card.addView(label(getString(R.string.settings_usb_charging_description), 14, MUTED))
         }
-        if (settingsSectionFilter?.contains(SettingsSection.CAR_HOTSPOT) != false) carHotspotSettings(content)
         filteredSection(content, SettingsSection.DISPLAY_AND_PERFORMANCE,
             getString(R.string.display_and_performance), R.drawable.ic_dp_display) { card ->
             card.addView(button(getString(R.string.picture_adjustments), false) {
@@ -2024,33 +2005,27 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
      * Other head units: starting the hotspot needs only Android's "Modify system settings" access
      * (WRITE_SETTINGS), which the driver allows on the system screen. No ADB is involved.
      */
-    private fun systemHotspotSettings(parent: LinearLayout) {
-        section(parent, getString(R.string.settings_car_hotspot_control), R.drawable.ic_dp_permissions) { card ->
-            toggle(card, getString(R.string.auto_car_hotspot_title),
-                getString(R.string.settings_auto_car_hotspot_system_description), CarHotspotSettings.enabled(this)) { enabled ->
-                CarHotspotSettings.setEnabled(this, enabled)
-                if (!enabled) startupHotspotCancelled = true
-                else if (!CarHotspotTethering.permitted(this)) openWriteSettingsAccess()
-            }
-            val permitted = CarHotspotTethering.permitted(this)
-            card.addView(label(getString(if (permitted) R.string.settings_write_settings_granted
-                else R.string.settings_write_settings_missing), 14, if (permitted) READY else MUTED).apply {
-                setPadding(0, dp(6), 0, dp(4))
-            })
-            if (!permitted) {
-                card.addView(button(getString(R.string.settings_write_settings_allow), false) { openWriteSettingsAccess() },
-                    matchButton(8, 54))
-            }
+    private fun systemHotspotControls(card: LinearLayout) {
+        card.addView(label(getString(R.string.settings_car_hotspot_control), 22, TEXT, true))
+        toggle(card, getString(R.string.auto_car_hotspot_title),
+            getString(R.string.settings_auto_car_hotspot_system_description), CarHotspotSettings.enabled(this)) { enabled ->
+            CarHotspotSettings.setEnabled(this, enabled)
+            if (!enabled) startupHotspotCancelled = true
+            else if (!CarHotspotTethering.permitted(this)) openWriteSettingsAccess()
+        }
+        val permitted = CarHotspotTethering.permitted(this)
+        card.addView(label(getString(if (permitted) R.string.settings_write_settings_granted
+            else R.string.settings_write_settings_missing), 14, if (permitted) READY else MUTED).apply {
+            setPadding(0, dp(6), 0, dp(4))
+        })
+        if (!permitted) {
+            card.addView(button(getString(R.string.settings_write_settings_allow), false) { openWriteSettingsAccess() },
+                matchButton(8, 54))
         }
     }
 
     private fun openWriteSettingsAccess() =
         openSystem(Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, Uri.parse("package:$packageName")))
-
-    private fun carHotspotSettings(parent: LinearLayout) {
-        if (AirPlayPersistence.loadWirelessHotspotMode(this) == WirelessHotspotMode.MANUAL &&
-            CarHotspotTethering.appStartSupported()) systemHotspotSettings(parent)
-    }
 
     private fun startCarHotspotOnLaunch() {
         if (!startupHotspotEligible()) return
@@ -2109,49 +2084,37 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         openSystem(wifi)
     }
 
-    /** "Choose iPhone · <name>" once an iPhone is chosen. Before that there is no name to show, only "Choose iPhone". */
-    private fun chooseIphoneTitle(): String =
-        if (DiPlayPreferences.phoneAddress(this) == null) getString(R.string.choose_iphone)
-        else "${getString(R.string.choose_iphone_prefix)}${DiPlayPreferences.phoneName(this)}"
+    private fun selectedWirelessHotspotMode(): WirelessHotspotMode =
+        if (pendingCarHotspotSetup) WirelessHotspotMode.MANUAL else AirPlayPersistence.loadWirelessHotspotMode(this)
+
+    private fun wirelessModeTitle(mode: WirelessHotspotMode): String = getString(when (mode) {
+        WirelessHotspotMode.MANUAL -> R.string.settings_built_in_car_hotspot_recommended
+        WirelessHotspotMode.WIFI_P2P -> R.string.wifi_direct
+        WirelessHotspotMode.EXISTING_WIFI -> R.string.existing_wifi_title
+        WirelessHotspotMode.LOCAL_ONLY_HOTSPOT -> R.string.settings_built_in_car_hotspot_recommended
+    })
+
+    private fun wirelessConnectionChoice(parent: LinearLayout) {
+        val current = selectedWirelessHotspotMode()
+        val modes = listOf(WirelessHotspotMode.MANUAL, WirelessHotspotMode.WIFI_P2P, WirelessHotspotMode.EXISTING_WIFI)
+        choice(parent, getString(R.string.settings_connection_method), modes.map(::wirelessModeTitle),
+            modes.indexOf(current), reconnects = false) { index ->
+            val mode = modes[index]
+            pendingCarHotspotSetup = mode == WirelessHotspotMode.MANUAL &&
+                hotspotError(storedSsid(), storedPassword()) != null
+            applyWirelessLink(mode)
+        }
+        parent.addView(label(getString(R.string.settings_connection_method_description), 16, MUTED))
+    }
 
     private fun wirelessLinkControls(parent: LinearLayout) {
-        val mode = if (pendingCarHotspotSetup) WirelessHotspotMode.MANUAL else AirPlayPersistence.loadWirelessHotspotMode(this)
-        val modes = listOf(WirelessHotspotMode.MANUAL, WirelessHotspotMode.WIFI_P2P, WirelessHotspotMode.EXISTING_WIFI)
-        val titles = listOf(getString(R.string.settings_built_in_car_hotspot_recommended), getString(R.string.wifi_direct), getString(R.string.existing_wifi_title))
-        val descriptions = listOf(
-            getString(R.string.hotspot_mode_manual_desc),
-            getString(R.string.hotspot_mode_p2p_desc),
-            getString(R.string.existing_wifi_description)
-        )
-        val wide = resources.configuration.screenWidthDp >= 850
-        val choices = if (wide) row().apply { gravity = Gravity.TOP } else column()
-        parent.addView(choices)
-        modes.forEachIndexed { index, candidate ->
-            val option = column()
-            choices.addView(option, if (wide) LinearLayout.LayoutParams(0, -2, 1f).apply {
-                if (index > 0) marginStart = dp(16)
-            } else LinearLayout.LayoutParams(-1, -2))
-            option.addView(button("${if (mode == candidate) "✓  " else ""}${titles[index]}", mode == candidate) {
-                if (candidate == WirelessHotspotMode.MANUAL) {
-                    pendingCarHotspotSetup = true
-                    render()
-                } else if (candidate == WirelessHotspotMode.EXISTING_WIFI) {
-                    askHotspotCredentials(existingWifi = true) { ssid, password, _ ->
-                        AirPlayPersistence.saveExistingWifiCredentials(this, ssid, password)
-                        pendingCarHotspotSetup = false
-                        applyWirelessLink(candidate)
-                    }
-                } else {
-                    pendingCarHotspotSetup = false
-                    applyWirelessLink(candidate)
-                }
-            }.apply { if (wide) minLines = 2 }, matchButton(CONTROL_GAP_DP, 60).apply {
-                height = LinearLayout.LayoutParams.WRAP_CONTENT
-            })
-            option.addView(label(descriptions[index], 15, MUTED).apply { setPadding(0, dp(6), 0, dp(12)) })
-        }
+        val mode = selectedWirelessHotspotMode()
+        parent.addView(label(getString(when (mode) {
+            WirelessHotspotMode.MANUAL -> R.string.hotspot_mode_manual_desc
+            WirelessHotspotMode.EXISTING_WIFI -> R.string.existing_wifi_description
+            else -> R.string.hotspot_mode_p2p_desc
+        }), 16, MUTED))
         if (mode == WirelessHotspotMode.MANUAL) {
-            parent.addView(label(getString(R.string.hotspot_setup), 22, TEXT, true))
             parent.addView(label(getString(R.string.s_1_open_car_hotspot_settings_turn_the_hotspot_on_and_sele), 16, MUTED).apply { setPadding(0, dp(8), 0, dp(12)) })
             parent.addView(button(getString(R.string.open_car_hotspot_settings), false) { openCarWifiSettings() }, matchButton(0, 60))
             // Before anything is saved there is no hotspot to edit and no name to show after the dot.
@@ -2169,6 +2132,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                 labelFactory = { label(it, 15, MUTED) }, buttonFactory = { title, click -> button(title, false, click) })
                 .also { hotspotJoinControls = it }
             parent.addView(join.build())
+            if (CarHotspotTethering.appStartSupported()) systemHotspotControls(parent)
         } else if (mode == WirelessHotspotMode.EXISTING_WIFI) {
             parent.addView(label(getString(R.string.existing_wifi_instructions), 16, MUTED))
             parent.addView(button(getString(R.string.open_car_wi_fi_settings), false) { openCarClientWifiSettings() }, matchButton(12, 60))
@@ -2902,6 +2866,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
     private fun applyWirelessLink(mode: WirelessHotspotMode) {
         startupHotspotCancelled = true
         AirPlayPersistence.saveWirelessHotspotMode(this, mode)
+        markReconnectNeeded()
         render()
         toast(getString(R.string.saved_for_your_next_connection))
     }
