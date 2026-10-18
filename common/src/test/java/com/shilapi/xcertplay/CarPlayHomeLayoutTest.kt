@@ -34,6 +34,37 @@ class CarPlayHomeLayoutTest {
         brand.performClick()
         assertEquals(1, opened)
     }
+    @Test @Config(qualifiers = "zh-rCN-w1100dp-h700dp-land")
+    fun headerBrandAndActionsShareVerticalCenterAtEveryFontScale() {
+        val context = RuntimeEnvironment.getApplication()
+        for (scale in listOf(1f, 1.5f)) {
+            RuntimeEnvironment.setFontScale(scale)
+            try {
+                val layout = CarPlayHomeLayout(context, DiPlayPalette.LIGHT,
+                    { title, _, click -> Button(context).apply { text = title; setOnClickListener { click() } } },
+                    { title, size, _, _ -> TextView(context).apply { text = title; textSize = size.toFloat() } })
+                val header = layout.header(null, {}, {}, {}, {})
+                val width = (1100 * context.resources.displayMetrics.density).toInt()
+                header.root.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
+                header.root.layout(0, 0, width, header.root.measuredHeight)
+                val brand = descendants(header.root).filterIsInstance<TextView>().single {
+                    it.text == context.getString(R.string.app_name)
+                }
+                val row = brand.parent as android.widget.LinearLayout
+                assertFalse("Header must center controls independently of text baselines", row.isBaselineAligned)
+                val buttons = (0 until row.childCount).map { row.getChildAt(it) }.filterIsInstance<Button>()
+                assertTrue("Wide header must include actions", buttons.isNotEmpty())
+                for (button in buttons.filter { it.visibility == View.VISIBLE }) {
+                    assertTrue("Header center differs at font scale $scale: ${button.text}",
+                        kotlin.math.abs((brand.top + brand.bottom) - (button.top + button.bottom)) <= 2)
+                }
+                assertEquals(android.view.Gravity.CENTER_VERTICAL,
+                    brand.gravity and android.view.Gravity.VERTICAL_GRAVITY_MASK)
+            } finally { RuntimeEnvironment.setFontScale(1f) }
+        }
+    }
+
     @Config(qualifiers = "zh-rCN-w1100dp-h700dp-land")
     @Test fun wideHomeHasTwoConnectionCardsAndKeepsEveryAction() = verify(wide = true)
 

@@ -65,7 +65,10 @@ internal class CarPlayHomeLayout(
     fun header(appearance: View?, choose: () -> Unit, disconnect: () -> Unit,
         settings: () -> Unit, carHome: () -> Unit, wheelTest: () -> Unit = {}): Header {
         val root = column()
-        val top = row()
+        val top = row().apply {
+            // Different title/action font sizes must not shift the controls to a shared baseline.
+            isBaselineAligned = false
+        }
         val taps = FiveTapGate()
         val brandClick = View.OnClickListener {
             if (taps.tap(android.os.SystemClock.elapsedRealtime())) wheelTest()
@@ -73,6 +76,7 @@ internal class CarPlayHomeLayout(
         val brand = label(R.string.app_name, if (compact) 22 else 30).apply {
             setPaddingRelative(0, 0, dp(8), 0)
             minHeight = dp(48)
+            gravity = Gravity.CENTER_VERTICAL
             setSingleLine(true)
             setOnClickListener(brandClick)
         }

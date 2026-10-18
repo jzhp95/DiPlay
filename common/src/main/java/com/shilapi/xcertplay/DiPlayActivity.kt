@@ -949,7 +949,6 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
     }
 
     private fun settingsOverview(content: LinearLayout) {
-        settingsPageTitle(content, getString(R.string.settings_overview), getString(R.string.settings_overview_subtitle))
         val readiness = card().apply {
             setPadding(dp(20), dp(16), dp(20), dp(16))
         }
@@ -1085,33 +1084,23 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         setOnClickListener { openSettingsCategory(category) }
     }
 
-    private fun settingsPageTitle(content: LinearLayout, title: String, subtitle: String) {
-        content.addView(label(title, if (isExpandedSettingsLayout) 34 else 26, TEXT, true))
-        content.addView(label(subtitle, 16, MUTED).apply { setPadding(0, dp(6), 0, dp(20)) })
-    }
-
     private fun connectionSettings(content: LinearLayout) {
-        settingsPageTitle(content, getString(R.string.connection), getString(R.string.settings_connection_summary))
         renderSections(content, SettingsInformationArchitecture.sectionsByCategory.getValue(SettingsCategory.CONNECTION))
     }
 
     private fun displaySettings(content: LinearLayout) {
-        settingsPageTitle(content, getString(R.string.settings_display), getString(R.string.settings_display_summary))
         renderSections(content, SettingsInformationArchitecture.sectionsByCategory.getValue(SettingsCategory.DISPLAY))
     }
 
     private fun audioSettings(content: LinearLayout) {
-        settingsPageTitle(content, getString(R.string.audio), getString(R.string.settings_audio_summary))
         renderSections(content, SettingsInformationArchitecture.sectionsByCategory.getValue(SettingsCategory.AUDIO))
     }
 
     private fun navigationSettings(content: LinearLayout) {
-        settingsPageTitle(content, getString(R.string.settings_navigation), getString(R.string.settings_navigation_summary))
         renderSections(content, SettingsInformationArchitecture.sectionsByCategory.getValue(SettingsCategory.NAVIGATION))
     }
 
     private fun vehicleSettings(content: LinearLayout) {
-        settingsPageTitle(content, getString(R.string.settings_vehicle), getString(R.string.settings_vehicle_summary))
         renderSections(content, SettingsInformationArchitecture.sectionsByCategory.getValue(SettingsCategory.VEHICLE))
         section(content, getString(R.string.settings_advanced), R.drawable.ic_dp_advanced) { card ->
             card.addView(label(getString(R.string.settings_vehicle_description), 16, MUTED))
@@ -1123,7 +1112,6 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
     }
 
     private fun diagnosticsSettings(content: LinearLayout) {
-        settingsPageTitle(content, getString(R.string.diagnostics), getString(R.string.settings_diagnostics_summary))
         renderSections(content, SettingsInformationArchitecture.sectionsByCategory.getValue(SettingsCategory.DIAGNOSTICS))
     }
 
@@ -1400,7 +1388,6 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
     }
 
     private fun advancedSettings(content: LinearLayout) {
-        settingsPageTitle(content, getString(R.string.settings_advanced), getString(R.string.settings_advanced_subtitle))
         val caution = card().apply {
             addView(label(getString(R.string.settings_advanced_caution_title), 18, WARNING, true))
             addView(label(getString(R.string.settings_advanced_caution_description), 14, MUTED).apply {
@@ -1905,7 +1892,6 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
     }
 
     private fun about(content: LinearLayout) {
-        settingsPageTitle(content, getString(R.string.about_diplay), getString(R.string.settings_about_subtitle))
         section(content, getString(R.string.app_name)) { card ->
             card.addView(label(getString(R.string.settings_about_version, version()), 18, ACCENT, true))
             card.addView(label(getString(R.string.settings_about_summary), 18, MUTED))
