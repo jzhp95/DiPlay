@@ -79,7 +79,37 @@ class CarPlayHostSettingsTest {
         (field("teardownExecutor") as ExecutorService).shutdownNow()
         (field("airPlayCommandExecutor") as ExecutorService).shutdownNow()
         CarPlayBackgroundSession.clear()
+        activity.getSharedPreferences("diplay_managed_hotspot", 0).edit().clear().commit()
         controllers.close()
+    }
+
+    @Test fun managedHotspotBuildsRuntimeWithoutAnyManualCredentials() {
+        val managed = com.shilapi.xcertplay.network.CarHotspotProfile("Managed Car", "12345678",
+            ManualHotspotSecurity.WPA2, ManualHotspotBand.GHZ_5, 149)
+        com.shilapi.xcertplay.network.CarHotspotProfiles.saveConfirmed(activity, managed)
+        setField("wirelessEnabled", true)
+        setField("wirelessHotspotMode", WirelessHotspotMode.MANUAL)
+        setField("manualHotspotSsid", "")
+        setField("manualHotspotPassphrase", "")
+        val runtime = invoke("createRuntimeConfig") as CarPlayRuntimeConfig
+        assertEquals(managed.ssid, runtime.manualHotspotSsid)
+        assertEquals(managed.passphrase, runtime.manualHotspotPassphrase)
+        assertEquals(managed.channel, runtime.manualHotspotChannel)
+        assertEquals("", field("manualHotspotSsid"))
+        assertTrue(invoke("validateManualHotspotSettings") as Boolean)
+    }
+
+    @Test fun invalidOldManualCredentialsCannotBlockAManagedHotspot() {
+        val managed = com.shilapi.xcertplay.network.CarHotspotProfile("Managed Car", "12345678", ManualHotspotSecurity.WPA2)
+        com.shilapi.xcertplay.network.CarHotspotProfiles.saveConfirmed(activity, managed)
+        setField("wirelessEnabled", true)
+        setField("wirelessHotspotMode", WirelessHotspotMode.MANUAL)
+        setField("manualHotspotSsid", "Old Car")
+        setField("manualHotspotPassphrase", "bad")
+        val runtime = invoke("createRuntimeConfig") as CarPlayRuntimeConfig
+        assertEquals(managed.passphrase, runtime.manualHotspotPassphrase)
+        assertTrue(invoke("validateManualHotspotSettings") as Boolean)
+        assertEquals("bad", field("manualHotspotPassphrase"))
     }
 
     @Test fun disabledGesturePersistsAndDoesNotOpenTheMenu() {

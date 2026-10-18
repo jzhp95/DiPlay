@@ -42,6 +42,7 @@ class CarHotspotNameTextTest {
     private fun clearSettings() {
         context.getSharedPreferences("diplay", 0).edit().clear().commit()
         context.getSharedPreferences("xcertplay_airplay", 0).edit().clear().commit()
+        context.getSharedPreferences("diplay_managed_hotspot", 0).edit().clear().commit()
     }
 
     private fun saveHotspot(name: String) {
@@ -76,14 +77,12 @@ class CarHotspotNameTextTest {
         assertTrue(texts(home).toString(), home.getString(R.string.msg_car_hotspot_off, "Car 5G") in texts(home))
     }
 
-    @Test fun connectionSetupAsksForTheDetailsUntilTheyAreSaved() {
+    @Test fun connectionSettingsKeepManualInputAsAnExplicitFallback() {
         val setup = open("connection")
         val shown = texts(setup)
-        assertTrue(shown.toString(), setup.getString(R.string.save_hotspot_details_and_use_this_mode) in shown)
-        assertTrue(shown.toString(), setup.getString(R.string.finish_setup_save_your_hotspot_details_to_use_this_mode) in shown)
-        // Nothing is saved, so there is no hotspot to edit and nothing to call saved.
-        assertFalse(shown.toString(), shown.any { it.startsWith(setup.getString(R.string.edit_saved_hotspot_prefix)) })
-        assertFalse(shown.toString(), setup.getString(R.string.hotspot_details_saved) in shown)
+        assertTrue(setup.getString(R.string.settings_hotspot_configure) in shown)
+        assertTrue(setup.getString(R.string.settings_hotspot_manual) in shown)
+        assertFalse(setup.getString(R.string.save_hotspot_details_and_use_this_mode) in shown)
     }
 
     // A plain space at the end of a string resource is dropped; Traditional Chinese read "… ·Car 5G".
@@ -95,12 +94,11 @@ class CarHotspotNameTextTest {
         }
     }
 
-    @Test fun connectionSetupOffersToEditASavedHotspotByItsName() {
+    @Test fun manualFallbackKeepsItsSavedCredentialsSeparateFromManagedConfiguration() {
         saveHotspot("Car 5G")
         val setup = open("connection")
-        val shown = texts(setup)
-        assertTrue(shown.toString(), setup.getString(R.string.edit_saved_hotspot_prefix) + "Car 5G" in shown)
-        assertTrue(shown.toString(), setup.getString(R.string.hotspot_details_off) in shown)
-        assertFalse(shown.toString(), setup.getString(R.string.save_hotspot_details_and_use_this_mode) in shown)
+        assertTrue(setup.getString(R.string.settings_hotspot_manual) in texts(setup))
+        assertTrue(AirPlayPersistence.loadManualHotspotSsid(context) == "Car 5G")
+        assertTrue(com.shilapi.xcertplay.network.CarHotspotProfiles.confirmed(context) == null)
     }
 }

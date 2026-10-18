@@ -174,7 +174,16 @@ class CarPlayHostActivity : ComponentActivity() {
     }
 
     // CH341 USB\VID_1A86&PID_5512&REV_0304 is the deployment-supplied bridge identity.
-    private fun createRuntimeConfig(): CarPlayRuntimeConfig = CarPlayRuntimeConfig(
+    private fun createRuntimeConfig(): CarPlayRuntimeConfig {
+        // Resolve before the runtime constructor validates MANUAL fields. Keep the legacy editor
+        // fields untouched: saving unrelated host settings must not overwrite manual fallback data.
+        val effectiveHotspot = if (wirelessEnabled && wirelessHotspotMode == WirelessHotspotMode.MANUAL) {
+            com.shilapi.xcertplay.network.CarHotspotProfiles.resolve(this,
+                manual = { com.shilapi.xcertplay.network.CarHotspotProfile(manualHotspotSsid,
+                    manualHotspotPassphrase, manualHotspotSecurity, manualHotspotBand, manualHotspotChannel) },
+                log = { DetailedDebugLog.record("hotspot-runtime", it) })?.profile
+        } else null
+        return CarPlayRuntimeConfig(
         mfiTarget = mfiTarget,
         ch341Devices = if (mfiTarget == MfiTarget.USB_CH341) {
             listOf(UsbDeviceId(0x1a86, 0x5512))
@@ -210,17 +219,18 @@ class CarPlayHostActivity : ComponentActivity() {
         transport = if (wirelessEnabled) CarPlayTransport.WIRELESS else CarPlayTransport.WIRED,
         wirelessHotspotMode = wirelessHotspotMode,
         wifiP2pPreferredChannel = AirPlayPersistence.loadWifiP2pPreferredChannel(this),
-        manualHotspotSsid = manualHotspotSsid,
-        manualHotspotPassphrase = manualHotspotPassphrase,
-        manualHotspotBand = manualHotspotBand,
-        manualHotspotChannel = manualHotspotChannel,
-        manualHotspotSecurity = manualHotspotSecurity,
+        manualHotspotSsid = effectiveHotspot?.ssid ?: manualHotspotSsid,
+        manualHotspotPassphrase = effectiveHotspot?.passphrase ?: manualHotspotPassphrase,
+        manualHotspotBand = effectiveHotspot?.band ?: manualHotspotBand,
+        manualHotspotChannel = effectiveHotspot?.channel ?: manualHotspotChannel,
+        manualHotspotSecurity = effectiveHotspot?.security ?: manualHotspotSecurity,
         manualHotspotInterface = manualHotspotInterface,
         existingWifiSsid = existingWifiSsid,
         existingWifiPassphrase = existingWifiPassphrase,
         locationReportingEnabled = locationReportingEnabled,
         availableCurrentMilliAmps = AirPlayPersistence.loadUsbChargingCurrent(this).milliAmps,
     )
+    }
 
     private val vpnConsent =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -4490,6 +4500,11 @@ class CarPlayHostActivity : ComponentActivity() {
             return error == null
         }
         if (wirelessHotspotMode != WirelessHotspotMode.MANUAL) return true
+        if (com.shilapi.xcertplay.network.CarHotspotProfiles.resolve(this, manual = { null }) != null) {
+            manualHotspotErrorView?.text = ""
+            manualHotspotErrorView?.visibility = View.GONE
+            return true
+        }
         val error = when {
             manualHotspotSsid.isBlank() -> getString(R.string.hotspot_ssid_is_required)
             manualHotspotSsid.encodeToByteArray().size > 32 ->

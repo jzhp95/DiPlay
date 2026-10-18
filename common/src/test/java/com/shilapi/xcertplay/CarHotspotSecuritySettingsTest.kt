@@ -110,7 +110,7 @@ class CarHotspotSecuritySettingsTest {
         DiPlayActivity::class.java.getDeclaredMethod("wirelessLinkControls", LinearLayout::class.java)
             .apply { isAccessible = true }.invoke(activity, parent)
         activity.setContentView(parent)
-        descendants(parent).filterIsInstance<Button>().first { it.text.startsWith(activity.getString(com.shilapi.xcertplay.host.R.string.edit_saved_hotspot_prefix)) }.performClick()
+        descendants(parent).filterIsInstance<Button>().first { it.text == activity.getString(com.shilapi.xcertplay.host.R.string.settings_hotspot_manual) }.performClick()
         shadowOf(Looper.getMainLooper()).idle()
         return ShadowAlertDialog.getLatestAlertDialog()
     }

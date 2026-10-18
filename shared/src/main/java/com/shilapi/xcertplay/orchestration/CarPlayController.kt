@@ -2405,23 +2405,23 @@ class CarPlayController(
                 appContext, config.transport == CarPlayTransport.WIRELESS, hotspotMode,
             )
         ) {
-            val result = com.shilapi.xcertplay.network.CarHotspotTethering.enable(
-                appContext,
-                isCancelled = { isStaleWirelessRun(generation) ||
-                    !com.shilapi.xcertplay.network.CarHotspotSettings.enabled(appContext) },
-                timeoutMillis = ((readyDeadline - System.nanoTime()) / 1_000_000).coerceAtLeast(1),
-                log = { debugLog("generation=$generation atNs=${System.nanoTime()} $it; awaiting hotspot interface") },
-            )
-            val manualFallback = result == com.shilapi.xcertplay.network.CarHotspotTethering.Result.UNSUPPORTED &&
-                com.shilapi.xcertplay.network.CarHotspotStatus.isEnabled(appContext) == null
-            if (result != com.shilapi.xcertplay.network.CarHotspotTethering.Result.READY && !manualFallback) {
-                throw WirelessStartupException(
-                    if (result == com.shilapi.xcertplay.network.CarHotspotTethering.Result.TIMED_OUT ||
-                        result == com.shilapi.xcertplay.network.CarHotspotTethering.Result.FAILED)
-                        WirelessStartupFailure.HOTSPOT_NOT_READY else WirelessStartupFailure.HOTSPOT_CONFIGURATION,
-                    "${result.diagnostic}. Open the car hotspot settings and connect again.")
+            val result = com.shilapi.xcertplay.network.CarHotspotController(appContext,
+                log = { debugLog("generation=$generation $it") }).enable {
+                    isStaleWirelessRun(generation) || !com.shilapi.xcertplay.network.CarHotspotSettings.enabled(appContext)
+                }
+            val manualFallback = com.shilapi.xcertplay.network.CarHotspotStatus.isEnabled(appContext) == null
+            if (!result.success && !manualFallback) {
+                throw WirelessStartupException(WirelessStartupFailure.HOTSPOT_NOT_READY,
+                    "Car hotspot startup was not confirmed. Open the car hotspot settings and connect again.")
             }
         }
+        val effectiveCarHotspot = if (hotspotMode == WirelessHotspotMode.MANUAL) {
+            com.shilapi.xcertplay.network.CarHotspotProfiles.resolve(appContext,
+                manual = { config.manualHotspotSsid?.let { ssid -> com.shilapi.xcertplay.network.CarHotspotProfile(
+                    ssid, config.manualHotspotPassphrase.orEmpty(), config.manualHotspotSecurity,
+                    config.manualHotspotBand, config.manualHotspotChannel,
+                ) } }, log = ::debugLog)?.profile
+        } else null
         var pastOffReport = false
         if (hotspotMode == WirelessHotspotMode.MANUAL) {
             val state = com.shilapi.xcertplay.network.CarHotspotStatus.isEnabled(appContext)
@@ -2447,12 +2447,12 @@ class CarPlayController(
             )
             WirelessHotspotMode.MANUAL -> ManualHotspotManager(
                 context = appContext,
-                ssid = config.manualHotspotSsid
-                    ?: throw WirelessStartupException(WirelessStartupFailure.HOTSPOT_CONFIGURATION, "Manual hotspot SSID is not configured"),
-                passphrase = config.manualHotspotPassphrase.orEmpty(),
-                band = config.manualHotspotBand,
-                channel = config.manualHotspotChannel,
-                security = config.manualHotspotSecurity,
+                ssid = effectiveCarHotspot?.ssid
+                    ?: throw WirelessStartupException(WirelessStartupFailure.HOTSPOT_CONFIGURATION, "Car hotspot profile is unavailable; configure the hotspot or save manual details"),
+                passphrase = effectiveCarHotspot.passphrase,
+                band = effectiveCarHotspot.band,
+                channel = effectiveCarHotspot.channel,
+                security = effectiveCarHotspot.security,
                 onDiagnostic = { debugLog("generation=$generation $it") },
                 isCancelled = { isStaleWirelessRun(generation) },
                 preferredInterface = config.manualHotspotInterface,

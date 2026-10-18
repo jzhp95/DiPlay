@@ -8,7 +8,6 @@ import com.shilapi.xcertplay.adb.AdbKeys
 import com.shilapi.xcertplay.adb.LocalAdb
 import com.shilapi.xcertplay.hud.BydOutputSettings
 import com.shilapi.xcertplay.network.CarHotspotSettings
-import com.shilapi.xcertplay.orchestration.ManualHotspotValidation
 
 /** Each grant is requested explicitly from settings; startup never calls this authorization path. */
 internal object CarHotspotSetup {
@@ -48,7 +47,5 @@ internal object CarHotspotSetup {
 
     fun shouldStartOnLaunch(context: Context, hasSession: Boolean): Boolean =
         !hasSession && CarHotspotSettings.shouldEnable(context,
-            AirPlayPersistence.loadWirelessEnabled(context), AirPlayPersistence.loadWirelessHotspotMode(context)) &&
-            ManualHotspotValidation.error(AirPlayPersistence.loadManualHotspotSsid(context),
-                AirPlayPersistence.loadManualHotspotPassphrase(context)) == null
+            AirPlayPersistence.loadWirelessEnabled(context), AirPlayPersistence.loadWirelessHotspotMode(context))
 }

@@ -22,6 +22,7 @@ object CarHotspotStatus {
      */
     fun isEnabled(context: Context): Boolean? {
         val app = context.applicationContext
+        CarHotspotController.vendorEnabled(app)?.let { return it }
         val wifi = app.getSystemService(WifiManager::class.java)
         return read(
             state = { wifi?.let { WifiManager::class.java.getMethod("getWifiApState").invoke(it) as? Int } },
