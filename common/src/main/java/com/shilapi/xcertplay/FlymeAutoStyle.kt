@@ -20,7 +20,7 @@ internal object FlymeAutoStyle {
     const val BUTTON_PADDING_VERTICAL_DP = 8
     const val HEADER_CONTROL_HEIGHT_DP = 44
     const val HEADER_BUTTON_PADDING_HORIZONTAL_DP = 16
-    const val HEADER_BUTTON_PADDING_VERTICAL_DP = 4
+    const val HEADER_BUTTON_PADDING_VERTICAL_DP = 8
     const val FOCUS_STROKE_DP = 2
     const val CONTROL_HEIGHT_DP = 64
     const val COMPACT_CONTROL_HEIGHT_DP = 56

@@ -3836,7 +3836,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
      * start-aligned, muted value, chevron. Any other text stays a centred action button.
      * The plain text is unchanged, so callers and tests keep matching "Title · Value".
      */
-    private class SettingButton(
+    internal class SettingButton(
         context: android.content.Context,
         private val muted: Int,
         private val accent: Int,

@@ -1002,7 +1002,7 @@
     <string name="settings_hotspot_hide_password">隐藏</string>
     <string name="settings_hotspot_start_confirm">应用并开启</string>
     <string name="settings_hotspot_disconnect_and_start">断开并开启热点</string>
-    <string name="settings_hotspot_save_first">请先保存热点名称和密码。</string>
+    <string name="settings_hotspot_save_first">请先保存热点配置。</string>
     <string name="settings_hotspot_interface_auto">自动检测</string>
     <string name="settings_hotspot_invalid_security_password">加密方式与已保存的密码不匹配。开放网络请清空密码；加密网络需要有效密码。</string>
     <string name="settings_hotspot_session_changed">CarPlay 会话已变化，请重新确认开启热点。</string>
