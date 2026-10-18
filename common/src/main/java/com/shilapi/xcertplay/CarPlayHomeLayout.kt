@@ -62,15 +62,6 @@ internal class CarPlayHomeLayout(
 
         }
 
-    private fun headerAction(id: Int, click: () -> Unit) = action(id, click = click).apply {
-        textSize = FlymeAutoStyle.NAVIGATION_TEXT_SP
-        minHeight = dp(FlymeAutoStyle.HEADER_CONTROL_HEIGHT_DP)
-        minimumHeight = dp(FlymeAutoStyle.HEADER_CONTROL_HEIGHT_DP)
-        val horizontal = dp(FlymeAutoStyle.HEADER_BUTTON_PADDING_HORIZONTAL_DP)
-        val vertical = dp(FlymeAutoStyle.HEADER_BUTTON_PADDING_VERTICAL_DP)
-        setPadding(horizontal, vertical, horizontal, vertical)
-    }
-
     fun header(appearance: View?, choose: () -> Unit, disconnect: () -> Unit,
         settings: () -> Unit, carHome: () -> Unit, wheelTest: () -> Unit = {}, hotspot: () -> Unit = {}): Header {
         val root = column()
@@ -91,17 +82,17 @@ internal class CarPlayHomeLayout(
         }
         top.addView(brand, LinearLayout.LayoutParams(0, -2, 1f))
         if (appearance != null) top.addView(appearance, LinearLayout.LayoutParams(dp(48), dp(48)))
-        val disconnectButton = headerAction(R.string.disconnect, click = disconnect).apply { visibility = View.GONE }
+        val disconnectButton = action(R.string.disconnect, click = disconnect).apply { visibility = View.GONE }
         fun addAction(target: LinearLayout, view: View, weight: Boolean = false) {
             target.addView(view, LinearLayout.LayoutParams(if (weight) 0 else -2, -2, if (weight) 1f else 0f).apply {
                 marginStart = dp(gap)
             })
         }
         val width = context.resources.configuration.screenWidthDp
-        val chooseButton = headerAction(R.string.choose_iphone, click = choose)
-        val hotspotButton = headerAction(R.string.home_hotspot, click = hotspot)
-        val settingsButton = headerAction(R.string.settings, click = settings)
-        val carHomeButton = headerAction(R.string.car_home, click = carHome)
+        val chooseButton = action(R.string.choose_iphone, click = choose)
+        val hotspotButton = action(R.string.home_hotspot, click = hotspot)
+        val settingsButton = action(R.string.settings, click = settings)
+        val carHomeButton = action(R.string.car_home, click = carHome)
         fun fits(vararg buttons: Button): Boolean {
             val natural = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
             val actionWidth = buttons.sumOf { it.measure(natural, natural); it.measuredWidth }
