@@ -71,8 +71,11 @@ class WheelTestActivity : Activity(), AppAppearanceOwner {
             Toast.makeText(this, if (enabled) R.string.settings_detailed_debug_started else R.string.settings_detailed_debug_stopped, Toast.LENGTH_SHORT).show()
         }, ::action, availableWidthDp = DiagnosticsTestLayout.detailWidthDp(resources.configuration.screenWidthDp))
         mfiLayout = MfiTestLayout(this, palette)
-        mfiViews = mfiLayout.build(mfiController::refresh, mfiController::probe, ::finish)
-        diagnosticsViews = DiagnosticsTestLayout(this, palette).build(views.root, mfiViews.root, selectedPage, ::selectPage)
+        mfiViews = mfiLayout.build(mfiController::refresh, mfiController::probe, ::finish) {
+            CarPlayBackgroundSession.snapshot()?.controller?.let(PendingReconnect::mark)
+            Toast.makeText(this, R.string.saved_for_your_next_connection, Toast.LENGTH_SHORT).show()
+        }
+        diagnosticsViews = DiagnosticsTestLayout(this, palette).build(views.root, mfiViews.root, selectedPage, ::selectPage, ::finish)
         ViewCompat.setOnApplyWindowInsetsListener(diagnosticsViews.root) { view, insets ->
             val safe = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
             view.setPadding(safe.left, safe.top, safe.right, safe.bottom)

@@ -135,6 +135,8 @@ object AirPlayPersistence {
     const val DEFAULT_MODEL = "Apple CarPlay"
     const val DEFAULT_OEM_LABEL = "返回车机"
     const val DEFAULT_MFI_I2C_PATH = "/dev/i2c-1"
+    const val DEFAULT_MANUAL_HOTSPOT_SSID = "WIFI_2033"
+    const val DEFAULT_MANUAL_HOTSPOT_PASSPHRASE = "12345678"
 
     fun loadAmbientDelaySeconds(context: Context): Int =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -431,7 +433,7 @@ object AirPlayPersistence {
 
     fun loadManualHotspotSsid(context: Context): String =
         CarHotspotProfiles.saved(context)?.ssid ?: context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getString(KEY_MANUAL_HOTSPOT_SSID, null)
+            .getString(KEY_MANUAL_HOTSPOT_SSID, DEFAULT_MANUAL_HOTSPOT_SSID)
             .orEmpty()
 
     fun saveManualHotspotSsid(context: Context, ssid: String) {
@@ -443,7 +445,7 @@ object AirPlayPersistence {
 
     fun loadManualHotspotPassphrase(context: Context): String =
         CarHotspotProfiles.saved(context)?.passphrase ?: context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getString(KEY_MANUAL_HOTSPOT_PASSPHRASE, null)
+            .getString(KEY_MANUAL_HOTSPOT_PASSPHRASE, DEFAULT_MANUAL_HOTSPOT_PASSPHRASE)
             .orEmpty()
 
     fun saveManualHotspotPassphrase(context: Context, passphrase: String) {

@@ -7,6 +7,8 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import com.shilapi.xcertplay.host.R
+import com.shilapi.xcertplay.settings.ConnectionSettingsSection
+import com.shilapi.xcertplay.settings.SettingsTheme
 import com.shilapi.xcertplay.mfi.LocalMfiDiagnostic
 import com.shilapi.xcertplay.mfi.MfiCoprocessorDiagnostic
 
@@ -21,7 +23,7 @@ internal class MfiTestLayout(private val context: Context, private val palette: 
         val gap = dp(FlymeAutoStyle.BUTTON_PADDING_VERTICAL_DP)
         setPadding(0, gap, 0, gap)
     }
-    fun build(refresh: () -> Unit, probe: () -> Unit, back: () -> Unit): Views {
+    fun build(refresh: () -> Unit, probe: () -> Unit, back: () -> Unit, authenticationChanged: () -> Unit = {}): Views {
         val content = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             val padding = contentPadding
@@ -32,8 +34,22 @@ internal class MfiTestLayout(private val context: Context, private val palette: 
         }
         // Stack the header and actions so large fonts remain usable in a narrow detail panel.
         content.addView(text(R.string.diagnostics_mfi_title, FlymeAutoStyle.BUTTON_TEXT_SP))
-        content.addView(button(R.string.back, back), LinearLayout.LayoutParams(-1, -2))
         content.addView(text(R.string.diagnostics_mfi_description, FlymeAutoStyle.SECONDARY_TEXT_SP).apply { setTextColor(palette.secondaryText) })
+        content.addView(LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            background = FlymeAutoStyle.card(context, palette)
+            val padding = contentPadding
+            setPadding(padding, padding, padding, padding)
+            addView(ConnectionSettingsSection.createMfiTargetChoice(
+                context, AirPlayPersistence.loadMfiTarget(context), SettingsTheme.card(palette),
+            ) { target ->
+                AirPlayPersistence.saveMfiTarget(context, target)
+                authenticationChanged()
+            }.container)
+            addView(text(R.string.settings_mfi_target_description, FlymeAutoStyle.SECONDARY_TEXT_SP).apply {
+                setTextColor(palette.secondaryText)
+            })
+        }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(FlymeAutoStyle.BLOCK_GAP_DP) })
         fun card(title: Int): TextView {
             val card = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL

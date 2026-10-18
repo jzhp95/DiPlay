@@ -46,7 +46,6 @@ internal class WheelTestLayout(private val context: Context, private val palette
             gravity = Gravity.CENTER_VERTICAL
             orientation = if (compact) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
             addView(text(R.string.wheel_test_title, 28f), if (compact) LinearLayout.LayoutParams(-1, -2) else LinearLayout.LayoutParams(0, -2, 1f))
-            addView(button(R.string.back, Action.BACK).apply { minWidth = dp(96) }, LinearLayout.LayoutParams(-2, -2))
         }, LinearLayout.LayoutParams(-1, -2))
         val wide = availableWidthDp >= 840
         val feedback = card()

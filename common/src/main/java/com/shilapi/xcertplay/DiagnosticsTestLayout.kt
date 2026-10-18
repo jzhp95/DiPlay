@@ -26,7 +26,7 @@ internal class DiagnosticsTestLayout(private val context: Context, private val p
             }
         }
     }
-    fun build(wheel: ScrollView, mfi: ScrollView, selected: Page, changed: (Page) -> Unit): Views {
+    fun build(wheel: ScrollView, mfi: ScrollView, selected: Page, changed: (Page) -> Unit, back: () -> Unit = {}): Views {
         val root = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             // The requested menu is physically on the left, including RTL configuration previews.
@@ -57,6 +57,15 @@ internal class DiagnosticsTestLayout(private val context: Context, private val p
                 })
             }
         }
+        rail.addView(Button(context).apply {
+            setText(R.string.back)
+            FlymeAutoStyle.button(this, palette, compact = true)
+            minimumWidth = 0
+            minWidth = 0
+            setOnClickListener { back() }
+        }, LinearLayout.LayoutParams(-1, -2).apply {
+            topMargin = FlymeAutoStyle.dp(context, FlymeAutoStyle.BLOCK_GAP_DP)
+        })
         val railScroll = ScrollView(context).apply { isFillViewport = true; addView(rail) }
         root.addView(railScroll, LinearLayout.LayoutParams(FlymeAutoStyle.dp(context, menuWidthDp(context.resources.configuration.screenWidthDp)), -1))
         root.addView(FrameLayout(context).apply {

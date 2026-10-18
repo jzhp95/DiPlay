@@ -15,6 +15,9 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
+import android.widget.AdapterView
+import android.widget.ArrayAdapter
+import android.widget.Spinner
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -77,8 +80,8 @@ internal class CarHotspotSettingsUi(
     fun build(parent: LinearLayout) {
         val saved = CarHotspotProfiles.saved(activity)
         val initial = saved ?: legacyProfile()
-        if (nameText == null) nameText = initial?.ssid.orEmpty()
-        if (passwordText == null) passwordText = initial?.passphrase.orEmpty()
+        if (nameText == null) nameText = initial?.ssid ?: AirPlayPersistence.DEFAULT_MANUAL_HOTSPOT_SSID
+        if (passwordText == null) passwordText = initial?.passphrase ?: AirPlayPersistence.DEFAULT_MANUAL_HOTSPOT_PASSPHRASE
         val toggle = SettingsWidgets.createSwitchRow(
             activity, activity.getString(R.string.settings_hotspot_boot), "",
             CarHotspotSettings.enabled(activity), SettingsTheme.card(palette), onChanged = {
@@ -88,7 +91,6 @@ internal class CarHotspotSettingsUi(
             },
         )
         parent.addView(toggle.rowView)
-        parent.addView(button(R.string.settings_hotspot_system_settings) { openSystemSettings() })
         parent.addView(label(activity.getString(R.string.settings_hotspot_configure), false), gap())
         val name = field(parent, R.string.hotspot_name, R.string.settings_hotspot_ssid_placeholder, nameText.orEmpty())
         val password = field(parent, R.string.hotspot_password, R.string.settings_hotspot_password_placeholder,
@@ -130,11 +132,6 @@ internal class CarHotspotSettingsUi(
                 hideKeyboard(password)
                 changed()
             }
-        })
-        parent.addView(button(R.string.settings_hotspot_interface) { showInterfaceEditor() }.apply {
-            text = activity.getString(R.string.settings_hotspot_interface_short) + " · " +
-                AirPlayPersistence.loadManualHotspotInterface(activity).orEmpty()
-                    .ifBlank { activity.getString(R.string.settings_hotspot_interface_auto) }
         })
         parent.addView(button(R.string.settings_hotspot_start) { showStartOptions() })
         status?.let { parent.addView(label(it), gap()) }
@@ -246,7 +243,7 @@ internal class CarHotspotSettingsUi(
         var security = current.security
         var band = current.band
         var channel = current.channel
-        var channelControl: Button? = null
+        var channelControl: Spinner? = null
         fun channels() = listOf(0) + CarHotspotProfile.CHANNELS.filter {
             when (band) {
                 ManualHotspotBand.AUTO -> true
@@ -254,31 +251,59 @@ internal class CarHotspotSettingsUi(
                 ManualHotspotBand.GHZ_5 -> it > 14
             }
         }
-        fun channelTitle() = if (channel == 0) activity.getString(R.string.auto) else channel.toString()
-        fun choice(title: Int, titles: () -> List<String>, selected: () -> Int, save: (Int) -> Unit): Button {
-            val view = button(title) {}
-            fun update() { view.text = activity.getString(title) + " · " + titles()[selected().coerceAtLeast(0)] }
-            update()
-            view.setOnClickListener {
-                val options = titles()
-                var pending = selected().coerceAtLeast(0)
-                activity.appDialogBuilder().setTitle(title).setSingleChoiceItems(options.toTypedArray(), pending) { _, index -> pending = index }
-                    .setPositiveButton(R.string.save) { _, _ ->
-                        if (!closed) { save(pending); update() }
-                    }.setNegativeButton(R.string.cancel, null).show()
+        fun dropdownAdapter(titles: List<String>) = object : ArrayAdapter<String>(
+            activity.appDialogContext(), android.R.layout.simple_spinner_item, titles,
+        ) {
+            override fun getView(position: Int, convertView: View?, parent: ViewGroup): View =
+                super.getView(position, convertView, parent).also { view ->
+                    (view as TextView).apply {
+                        textSize = FlymeAutoStyle.BODY_TEXT_SP
+                        setTextColor(palette.primaryText)
+                    }
+                }
+            override fun getDropDownView(position: Int, convertView: View?, parent: ViewGroup): View =
+                super.getDropDownView(position, convertView, parent).also { view ->
+                    (view as TextView).apply {
+                        textSize = FlymeAutoStyle.BODY_TEXT_SP
+                        setTextColor(palette.primaryText)
+                        setBackgroundColor(palette.background)
+                        minHeight = dp(FlymeAutoStyle.CONTROL_HEIGHT_DP)
+                    }
+                }
+        }.apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
+        fun choice(title: Int, titles: List<String>, selected: Int, save: (Int) -> Unit): Spinner {
+            fields.addView(label(activity.getString(title)), gap())
+            return Spinner(activity.appDialogContext(), Spinner.MODE_DROPDOWN).apply {
+                contentDescription = activity.getString(title)
+                minimumHeight = dp(FlymeAutoStyle.CONTROL_HEIGHT_DP)
+                this.adapter = dropdownAdapter(titles)
+                setSelection(selected.coerceAtLeast(0))
+                onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+                    override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                        save(position)
+                    }
+                    override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+                }
+                fields.addView(this, gap())
             }
-            fields.addView(view, gap())
-            return view
         }
-        choice(R.string.settings_hotspot_security, { securityTitles }, { securities.indexOf(security) }) { security = securities[it] }
-        choice(R.string.settings_hotspot_band, { bandTitles }, { bands.indexOf(band) }) {
-            band = bands[it]
-            if (channel !in channels()) channel = 0
-            channelControl?.text = activity.getString(R.string.settings_hotspot_channel) + " · " + channelTitle()
+        choice(R.string.settings_hotspot_security, securityTitles, securities.indexOf(security)) { security = securities[it] }
+        choice(R.string.settings_hotspot_band, bandTitles, bands.indexOf(band)) {
+            val next = bands[it]
+            if (band != next) {
+                band = next
+                if (channel !in channels()) channel = 0
+                channelControl?.apply {
+                    adapter = dropdownAdapter(channels().map { value ->
+                        if (value == 0) activity.getString(R.string.auto) else value.toString()
+                    })
+                    setSelection(channels().indexOf(channel).coerceAtLeast(0))
+                }
+            }
         }
         channelControl = choice(R.string.settings_hotspot_channel,
-            { channels().map { if (it == 0) activity.getString(R.string.auto) else it.toString() } },
-            { channels().indexOf(channel) }) { channel = channels()[it] }
+            channels().map { if (it == 0) activity.getString(R.string.auto) else it.toString() },
+            channels().indexOf(channel)) { index -> channels().getOrNull(index)?.let { channel = it } }
         val error = label("").apply { visibility = View.GONE; accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE }
         fields.addView(error, gap())
         val disconnect = CarPlayBackgroundSession.hasSession()
@@ -325,20 +350,6 @@ internal class CarHotspotSettingsUi(
         dialog.show()
     }
 
-    private fun showInterfaceEditor() {
-        val input = EditText(activity.appDialogContext()).apply {
-            setSingleLine()
-            setText(AirPlayPersistence.loadManualHotspotInterface(activity))
-            hint = activity.getString(R.string.settings_hotspot_interface_auto)
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
-        }
-        activeDialog = activity.appDialogBuilder().setTitle(R.string.settings_hotspot_interface).setView(input)
-            .setPositiveButton(R.string.save) { _, _ ->
-                AirPlayPersistence.saveManualHotspotInterface(activity, input.text.toString())
-                changed()
-            }.setNegativeButton(R.string.cancel, null).show()
-    }
-
     private fun problem(profile: CarHotspotProfile): String? = when (profile.error()) {
         null -> null
         CarHotspotProfile.Error.CREDENTIALS -> ManualHotspotValidation.error(profile.ssid, profile.passphrase)
@@ -352,12 +363,16 @@ internal class CarHotspotSettingsUi(
         view.clearFocus()
     }
 
-    private fun openSystemSettings() {
-        for (action in listOf("com.android.settings.WIFI_TETHER_SETTINGS", Settings.ACTION_WIRELESS_SETTINGS)) {
-            val intent = Intent(action)
-            if (activity.packageManager.resolveActivity(intent, 0) != null && runCatching { activity.startActivity(intent) }.isSuccess) return
+    companion object {
+        fun openSystemSettings(activity: Activity) {
+            for (action in listOf("com.android.settings.WIFI_TETHER_SETTINGS", Settings.ACTION_WIRELESS_SETTINGS)) {
+                val intent = Intent(action)
+                if (activity.packageManager.resolveActivity(intent, 0) != null &&
+                    runCatching { activity.startActivity(intent) }.isSuccess) return
+            }
+            android.widget.Toast.makeText(activity, R.string.settings_hotspot_settings_unavailable,
+                android.widget.Toast.LENGTH_LONG).show()
         }
-        android.widget.Toast.makeText(activity, R.string.settings_hotspot_settings_unavailable, android.widget.Toast.LENGTH_LONG).show()
     }
 
     private fun runOperation(action: () -> CarHotspotControlResult) {

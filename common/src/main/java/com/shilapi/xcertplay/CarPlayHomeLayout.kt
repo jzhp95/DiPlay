@@ -63,7 +63,7 @@ internal class CarPlayHomeLayout(
         }
 
     fun header(appearance: View?, choose: () -> Unit, disconnect: () -> Unit,
-        settings: () -> Unit, carHome: () -> Unit, wheelTest: () -> Unit = {}): Header {
+        settings: () -> Unit, carHome: () -> Unit, wheelTest: () -> Unit = {}, hotspot: () -> Unit = {}): Header {
         val root = column()
         val top = row().apply {
             // Different title/action font sizes must not shift the controls to a shared baseline.
@@ -90,6 +90,7 @@ internal class CarPlayHomeLayout(
         }
         val width = context.resources.configuration.screenWidthDp
         val chooseButton = action(R.string.choose_iphone, click = choose)
+        val hotspotButton = action(R.string.home_hotspot, click = hotspot)
         val settingsButton = action(R.string.settings, click = settings)
         val carHomeButton = action(R.string.car_home, click = carHome)
         fun fits(vararg buttons: Button): Boolean {
@@ -98,13 +99,14 @@ internal class CarPlayHomeLayout(
             val brandWidth = android.text.Layout.getDesiredWidth(brand.text, brand.paint).roundToInt()
             return actionWidth + brandWidth + dp(8 + (if (appearance != null) 48 else 0) + gap * buttons.size) <= dp(width - 64)
         }
-        val allInHeader = width >= 850 && fits(chooseButton, disconnectButton, settingsButton, carHomeButton)
+        val allInHeader = width >= 850 && fits(chooseButton, disconnectButton, hotspotButton, settingsButton, carHomeButton)
         if (allInHeader) {
             addAction(top, chooseButton)
             addAction(top, disconnectButton)
         }
         // Narrow windows use a separate action row so large text cannot squeeze the brand or buttons.
-        val actions = if (width >= 850 && fits(settingsButton, carHomeButton)) top else row()
+        val actions = if (width >= 850 && fits(hotspotButton, settingsButton, carHomeButton)) top else row()
+        addAction(actions, hotspotButton, actions !== top)
         addAction(actions, settingsButton, actions !== top)
         addAction(actions, carHomeButton, actions !== top)
         root.addView(top, params())
@@ -145,8 +147,8 @@ internal class CarPlayHomeLayout(
 
     fun cards(connect: () -> Unit, usbConnect: () -> Unit, hint: String): Cards {
         val root = column()
-        val wireless = connectionCard(R.drawable.ic_home_wifi, R.string.wireless_carplay)
-        val usb = connectionCard(R.drawable.ic_home_link, R.string.home_usb_carplay)
+        val wireless = connectionCard(R.drawable.ic_home_wifi, R.string.home_wireless_connection)
+        val usb = connectionCard(R.drawable.ic_home_link, R.string.home_wired_connection)
         val state = label(R.string.ready_when_you_are, if (shortScreen) 15 else 17, true).apply { gravity = Gravity.CENTER }
         wireless.addView(state, params(if (shortScreen) 10 else 18))
         val connectButton = action(R.string.connect_phone, true, connect)

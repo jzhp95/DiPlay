@@ -2848,14 +2848,6 @@ class CarPlayHostActivity : ComponentActivity() {
                 }
             }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         }
-        content.addView(
-            buildMfiTargetSection(),
-            LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-            ).apply { topMargin = dp(14) },
-        )
-
         val wirelessRowResult = ConnectionSettingsSection.createWirelessCarPlayRow(
             context = this,
             checked = wirelessEnabled,

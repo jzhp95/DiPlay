@@ -706,7 +706,6 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
 
     private fun settingsHeader(compact: Boolean): LinearLayout = row().apply {
         val controlHeight = dp(if (compact) 44 else 52)
-        val iconOnlySearch = compact || resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT
         gravity = Gravity.CENTER_VERTICAL
         addView(headerButton(getString(R.string.back), R.drawable.ic_dp_back, compact, ::navigateBack),
             LinearLayout.LayoutParams(-2, if (compact) dp(44) else dp(52)))
@@ -716,51 +715,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             setSingleLine(true)
             ellipsize = android.text.TextUtils.TruncateAt.END
         }
-        // Reserve the action buttons first; only the title may shrink in a narrow header.
-        addView(settingsTitle, LinearLayout.LayoutParams(
-            if (settingsSearchExpanded) -2 else 0, controlHeight,
-            if (settingsSearchExpanded) 0f else 1f,
-        ))
-        val searchGap = dp(if (compact) SETTINGS_HEADER_COMPACT_GAP_DP else SETTINGS_HEADER_GAP_DP)
-        if (settingsSearchExpanded) {
-            val searchField = settingsSearchField(compact)
-            addView(searchField, LinearLayout.LayoutParams(0, controlHeight, 1f).apply {
-                marginEnd = searchGap
-            })
-            searchField.doOnLayout {
-                // Give a squeezed editor the title's space, using the current locale and font scale.
-                val hintWidth = searchField.paint.measureText(searchField.hint.toString())
-                val requiredWidth = hintWidth + searchField.compoundPaddingLeft + searchField.compoundPaddingRight
-                if (searchField.width < requiredWidth) {
-                    settingsTitle.visibility = View.GONE
-                    searchField.layoutParams = (searchField.layoutParams as LinearLayout.LayoutParams).apply {
-                        marginStart = searchGap
-                    }
-                }
-            }
-        } else {
-            val openSearch = {
-                // Indexing rebuilds the settings widgets. Do it before focusing an editor,
-                // so the first keystroke never replaces the IME's input connection.
-                settingsSearchIndex = buildSettingsSearchIndex()
-                settingsSearchExpanded = true
-                settingsSearchRestoreFocus = true
-                render()
-            }
-            val searchButton = if (iconOnlySearch) {
-                iconButton(R.drawable.ic_dp_search, getString(R.string.settings_search), openSearch).apply {
-                    imageTintList = ColorStateList.valueOf(TEXT)
-                }
-            } else {
-                headerButton(getString(R.string.settings_search_hint), R.drawable.ic_dp_search, compact, openSearch)
-            }.apply {
-                tag = SETTINGS_SEARCH_BUTTON_TAG
-                contentDescription = getString(R.string.settings_search)
-            }
-            addView(searchButton, LinearLayout.LayoutParams(if (iconOnlySearch) controlHeight else -2, controlHeight).apply {
-                marginEnd = searchGap
-            })
-        }
+        addView(settingsTitle, LinearLayout.LayoutParams(0, controlHeight, 1f))
     }
 
     private fun homeLayout() = CarPlayHomeLayout(this, palette,
@@ -776,7 +731,8 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             },
             settings = { page = "settings"; render() },
             carHome = { startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)) },
-            wheelTest = { startActivity(Intent(this, WheelTestActivity::class.java)) })
+            wheelTest = { startActivity(Intent(this, WheelTestActivity::class.java)) },
+            hotspot = { CarHotspotSettingsUi.openSystemSettings(this) })
         disconnectButton = header.disconnect
         return header.root
     }
@@ -1411,24 +1367,6 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         filteredSection(content, SettingsSection.CONNECTION_SETUP,
             getString(R.string.connection_setup), R.drawable.ic_dp_connection) { card ->
             wirelessConnectionChoice(card)
-            // Keep automatic and explicit authentication choices available before connecting.
-            val mfiTargets = listOf(MfiTarget.AUTO, MfiTarget.LOCAL, MfiTarget.USB_CH341)
-            val storedMfiTarget = AirPlayPersistence.loadMfiTarget(this)
-            if (storedMfiTarget in mfiTargets) {
-                choice(card, getString(R.string.mfi_certificate_signing_target), listOf(
-                    getString(R.string.settings_mfi_auto),
-                    getString(R.string.local_offline),
-                    getString(R.string.usb_ch341),
-                ), mfiTargets.indexOf(storedMfiTarget)) { index ->
-                    val target = mfiTargets[index]
-                    AirPlayPersistence.saveMfiTarget(this, target)
-                    setupError = runCatching { DiPlayBootstrap.ensure(this, target) }.exceptionOrNull()?.let {
-                        android.util.Log.e("DiPlaySetup", "CarPlay authentication could not be loaded", it)
-                        getString(R.string.setup_error_auth)
-                    }
-                }
-                card.addView(label(getString(R.string.settings_mfi_target_description), 14, MUTED))
-            }
         }
         filteredSection(content, SettingsSection.CONNECTION_DETAILS,
             getString(when (selectedWirelessHotspotMode()) {
@@ -2303,16 +2241,6 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             override fun afterTextChanged(s: android.text.Editable?) = updateNameWarning()
         })
         fields.addView(ssid); fields.addView(nameWarning); fields.addView(password)
-        val hotspotInterface = if (existingWifi) null else EditText(dialogContext).apply {
-            hint = getString(R.string.settings_hotspot_interface)
-            setText(AirPlayPersistence.loadManualHotspotInterface(this@DiPlayActivity))
-            setSingleLine()
-            inputType = android.text.InputType.TYPE_CLASS_TEXT
-        }
-        if (hotspotInterface != null) {
-            fields.addView(hotspotInterface)
-            fields.addView(label(getString(R.string.settings_hotspot_interface_description), 14, MUTED))
-        }
         fields.addView(CheckBox(dialogContext).apply {
             text = getString(R.string.show_password)
             setOnCheckedChangeListener { _, checked ->
@@ -2369,9 +2297,6 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                 if (problem != null) error.text = problem
                 else {
                     val security = if (secret.isEmpty()) ManualHotspotSecurity.OPEN else protectedSecurity
-                    if (!existingWifi) {
-                        AirPlayPersistence.saveManualHotspotInterface(this, hotspotInterface?.text?.toString().orEmpty())
-                    }
                     hideKeyboard(); dialog.dismiss(); done(name, secret, security)
                 }
             }
