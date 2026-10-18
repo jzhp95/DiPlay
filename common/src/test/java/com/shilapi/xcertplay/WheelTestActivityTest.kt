@@ -198,6 +198,26 @@ class WheelTestActivityTest {
         } finally { activity.pause().stop().destroy() }
     }
 
+    @Test fun uidMenuReadsIdentityAndStopsWheelWithoutStartingAnotherTest() {
+        val activity = Robolectric.buildActivity(WheelTestActivity::class.java).setup()
+        try {
+            val screen = activity.get()
+            val probe = ReflectionHelpers.getField<WheelTestController>(screen, "controller")
+            probe.start()
+            menu(screen, "UID 检测").performClick()
+            assertFalse(probe.snapshot().running)
+            val text = descendants(screen.window.decorView).filterIsInstance<android.widget.TextView>()
+                .filter { it.isShown }.joinToString("\n") { it.text }
+            assertTrue(text.contains("进程 UID：${android.os.Process.myUid()}"))
+            assertTrue(text.contains("安装 UID：${screen.applicationInfo.uid}"))
+            assertTrue(text.contains(screen.packageName))
+            screen.onConfigurationChanged(screen.resources.configuration)
+            assertTrue(menu(screen, "UID 检测").isSelected)
+            menu(screen, "方控测试").performClick()
+            assertFalse(probe.snapshot().running)
+        } finally { activity.pause().stop().destroy() }
+    }
+
     private fun menu(screen: WheelTestActivity, title: String): Button {
         val button = descendants(screen.window.decorView).filterIsInstance<Button>()
             .firstOrNull { it.isShown && it.text == title }

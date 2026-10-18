@@ -17,8 +17,22 @@ android {
         versionName = "1.0"
     }
 
+    testOptions { unitTests.isIncludeAndroidResources = true }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
+}
+
+// Compile the same presentation sources without depending on CarPlay services.
+androidComponents {
+    onVariants { variant ->
+        variant.sources.java?.addStaticSourceDirectory(rootProject.file("ui-style/src/main/java").absolutePath)
+    }
+}
+
+dependencies {
+    testImplementation(libs.junit)
+    testImplementation("org.robolectric:robolectric:4.17")
 }

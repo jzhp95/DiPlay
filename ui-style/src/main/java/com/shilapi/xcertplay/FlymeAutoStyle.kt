@@ -23,6 +23,7 @@ internal object FlymeAutoStyle {
     const val COMPACT_CONTROL_HEIGHT_DP = 56
     const val DIALOG_CONTROL_HEIGHT_DP = 72
     const val BUTTON_TEXT_SP = 20f
+    const val PAGE_TITLE_SP = 28f
     const val BODY_TEXT_SP = 18f
     const val SECONDARY_TEXT_SP = 16f
     const val NAVIGATION_TEXT_SP = 18f

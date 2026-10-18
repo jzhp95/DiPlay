@@ -4,14 +4,15 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
-import android.graphics.Color
 import android.graphics.drawable.Drawable
-import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import com.shilapi.xcertplay.FlymeAutoStyle
+import com.shilapi.xcertplay.FlymeSampleStyle
+import android.widget.Button
 import android.widget.BaseAdapter
 import android.widget.FrameLayout
 import android.widget.GridView
@@ -35,6 +36,7 @@ class HomeActivity : ComponentActivity() {
     private lateinit var appsOverlay: View
     private lateinit var appsAdapter: AppsAdapter
     private lateinit var editButton: TextView
+    private val palette get() = FlymeSampleStyle.palette(this)
     private val density get() = resources.displayMetrics.density
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -42,51 +44,64 @@ class HomeActivity : ComponentActivity() {
         mapPanel = DiPlayMapPanel(this)
         val widgetColumn = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         board = WidgetBoard(this, widgetColumn)
-        val landscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+        val landscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE && resources.configuration.screenWidthDp >= 840 && resources.configuration.screenHeightDp >= 500
 
         val left = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             addView(clock())
             addView(AspectFrame(context, 8f / 3).apply { addView(mapPanel, FrameLayout.LayoutParams(-1, -1)) },
-                LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(16) })
-            addView(View(context), LinearLayout.LayoutParams(-1, 0, 1f))
+                LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(FlymeAutoStyle.BLOCK_GAP_DP) })
+            if (landscape) addView(View(context), LinearLayout.LayoutParams(-1, 0, 1f))
             addView(LinearLayout(context).apply {
-                addView(pill(getString(R.string.home_apps)) { showApps(true) }, weighted())
-                addView(pill("CarPlay") { mapPanel.openCarPlay() }, weighted())
-                addView(pill(getString(R.string.home_byd_home)) { openBydHome() }, weighted())
-            }, LinearLayout.LayoutParams(-1, dp(72)).apply { topMargin = dp(16) })
+                orientation = if (landscape) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
+                fun actionParams() = if (landscape) weighted() else LinearLayout.LayoutParams(-1, -2).apply {
+                    topMargin = dp(FlymeAutoStyle.CONTROL_GAP_DP)
+                }
+                addView(pill(getString(R.string.home_apps)) { showApps(true) }, actionParams())
+                addView(pill("CarPlay") { mapPanel.openCarPlay() }, actionParams())
+                addView(pill(getString(R.string.home_byd_home)) { openBydHome() }, actionParams())
+            }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(FlymeAutoStyle.BLOCK_GAP_DP) })
         }
         editButton = pill(getString(R.string.home_edit)) { setEditing(!board.editing) }
         val right = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
+            addView(label(getString(R.string.home_widgets), FlymeAutoStyle.PAGE_TITLE_SP), LinearLayout.LayoutParams(-1, -2))
             addView(LinearLayout(context).apply {
                 gravity = Gravity.CENTER_VERTICAL
-                addView(label(getString(R.string.home_widgets), 28f), LinearLayout.LayoutParams(0, -2, 1f))
-                addView(editButton, LinearLayout.LayoutParams(dp(120), dp(56)))
-                addView(pill(getString(R.string.home_add)) { board.pick() }, LinearLayout.LayoutParams(dp(140), dp(56)).apply { marginStart = dp(12) })
-            })
-            addView(ScrollView(context).apply { addView(widgetColumn) },
-                LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(16) })
+                addView(editButton, LinearLayout.LayoutParams(0, -1, 1f))
+                addView(pill(getString(R.string.home_add)) { board.pick() }, LinearLayout.LayoutParams(0, -1, 1f).apply {
+                    marginStart = dp(FlymeAutoStyle.CONTROL_GAP_DP)
+                })
+            }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(FlymeAutoStyle.CONTROL_GAP_DP) })
+            if (landscape) addView(ScrollView(context).apply { addView(widgetColumn) },
+                LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(FlymeAutoStyle.BLOCK_GAP_DP) })
+            else addView(widgetColumn, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(FlymeAutoStyle.BLOCK_GAP_DP) })
         }
         val content = LinearLayout(this).apply {
             orientation = if (landscape) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
-            setPadding(dp(28), dp(24), dp(28), dp(24))
+            val inset = dp(FlymeAutoStyle.CARD_PADDING_DP)
+            setPadding(inset, inset, inset, inset)
             if (landscape) {
                 addView(left, LinearLayout.LayoutParams(0, -1, 3f))
-                addView(right, LinearLayout.LayoutParams(0, -1, 2f).apply { marginStart = dp(28) })
+                addView(right, LinearLayout.LayoutParams(0, -1, 2f).apply { marginStart = dp(FlymeAutoStyle.CARD_PADDING_DP) })
             } else {
                 addView(left, LinearLayout.LayoutParams(-1, -2))
-                addView(right, LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(24) })
+                addView(right, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(FlymeAutoStyle.CARD_PADDING_DP) })
             }
         }
         appsAdapter = AppsAdapter(this)
         appsOverlay = appsScreen()
         setContentView(FrameLayout(this).apply {
-            setBackgroundColor(BACKGROUND)
-            addView(content, FrameLayout.LayoutParams(-1, -1))
+            setBackgroundColor(palette.background)
+            val homeContent = if (landscape) content else ScrollView(context).apply { isFillViewport = true; addView(content) }
+            addView(homeContent, FrameLayout.LayoutParams(-1, -1))
             addView(appsOverlay, FrameLayout.LayoutParams(-1, -1))
         })
+        FlymeSampleStyle.install(this, findViewById(android.R.id.content))
+        board.restorePendingState(savedInstanceState)
         board.restore()
+        if (savedInstanceState?.getBoolean("editing") == true) setEditing(true)
+        if (savedInstanceState?.getBoolean("apps") == true) showApps(true)
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 when {
@@ -96,6 +111,13 @@ class HomeActivity : ComponentActivity() {
                 }
             }
         })
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        board.savePendingState(outState)
+        outState.putBoolean("editing", board.editing)
+        outState.putBoolean("apps", appsOverlay.visibility == View.VISIBLE)
+        super.onSaveInstanceState(outState)
     }
 
     override fun onStart() {
@@ -142,15 +164,16 @@ class HomeActivity : ComponentActivity() {
 
     private fun appsScreen(): View = FrameLayout(this).apply {
         visibility = View.GONE
-        setBackgroundColor(BACKGROUND)
+        setBackgroundColor(palette.background)
         isClickable = true // keep taps from reaching the home page underneath
         addView(LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(28), dp(24), dp(28), dp(24))
+            val inset = dp(FlymeAutoStyle.CARD_PADDING_DP)
+            setPadding(inset, inset, inset, inset)
             addView(LinearLayout(context).apply {
                 gravity = Gravity.CENTER_VERTICAL
-                addView(label(getString(R.string.home_apps), 28f), LinearLayout.LayoutParams(0, -2, 1f))
-                addView(pill(getString(R.string.home_close)) { showApps(false) }, LinearLayout.LayoutParams(dp(140), dp(56)))
+                addView(label(getString(R.string.home_apps), FlymeAutoStyle.PAGE_TITLE_SP), LinearLayout.LayoutParams(0, -2, 1f))
+                addView(pill(getString(R.string.home_close)) { showApps(false) }, LinearLayout.LayoutParams(dp(140), -2))
             })
             addView(GridView(context).apply {
                 numColumns = GridView.AUTO_FIT
@@ -162,49 +185,49 @@ class HomeActivity : ComponentActivity() {
                     showApps(false)
                     runCatching { startActivity(appsAdapter.launchIntent(position)) }
                 }
-            }, LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(24) })
+            }, LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(FlymeAutoStyle.CARD_PADDING_DP) })
         }, FrameLayout.LayoutParams(-1, -1))
     }
 
     private fun clock() = LinearLayout(this).apply {
-        orientation = LinearLayout.HORIZONTAL
+        orientation = if (resources.configuration.screenWidthDp < 840) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
         gravity = Gravity.BOTTOM
         addView(TextClock(context).apply {
-            setTextColor(Color.WHITE)
+            setTextColor(palette.primaryText)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 52f)
         })
         addView(TextClock(context).apply {
             val datePattern = android.text.format.DateFormat.getBestDateTimePattern(resources.configuration.locales[0], "EEEEdMMMM")
             format12Hour = datePattern
             format24Hour = datePattern
-            setTextColor(MUTED)
+            setTextColor(palette.secondaryText)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
-            setPadding(dp(20), 0, 0, dp(10))
+            setPadding(if (resources.configuration.screenWidthDp < 840) 0 else dp(FlymeAutoStyle.BLOCK_GAP_DP), 0, 0, dp(FlymeAutoStyle.BUTTON_PADDING_VERTICAL_DP))
         })
     }
 
     private fun label(text: String, size: Float) = TextView(this).apply {
         this.text = text
-        setTextColor(Color.WHITE)
+        setTextColor(palette.primaryText)
         setTextSize(TypedValue.COMPLEX_UNIT_SP, size)
     }
 
-    private fun pill(text: String, onClick: () -> Unit) = TextView(this).apply {
+    private fun pill(text: String, onClick: () -> Unit) = Button(this).apply {
         this.text = text
-        setTextColor(Color.WHITE)
+        setTextColor(palette.primaryText)
         setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
         gravity = Gravity.CENTER
-        background = GradientDrawable().apply { cornerRadius = dp(28).toFloat(); setColor(WidgetBoard.PANEL) }
+        FlymeAutoStyle.button(this, palette, compact = true)
+        minimumWidth = 0
+        minWidth = 0
         setOnClickListener { onClick() }
     }
 
-    private fun weighted() = LinearLayout.LayoutParams(0, -1, 1f).apply { marginEnd = dp(12) }
+    private fun weighted() = LinearLayout.LayoutParams(0, -1, 1f).apply { marginEnd = dp(FlymeAutoStyle.CONTROL_GAP_DP) }
 
     private fun dp(value: Int) = (value * density).toInt()
 
     private companion object {
-        val BACKGROUND = Color.rgb(14, 19, 26)
-        val MUTED = Color.rgb(150, 162, 178)
         const val BYD_HOME_PACKAGE = "com.android.launcher3"
         const val BYD_HOME_ACTIVITY = "com.android.launcher3.home.MainActivity"
     }
@@ -264,7 +287,7 @@ private class AppsAdapter(private val context: Context) : BaseAdapter() {
             gravity = Gravity.CENTER_HORIZONTAL
             addView(ImageView(context), LinearLayout.LayoutParams((72 * density).toInt(), (72 * density).toInt()))
             addView(TextView(context).apply {
-                setTextColor(Color.WHITE)
+                setTextColor(FlymeSampleStyle.palette(context).primaryText)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
                 gravity = Gravity.CENTER
                 maxLines = 2

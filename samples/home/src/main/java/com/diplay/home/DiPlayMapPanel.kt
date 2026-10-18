@@ -4,7 +4,8 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
-import android.graphics.Color
+import com.shilapi.xcertplay.FlymeAutoStyle
+import com.shilapi.xcertplay.FlymeSampleStyle
 import android.os.Bundle
 import android.os.Handler
 import android.os.IBinder
@@ -27,10 +28,11 @@ import android.widget.TextView
 class DiPlayMapPanel(context: Context) : FrameLayout(context) {
     private val map = SurfaceView(context)
     private val status = TextView(context).apply {
-        setTextColor(Color.WHITE)
-        textSize = 20f
+        setTextColor(FlymeSampleStyle.palette(context).primaryText)
+        textSize = FlymeAutoStyle.BODY_TEXT_SP
         gravity = Gravity.CENTER
-        setPadding(48, 48, 48, 48)
+        val inset = FlymeAutoStyle.dp(context, FlymeAutoStyle.CARD_PADDING_DP)
+        setPadding(inset, inset, inset, inset)
     }
     private var service: Messenger? = null
     private var bound = false
@@ -57,7 +59,7 @@ class DiPlayMapPanel(context: Context) : FrameLayout(context) {
     }
 
     init {
-        setBackgroundColor(Color.BLACK)
+        background = FlymeAutoStyle.card(context, FlymeSampleStyle.palette(context))
         addView(map, LayoutParams(-1, -1))
         addView(status, LayoutParams(-1, -1))
         status.setOnClickListener { openDiPlay() }

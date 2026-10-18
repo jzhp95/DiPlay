@@ -49,18 +49,24 @@ class DiagnosticsTestLayoutTest {
                 permission = MfiTestController.Permission.GRANTED,
                 chip = MfiCoprocessorDiagnostic(MfiCoprocessorDiagnostic.Status.READABLE, 0x11, 2, 650)))
             val clicks = mutableListOf<DiagnosticsTestLayout.Page>()
-            val ui = DiagnosticsTestLayout(context, palette).build(wheel.root, mfi.root, DiagnosticsTestLayout.Page.WHEEL, clicks::add)
+            var backs = 0
+            val uid = UidTestLayout(context, palette).build()
+            val ui = DiagnosticsTestLayout(context, palette).build(wheel.root, mfi.root, DiagnosticsTestLayout.Page.WHEEL, clicks::add, back = { backs++ }, uid = uid.root)
             val density = context.resources.displayMetrics.density
             val w = (width * density).toInt(); val h = (height * density).toInt()
             val prefix = "$width-$densityDpi-1.5-${if (night) "dark" else "light"}${if (rtl) "-rtl" else ""}"
             for (page in DiagnosticsTestLayout.Page.entries) {
                 ui.select(page)
                 measure(ui.root, w, h)
-                val detail = if (page == DiagnosticsTestLayout.Page.WHEEL) wheel.root else mfi.root
+                val detail = when (page) {
+                    DiagnosticsTestLayout.Page.WHEEL -> wheel.root
+                    DiagnosticsTestLayout.Page.MFI -> mfi.root
+                    DiagnosticsTestLayout.Page.UID -> uid.root
+                }
                 val menus = visible(ui.root).filterIsInstance<Button>().filter {
-                    it.text == "方控测试" || it.text == "MFi 认证测试"
+                    it.text == "方控测试" || it.text == "MFi 认证测试" || it.text == "UID 检测"
                 }.toList()
-                assertEquals(2, menus.size)
+                assertEquals(3, menus.size)
                 menus.forEach { menu ->
                     val menuBounds = bounds(ui.root, menu)
                     val detailBounds = bounds(ui.root, detail)
@@ -74,7 +80,9 @@ class DiagnosticsTestLayoutTest {
                 assertEquals("Scrolling details cannot move the menu", menuTop, bounds(ui.root, menus.first()).top)
                 screenshot(ui.root, w, h, "$prefix-${page.name.lowercase()}-bottom")
             }
-            assertEquals(setOf(DiagnosticsTestLayout.Page.WHEEL, DiagnosticsTestLayout.Page.MFI), clicks.toSet())
+            assertEquals(DiagnosticsTestLayout.Page.entries.toSet(), clicks.toSet())
+            visible(ui.root).filterIsInstance<Button>().single { it.text == context.getString(R.string.back) }.performClick()
+            assertEquals(1, backs)
         }
     }
     private fun measure(root: View, width: Int, height: Int) {

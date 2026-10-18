@@ -1,7 +1,8 @@
 package com.diplay.home
 
+import com.shilapi.xcertplay.FlymeAutoStyle
+import com.shilapi.xcertplay.FlymeSampleStyle
 import android.app.Activity
-import android.app.AlertDialog
 import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProviderInfo
@@ -38,6 +39,14 @@ class WidgetBoard(private val activity: Activity, private val column: LinearLayo
             removeButtons.forEach { it.visibility = if (value) View.VISIBLE else View.GONE }
         }
 
+    fun savePendingState(outState: Bundle) {
+        pendingId?.let { outState.putInt(KEY_PENDING_ID, it) }
+    }
+
+    fun restorePendingState(state: Bundle?) {
+        pendingId = state?.takeIf { it.containsKey(KEY_PENDING_ID) }?.getInt(KEY_PENDING_ID)
+    }
+
     fun restore() {
         val ids = savedIds()
         val kept = ids.filter { id ->
@@ -62,11 +71,11 @@ class WidgetBoard(private val activity: Activity, private val column: LinearLayo
             return
         }
         val labels = providers.map { "${appLabel(it)} · ${it.loadLabel(activity.packageManager)}" }.toTypedArray()
-        AlertDialog.Builder(activity)
+        FlymeSampleStyle.dialog(activity)
             .setTitle(R.string.home_add_widget)
             .setItems(labels) { _, index -> add(providers[index]) }
             .setNegativeButton(android.R.string.cancel, null)
-            .show()
+            .let { FlymeSampleStyle.showDialog(it, activity) }
     }
 
     private fun add(info: AppWidgetProviderInfo) {
@@ -86,13 +95,13 @@ class WidgetBoard(private val activity: Activity, private val column: LinearLayo
             // BYD has no consent screen; the owner allows binding once over adb.
             pendingId = null
             host.deleteAppWidgetId(id)
-            AlertDialog.Builder(activity)
+            FlymeSampleStyle.dialog(activity)
                 .setTitle(R.string.home_allow_widgets)
                 .setMessage(
                     activity.getString(R.string.home_allow_widgets_description, activity.packageName),
                 )
                 .setPositiveButton(android.R.string.ok, null)
-                .show()
+                .let { FlymeSampleStyle.showDialog(it, activity) }
         }
     }
 
@@ -143,11 +152,11 @@ class WidgetBoard(private val activity: Activity, private val column: LinearLayo
             setTextColor(Color.WHITE)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
             gravity = Gravity.CENTER
-            background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(0xE6C62828.toInt()) }
+            background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(FlymeSampleStyle.palette(activity).danger) }
             visibility = if (editing) View.VISIBLE else View.GONE
         }
         val card = FrameLayout(activity).apply {
-            background = GradientDrawable().apply { cornerRadius = 20 * density; setColor(PANEL) }
+            background = FlymeAutoStyle.card(activity, FlymeSampleStyle.palette(activity))
             setPadding((8 * density).toInt(), (8 * density).toInt(), (8 * density).toInt(), (8 * density).toInt())
             addView(widget, FrameLayout.LayoutParams(-1, -1))
             addView(remove, FrameLayout.LayoutParams((44 * density).toInt(), (44 * density).toInt(), Gravity.TOP or Gravity.END))
@@ -159,7 +168,7 @@ class WidgetBoard(private val activity: Activity, private val column: LinearLayo
             save(savedIds() - id)
         }
         removeButtons += remove
-        column.addView(card, LinearLayout.LayoutParams(-1, height).apply { bottomMargin = (16 * density).toInt() })
+        column.addView(card, LinearLayout.LayoutParams(-1, height).apply { bottomMargin = FlymeAutoStyle.dp(activity, FlymeAutoStyle.BLOCK_GAP_DP) })
         // Tell the widget its real size once it is laid out.
         widget.post {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && widget.width > 0 && widget.height > 0) {
@@ -181,11 +190,11 @@ class WidgetBoard(private val activity: Activity, private val column: LinearLayo
     private fun save(ids: List<Int>) = prefs.edit().putString(KEY_IDS, ids.joinToString(",")).apply()
 
     companion object {
-        const val PANEL = 0xFF18212C.toInt()
         private const val HOST_ID = 1024
         private const val REQUEST_BIND = 11
         private const val REQUEST_CONFIGURE = 12
         private const val KEY_IDS = "ids"
+        private const val KEY_PENDING_ID = "pending_widget_id"
         private const val MIN_HEIGHT_DP = 140
     }
 }

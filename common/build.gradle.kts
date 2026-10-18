@@ -53,3 +53,10 @@ dependencies {
     testImplementation("org.mockito:mockito-core:5.20.0")
     testImplementation(libs.jmdns)
 }
+
+// Compile the same presentation sources without depending on CarPlay services.
+androidComponents {
+    onVariants { variant ->
+        variant.sources.java?.addStaticSourceDirectory(rootProject.file("ui-style/src/main/java").absolutePath)
+    }
+}

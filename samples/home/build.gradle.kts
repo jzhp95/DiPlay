@@ -37,3 +37,10 @@ tasks.withType<Test>().configureEach {
     // Robolectric's API 36 shared-memory implementation needs this JDK interface.
     jvmArgs("--add-exports=java.base/jdk.internal.access=ALL-UNNAMED")
 }
+
+// Compile the same presentation sources without depending on CarPlay services.
+androidComponents {
+    onVariants { variant ->
+        variant.sources.java?.addStaticSourceDirectory(rootProject.file("ui-style/src/main/java").absolutePath)
+    }
+}

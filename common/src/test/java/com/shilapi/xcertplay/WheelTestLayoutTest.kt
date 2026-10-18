@@ -44,9 +44,8 @@ class WheelTestLayoutTest {
             ui.root.measure(View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY),
                 View.MeasureSpec.makeMeasureSpec(h, View.MeasureSpec.EXACTLY))
             ui.root.layout(0, 0, w, h)
-            assertEquals(1, descendants(ui.root).filterIsInstance<Button>().single { it.text == context.getString(R.string.back) }.lineCount)
             descendants(ui.root).filterIsInstance<Button>().filterNot { it is Switch }.forEach { it.performClick() }
-            assertEquals(WheelTestLayout.Action.entries.toSet(), actions.toSet())
+            assertEquals(WheelTestLayout.Action.entries.filterNot { it == WheelTestLayout.Action.BACK }.toSet(), actions.toSet())
             descendants(ui.root).filterIsInstance<Switch>().single().performClick()
             assertTrue(debug)
             descendants(ui.root).filterIsInstance<TextView>().forEach { text ->

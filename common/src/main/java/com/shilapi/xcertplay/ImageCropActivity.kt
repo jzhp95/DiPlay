@@ -60,14 +60,16 @@ class ImageCropActivity : Activity() {
             background = FlymeAutoStyle.card(this@ImageCropActivity, palette)
             textSize = FlymeAutoStyle.BODY_TEXT_SP
             gravity = Gravity.CENTER
-            setPadding(dp(12), dp(8), dp(12), dp(8))
+            setPadding(dp(FlymeAutoStyle.CONTROL_GAP_DP), dp(FlymeAutoStyle.BUTTON_PADDING_VERTICAL_DP), dp(FlymeAutoStyle.CONTROL_GAP_DP), dp(FlymeAutoStyle.BUTTON_PADDING_VERTICAL_DP))
             text = getString(R.string.loading_image)
         }
 
         val controls = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
-            setPadding(dp(16), dp(10), dp(16), dp(16))
+            setBackgroundColor(palette.surface)
+            val inset = dp(FlymeAutoStyle.CONTROL_GAP_DP)
+            setPadding(inset, inset, inset, inset)
         }
         controls.addView(
             Button(this).apply {
@@ -87,7 +89,7 @@ class ImageCropActivity : Activity() {
                 setOnClickListener { saveCrop() }
             },
             LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
-                marginStart = dp(12)
+                marginStart = dp(FlymeAutoStyle.CONTROL_GAP_DP)
             },
         )
 

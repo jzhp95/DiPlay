@@ -27,13 +27,13 @@ internal class MfiTestLayout(private val context: Context, private val palette: 
         val content = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             val padding = contentPadding
-            setPadding(padding, padding, padding, padding)
+            setPadding(padding, dp(FlymeAutoStyle.BLOCK_GAP_DP), padding, padding)
         }
         fun button(id: Int, action: () -> Unit) = Button(context).apply {
             setText(id); FlymeAutoStyle.button(this, palette); setOnClickListener { action() }
         }
         // Stack the header and actions so large fonts remain usable in a narrow detail panel.
-        content.addView(text(R.string.diagnostics_mfi_title, FlymeAutoStyle.BUTTON_TEXT_SP))
+        content.addView(text(R.string.diagnostics_mfi_title, FlymeAutoStyle.PAGE_TITLE_SP))
         content.addView(text(R.string.diagnostics_mfi_description, FlymeAutoStyle.SECONDARY_TEXT_SP).apply { setTextColor(palette.secondaryText) })
         content.addView(LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL

@@ -1,10 +1,12 @@
 package com.diplay.maphost
 
+import com.shilapi.xcertplay.FlymeAutoStyle
+import com.shilapi.xcertplay.FlymeSampleStyle
+import android.widget.ScrollView
 import android.app.Activity
 import android.content.ComponentName
 import android.content.Intent
 import android.content.ServiceConnection
-import android.graphics.Color
 import android.os.Bundle
 import android.os.Handler
 import android.os.IBinder
@@ -56,7 +58,9 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        status = TextView(this).apply { setTextColor(Color.WHITE); textSize = 18f }
+        val palette = FlymeSampleStyle.palette(this)
+        mapWidth = savedInstanceState?.getInt("map_width", mapWidth) ?: mapWidth
+        status = TextView(this).apply { setTextColor(palette.secondaryText); textSize = FlymeAutoStyle.BODY_TEXT_SP }
         mapView = SurfaceView(this)
         mapView.holder.addCallback(object : SurfaceHolder.Callback {
             override fun surfaceCreated(holder: SurfaceHolder) {
@@ -75,30 +79,50 @@ class MainActivity : Activity() {
         })
         fun sizeButton(label: String, step: Int) = Button(this).apply {
             text = label
+            FlymeAutoStyle.button(this, palette)
             setOnClickListener {
                 mapWidth = (mapWidth + step).coerceIn(400, 2400)
                 mapView.layoutParams = mapParams()
             }
         }
         val buttons = LinearLayout(this).apply {
-            addView(sizeButton(getString(R.string.maphost_smaller), -200))
-            addView(sizeButton(getString(R.string.maphost_larger), 200))
+            orientation = if (resources.configuration.screenWidthDp < 600) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
+            listOf(sizeButton(getString(R.string.maphost_smaller), -200), sizeButton(getString(R.string.maphost_larger), 200)).forEach { button ->
+                addView(button, LinearLayout.LayoutParams(-1, -2).apply {
+                    if (orientation == LinearLayout.HORIZONTAL) { width = 0; weight = 1f; marginEnd = FlymeAutoStyle.dp(context, FlymeAutoStyle.CONTROL_GAP_DP) }
+                    topMargin = FlymeAutoStyle.dp(context, FlymeAutoStyle.CONTROL_GAP_DP)
+                })
+            }
         }
-        setContentView(LinearLayout(this).apply {
+        val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.rgb(20, 24, 32))
-            setPadding(48, 48, 48, 48)
+            setBackgroundColor(palette.background)
+            val inset = FlymeAutoStyle.dp(context, FlymeAutoStyle.CARD_PADDING_DP)
+            setPadding(inset, inset, inset, inset)
             addView(TextView(context).apply {
-                text = getString(R.string.maphost_title); setTextColor(Color.WHITE); textSize = 32f
+                text = getString(R.string.maphost_title); setTextColor(palette.primaryText); textSize = FlymeAutoStyle.PAGE_TITLE_SP
             })
             addView(status)
             addView(buttons)
             addView(FrameLayout(context).apply { addView(mapView, mapParams()) })
-        })
+        }
+        val scroll = ScrollView(this).apply { isFillViewport = true; addView(content) }
+        setContentView(scroll)
+        FlymeSampleStyle.install(this, scroll)
     }
 
     // The dashboard map is 8:3; other shapes are filled and cropped by DiPlay.
-    private fun mapParams() = FrameLayout.LayoutParams(mapWidth, mapWidth * 3 / 8, Gravity.START)
+    private fun mapParams(): FrameLayout.LayoutParams {
+        val available = (resources.configuration.screenWidthDp * resources.displayMetrics.density).toInt() -
+            FlymeAutoStyle.dp(this, FlymeAutoStyle.CARD_PADDING_DP * 2)
+        val width = minOf(mapWidth, available.coerceAtLeast(1))
+        return FrameLayout.LayoutParams(width, width * 3 / 8, Gravity.START)
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putInt("map_width", mapWidth)
+        super.onSaveInstanceState(outState)
+    }
 
     override fun onStart() {
         super.onStart()

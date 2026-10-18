@@ -12,12 +12,11 @@ import com.shilapi.xcertplay.host.R
 
 /** Navigation stays outside the independently scrolling detail pages, including narrow windows. */
 internal class DiagnosticsTestLayout(private val context: Context, private val palette: DiPlayPalette) {
-    enum class Page { WHEEL, MFI }
-    class Views(val root: LinearLayout, private val wheel: ScrollView, private val mfi: ScrollView,
+    enum class Page { WHEEL, MFI, UID }
+    class Views(val root: LinearLayout, private val pages: Map<Page, ScrollView>,
         private val menu: Map<Page, Button>, private val palette: DiPlayPalette) {
         fun select(page: Page) {
-            wheel.visibility = if (page == Page.WHEEL) View.VISIBLE else View.GONE
-            mfi.visibility = if (page == Page.MFI) View.VISIBLE else View.GONE
+            pages.forEach { (item, view) -> view.visibility = if (item == page) View.VISIBLE else View.GONE }
             menu.forEach { (item, button) ->
                 button.isSelected = item == page
                 FlymeAutoStyle.button(button, palette, primary = item == page, compact = true)
@@ -26,7 +25,8 @@ internal class DiagnosticsTestLayout(private val context: Context, private val p
             }
         }
     }
-    fun build(wheel: ScrollView, mfi: ScrollView, selected: Page, changed: (Page) -> Unit, back: () -> Unit = {}): Views {
+    fun build(wheel: ScrollView, mfi: ScrollView, selected: Page, changed: (Page) -> Unit, back: () -> Unit = {}, uid: ScrollView = UidTestLayout(context, palette).build().root): Views {
+        val pages = linkedMapOf(Page.WHEEL to wheel, Page.MFI to mfi, Page.UID to uid)
         val root = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             // The requested menu is physically on the left, including RTL configuration previews.
@@ -48,7 +48,7 @@ internal class DiagnosticsTestLayout(private val context: Context, private val p
             setPadding(0, gap, 0, gap)
             gravity = Gravity.CENTER
         }, LinearLayout.LayoutParams(-1, -2))
-        val menu = listOf(Page.WHEEL to R.string.wheel_test_title, Page.MFI to R.string.diagnostics_mfi_title).associate { (page, title) ->
+        val menu = listOf(Page.WHEEL to R.string.wheel_test_title, Page.MFI to R.string.diagnostics_mfi_title, Page.UID to R.string.diagnostics_uid_title).associate { (page, title) ->
             page to Button(context).apply {
                 setText(title)
                 setOnClickListener { changed(page) }
@@ -70,8 +70,7 @@ internal class DiagnosticsTestLayout(private val context: Context, private val p
         root.addView(railScroll, LinearLayout.LayoutParams(FlymeAutoStyle.dp(context, menuWidthDp(context.resources.configuration.screenWidthDp)), -1))
         root.addView(FrameLayout(context).apply {
             layoutDirection = context.resources.configuration.layoutDirection
-            addView(wheel, FrameLayout.LayoutParams(-1, -1))
-            addView(mfi, FrameLayout.LayoutParams(-1, -1))
+            pages.values.forEach { addView(it, FrameLayout.LayoutParams(-1, -1)) }
         }, LinearLayout.LayoutParams(0, -1, 1f))
         root.addOnLayoutChangeListener { _, left, _, right, _, _, _, _, _ ->
             val density = context.resources.displayMetrics.density
@@ -81,7 +80,7 @@ internal class DiagnosticsTestLayout(private val context: Context, private val p
                 railScroll.layoutParams = (railScroll.layoutParams as LinearLayout.LayoutParams).apply { this.width = wanted }
             }
         }
-        return Views(root, wheel, mfi, menu, palette).also { it.select(selected) }
+        return Views(root, pages, menu, palette).also { it.select(selected) }
     }
     companion object {
         fun menuWidthDp(widthDp: Int) = minOf(FlymeAutoStyle.CONTROL_HEIGHT_DP * 4,

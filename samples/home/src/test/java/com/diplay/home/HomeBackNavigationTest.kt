@@ -21,8 +21,8 @@ class HomeBackNavigationTest {
     }
 
     @Test @Config(qualifiers = "zh-rTW")
-    fun traditionalChineseHomeKeepsEditingAndBackNavigationWorking() {
-        assertEquals("編輯", RuntimeEnvironment.getApplication().getString(R.string.home_edit))
+    fun traditionalChineseSystemKeepsSimplifiedCopyAndBackNavigationWorking() {
+        assertEquals("编辑", RuntimeEnvironment.getApplication().getString(R.string.home_edit))
         verifyBackNavigation()
     }
 

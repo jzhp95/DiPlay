@@ -28,6 +28,8 @@ class WheelTestActivity : Activity(), AppAppearanceOwner {
     private lateinit var mfiController: MfiTestController
     private lateinit var mfiLayout: MfiTestLayout
     private lateinit var mfiViews: MfiTestLayout.Views
+    private lateinit var uidLayout: UidTestLayout
+    private lateinit var uidViews: UidTestLayout.Views
     private var selectedPage = DiagnosticsTestLayout.Page.WHEEL
     private val appearanceHandler = Handler(Looper.getMainLooper())
     private val appearancePoll = object : Runnable {
@@ -57,6 +59,7 @@ class WheelTestActivity : Activity(), AppAppearanceOwner {
     private fun renderAppearance() {
         val scrollY = if (::views.isInitialized) views.root.scrollY else 0
         val mfiScrollY = if (::mfiViews.isInitialized) mfiViews.root.scrollY else 0
+        val uidScrollY = if (::uidViews.isInitialized) uidViews.root.scrollY else 0
         currentAppNight = resolveAppNightNow()
         val palette = DiPlayPalette.of(currentAppNight)
         window.setBackgroundDrawable(ColorDrawable(palette.background))
@@ -75,7 +78,9 @@ class WheelTestActivity : Activity(), AppAppearanceOwner {
             CarPlayBackgroundSession.snapshot()?.controller?.let(PendingReconnect::mark)
             Toast.makeText(this, R.string.saved_for_your_next_connection, Toast.LENGTH_SHORT).show()
         }
-        diagnosticsViews = DiagnosticsTestLayout(this, palette).build(views.root, mfiViews.root, selectedPage, ::selectPage, ::finish)
+        uidLayout = UidTestLayout(this, palette)
+        uidViews = uidLayout.build()
+        diagnosticsViews = DiagnosticsTestLayout(this, palette).build(views.root, mfiViews.root, selectedPage, ::selectPage, ::finish, uidViews.root)
         ViewCompat.setOnApplyWindowInsetsListener(diagnosticsViews.root) { view, insets ->
             val safe = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
             view.setPadding(safe.left, safe.top, safe.right, safe.bottom)
@@ -86,6 +91,7 @@ class WheelTestActivity : Activity(), AppAppearanceOwner {
         showMfiState(mfiController.snapshot())
         views.root.post { views.root.scrollTo(0, scrollY) }
         mfiViews.root.post { mfiViews.root.scrollTo(0, mfiScrollY) }
+        uidViews.root.post { uidViews.root.scrollTo(0, uidScrollY) }
     }
 
     override fun onResume() {
@@ -101,6 +107,7 @@ class WheelTestActivity : Activity(), AppAppearanceOwner {
         appearanceHandler.postDelayed(appearancePoll, 5_000L)
         showState(controller.snapshot())
         if (selectedPage == DiagnosticsTestLayout.Page.MFI) mfiController.refresh()
+        if (selectedPage == DiagnosticsTestLayout.Page.UID) uidLayout.show(uidViews, UidDiagnostic.read(this))
     }
 
     private fun selectPage(page: DiagnosticsTestLayout.Page) {
@@ -114,6 +121,7 @@ class WheelTestActivity : Activity(), AppAppearanceOwner {
         diagnosticsViews.select(page)
         showState(controller.snapshot())
         if (page == DiagnosticsTestLayout.Page.MFI && foreground) mfiController.refresh()
+        if (page == DiagnosticsTestLayout.Page.UID) uidLayout.show(uidViews, UidDiagnostic.read(this))
     }
 
     private fun showMfiState(state: MfiTestController.State) {

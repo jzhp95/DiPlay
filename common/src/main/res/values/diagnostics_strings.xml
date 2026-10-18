@@ -34,4 +34,18 @@
     <string name="diagnostics_mfi_chip_missing">CH341 已打开，但未收到认证芯片响应。</string>
     <string name="diagnostics_mfi_chip_unreadable">芯片有响应（地址 %1$s），证书无法读取。</string>
     <string name="diagnostics_mfi_chip_ready">芯片有响应（地址 %1$s，协议版本 %2$s）\n证书可读取（%3$d 字节）。</string>
+    <string name="diagnostics_uid_title">UID 检测</string>
+    <string name="diagnostics_uid_description">读取实际 UID，检查是否具有 system 身份。</string>
+    <string name="diagnostics_uid_read_title">UID 读取结果</string>
+    <string name="diagnostics_uid_identity_title">系统身份</string>
+    <string name="diagnostics_uid_details_title">运行身份详情</string>
+    <string name="diagnostics_uid_read_ok">已获取 UID：%1$d</string>
+    <string name="diagnostics_uid_read_failed">未能获取当前进程 UID，请刷新重试。</string>
+    <string name="diagnostics_uid_system">具有 system UID 身份（appId 1000）。</string>
+    <string name="diagnostics_uid_ordinary">未获得 system UID 身份。</string>
+    <string name="diagnostics_uid_unknown">无法确认</string>
+    <string name="diagnostics_uid_matches">进程 UID 与安装 UID 一致。</string>
+    <string name="diagnostics_uid_differs">进程 UID 与安装 UID 不一致，请核对运行环境。</string>
+    <string name="diagnostics_uid_permission_note">UID 读取成功不代表获得系统权限，具体功能以对应接口检测结果为准。</string>
+    <string name="diagnostics_uid_details">进程 UID：%1$s\n安装 UID：%2$s\n应用 appId：%3$s\n包名：%4$s\n%5$s</string>
 </resources>

@@ -45,7 +45,7 @@ internal class WheelTestLayout(private val context: Context, private val palette
         content.addView(LinearLayout(context).apply {
             gravity = Gravity.CENTER_VERTICAL
             orientation = if (compact) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
-            addView(text(R.string.wheel_test_title, 28f), if (compact) LinearLayout.LayoutParams(-1, -2) else LinearLayout.LayoutParams(0, -2, 1f))
+            addView(text(R.string.wheel_test_title, FlymeAutoStyle.PAGE_TITLE_SP), if (compact) LinearLayout.LayoutParams(-1, -2) else LinearLayout.LayoutParams(0, -2, 1f))
         }, LinearLayout.LayoutParams(-1, -2))
         val wide = availableWidthDp >= 840
         val feedback = card()
