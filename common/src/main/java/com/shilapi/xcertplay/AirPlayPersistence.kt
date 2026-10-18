@@ -17,6 +17,7 @@ import com.shilapi.xcertplay.orchestration.ManualHotspotBand
 import com.shilapi.xcertplay.orchestration.ManualHotspotSecurity
 import com.shilapi.xcertplay.orchestration.MfiTarget
 import com.shilapi.xcertplay.orchestration.WirelessHotspotMode
+import com.shilapi.xcertplay.network.CarHotspotProfiles
 import com.shilapi.xcertplay.network.WifiP2pChannels
 import com.shilapi.xcertplay.transport.LockdownPairRecord
 import java.io.File
@@ -423,7 +424,7 @@ object AirPlayPersistence {
     }
 
     fun loadManualHotspotSsid(context: Context): String =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        CarHotspotProfiles.saved(context)?.ssid ?: context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .getString(KEY_MANUAL_HOTSPOT_SSID, null)
             .orEmpty()
 
@@ -431,10 +432,11 @@ object AirPlayPersistence {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putString(KEY_MANUAL_HOTSPOT_SSID, ssid)
             .apply()
+        CarHotspotProfiles.updateSavedIfValid(context) { it.copy(ssid = ssid) }
     }
 
     fun loadManualHotspotPassphrase(context: Context): String =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        CarHotspotProfiles.saved(context)?.passphrase ?: context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .getString(KEY_MANUAL_HOTSPOT_PASSPHRASE, null)
             .orEmpty()
 
@@ -442,9 +444,17 @@ object AirPlayPersistence {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putString(KEY_MANUAL_HOTSPOT_PASSPHRASE, passphrase)
             .apply()
+        CarHotspotProfiles.updateSavedIfValid(context) {
+            it.copy(passphrase = passphrase, security = when {
+                passphrase.isEmpty() -> ManualHotspotSecurity.OPEN
+                it.security == ManualHotspotSecurity.OPEN -> ManualHotspotSecurity.WPA2
+                else -> it.security
+            })
+        }
     }
 
     fun loadManualHotspotBand(context: Context): ManualHotspotBand {
+        CarHotspotProfiles.saved(context)?.let { return it.band }
         val stored = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .getString(KEY_MANUAL_HOTSPOT_BAND, null)
         return ManualHotspotBand.entries.firstOrNull { it.name == stored }
@@ -455,10 +465,11 @@ object AirPlayPersistence {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putString(KEY_MANUAL_HOTSPOT_BAND, band.name)
             .apply()
+        CarHotspotProfiles.updateSavedIfValid(context) { it.copy(band = band) }
     }
 
     fun loadManualHotspotChannel(context: Context): Int =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        CarHotspotProfiles.saved(context)?.channel ?: context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .getInt(KEY_MANUAL_HOTSPOT_CHANNEL, 0)
             .coerceIn(0, 196)
 
@@ -466,9 +477,11 @@ object AirPlayPersistence {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putInt(KEY_MANUAL_HOTSPOT_CHANNEL, channel.coerceIn(0, 196))
             .apply()
+        CarHotspotProfiles.updateSavedIfValid(context) { it.copy(channel = channel.coerceIn(0, 196)) }
     }
 
     fun loadManualHotspotSecurity(context: Context): ManualHotspotSecurity {
+        CarHotspotProfiles.saved(context)?.let { return it.security }
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val stored = prefs.getString(KEY_MANUAL_HOTSPOT_SECURITY, null)
         return ManualHotspotSecurity.entries.firstOrNull { it.name == stored }
@@ -483,6 +496,7 @@ object AirPlayPersistence {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putString(KEY_MANUAL_HOTSPOT_SECURITY, security.name)
             .apply()
+        CarHotspotProfiles.updateSavedIfValid(context) { it.copy(security = security) }
     }
 
     /** Interface that carries the car hotspot when the platform does not report it as a Wi-Fi AP. */

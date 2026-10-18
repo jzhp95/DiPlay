@@ -13,6 +13,7 @@ import com.shilapi.xcertplay.host.R
 
 /** Large controls and a persistent last-key banner for vehicle testing. */
 internal class WheelTestLayout(private val context: Context, private val palette: DiPlayPalette) {
+    private var compact = false
     enum class Action { ACQUIRE, RELEASE, PREVIOUS, NEXT, PLAY, PAUSE, TOGGLE, SIRI, BACK }
     data class Views(val root: ScrollView, val status: TextView, val event: TextView,
         val counts: TextView, val logs: TextView, val acquire: Button, val release: Button)
@@ -20,18 +21,21 @@ internal class WheelTestLayout(private val context: Context, private val palette
     private fun card() = LinearLayout(context).apply {
         orientation = LinearLayout.VERTICAL
         background = FlymeAutoStyle.card(context, palette)
-        val padding = dp(FlymeAutoStyle.CARD_PADDING_DP)
+        val padding = dp(if (compact) FlymeAutoStyle.CONTROL_GAP_DP else FlymeAutoStyle.CARD_PADDING_DP)
         setPadding(padding, padding, padding, padding)
     }
     private fun text(id: Int, size: Float) = TextView(context).apply {
         setText(id); textSize = size; setTextColor(palette.primaryText)
-        setPadding(0, dp(8), 0, dp(8))
+        setPadding(0, dp(FlymeAutoStyle.BUTTON_PADDING_VERTICAL_DP), 0, dp(FlymeAutoStyle.BUTTON_PADDING_VERTICAL_DP))
     }
 
-    fun build(debugEnabled: Boolean, debugChanged: (Boolean) -> Unit, action: (Action) -> Unit): Views {
+    fun build(debugEnabled: Boolean, debugChanged: (Boolean) -> Unit, action: (Action) -> Unit,
+        availableWidthDp: Int = context.resources.configuration.screenWidthDp): Views {
+        compact = availableWidthDp < 480
         val content = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(FlymeAutoStyle.CARD_PADDING_DP), dp(16), dp(FlymeAutoStyle.CARD_PADDING_DP), dp(FlymeAutoStyle.CARD_PADDING_DP))
+            val padding = dp(if (compact) FlymeAutoStyle.CONTROL_GAP_DP else FlymeAutoStyle.CARD_PADDING_DP)
+            setPadding(padding, dp(FlymeAutoStyle.BLOCK_GAP_DP), padding, padding)
         }
         fun button(id: Int, key: Action) = Button(context).apply {
             setText(id)
@@ -40,10 +44,11 @@ internal class WheelTestLayout(private val context: Context, private val palette
         }
         content.addView(LinearLayout(context).apply {
             gravity = Gravity.CENTER_VERTICAL
-            addView(text(R.string.wheel_test_title, 28f), LinearLayout.LayoutParams(0, -2, 1f))
+            orientation = if (compact) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
+            addView(text(R.string.wheel_test_title, 28f), if (compact) LinearLayout.LayoutParams(-1, -2) else LinearLayout.LayoutParams(0, -2, 1f))
             addView(button(R.string.back, Action.BACK).apply { minWidth = dp(96) }, LinearLayout.LayoutParams(-2, -2))
         }, LinearLayout.LayoutParams(-1, -2))
-        val wide = context.resources.configuration.screenWidthDp >= 840
+        val wide = availableWidthDp >= 840
         val feedback = card()
         val controls = card()
         val event = text(R.string.wheel_test_waiting, 32f).apply {
@@ -56,9 +61,9 @@ internal class WheelTestLayout(private val context: Context, private val palette
         val status = text(R.string.wheel_test_stopped, FlymeAutoStyle.BODY_TEXT_SP)
         feedback.addView(status)
         fun row(first: Button, second: Button) {
-            val row = LinearLayout(context)
-            row.addView(first, LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = dp(FlymeAutoStyle.CONTROL_GAP_DP) })
-            row.addView(second, LinearLayout.LayoutParams(0, -2, 1f))
+            val row = LinearLayout(context).apply { orientation = if (compact) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL }
+            row.addView(first, if (compact) LinearLayout.LayoutParams(-1, -2) else LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = dp(FlymeAutoStyle.CONTROL_GAP_DP) })
+            row.addView(second, if (compact) LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(FlymeAutoStyle.CONTROL_GAP_DP) } else LinearLayout.LayoutParams(0, -2, 1f))
             controls.addView(row, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(FlymeAutoStyle.CONTROL_GAP_DP) })
         }
         val acquire = button(R.string.wheel_test_acquire, Action.ACQUIRE)

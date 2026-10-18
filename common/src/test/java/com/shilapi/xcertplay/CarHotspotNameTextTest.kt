@@ -6,6 +6,8 @@ import android.content.res.Configuration
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
+import android.widget.Button
+import android.widget.EditText
 import com.shilapi.xcertplay.host.R
 import java.util.Locale
 import org.junit.After
@@ -77,11 +79,13 @@ class CarHotspotNameTextTest {
         assertTrue(texts(home).toString(), home.getString(R.string.msg_car_hotspot_off, "Car 5G") in texts(home))
     }
 
-    @Test fun connectionSettingsKeepManualInputAsAnExplicitFallback() {
+    @Test fun connectionSettingsUseOneInlineHotspotEditor() {
         val setup = open("connection")
         val shown = texts(setup)
         assertTrue(setup.getString(R.string.settings_hotspot_configure) in shown)
-        assertTrue(setup.getString(R.string.settings_hotspot_manual) in shown)
+        assertFalse(setup.getString(R.string.settings_hotspot_manual) in shown)
+        assertTrue(setup.getString(R.string.settings_hotspot_save) in shown)
+        assertFalse(setup.getString(R.string.hotspot_mode_manual_desc) in shown)
         assertFalse(setup.getString(R.string.save_hotspot_details_and_use_this_mode) in shown)
     }
 
@@ -94,11 +98,17 @@ class CarHotspotNameTextTest {
         }
     }
 
-    @Test fun manualFallbackKeepsItsSavedCredentialsSeparateFromManagedConfiguration() {
+    @Test fun savingTheInlineCardUpdatesBothHotspotPathsWithoutTurningItOn() {
         saveHotspot("Car 5G")
         val setup = open("connection")
-        assertTrue(setup.getString(R.string.settings_hotspot_manual) in texts(setup))
-        assertTrue(AirPlayPersistence.loadManualHotspotSsid(context) == "Car 5G")
-        assertTrue(com.shilapi.xcertplay.network.CarHotspotProfiles.confirmed(context) == null)
+        val inputs = descendants(setup.window.decorView).filterIsInstance<EditText>().toList()
+        inputs.single { it.contentDescription == setup.getString(R.string.hotspot_name) }.setText("Updated Car")
+        inputs.single { it.contentDescription == setup.getString(R.string.hotspot_password) }.setText("abcdefgh")
+        descendants(setup.window.decorView).filterIsInstance<Button>().single {
+            it.text == setup.getString(R.string.settings_hotspot_save)
+        }.performClick()
+        assertTrue(AirPlayPersistence.loadManualHotspotSsid(context) == "Updated Car")
+        assertTrue(com.shilapi.xcertplay.network.CarHotspotProfiles.saved(context)?.ssid == "Updated Car")
+        assertTrue(com.shilapi.xcertplay.network.CarHotspotStatus.isEnabled(context) == false)
     }
 }

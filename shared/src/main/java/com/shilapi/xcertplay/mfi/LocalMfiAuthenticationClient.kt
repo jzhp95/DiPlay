@@ -3,6 +3,7 @@ package com.shilapi.xcertplay.mfi
 import org.bouncycastle.asn1.ASN1Integer
 import org.bouncycastle.asn1.ASN1Sequence
 import java.io.File
+import java.io.InputStream
 import java.security.KeyFactory
 import java.security.PrivateKey
 import java.security.SecureRandom
@@ -47,13 +48,18 @@ class LocalMfiAuthenticationClient private constructor(
 
         fun load(directory: File, onSignature: (Int) -> Unit = {}): LocalMfiAuthenticationClient {
             require(directory.isDirectory) { "Offline MFi directory is missing or invalid" }
-            val encodedKey = readBounded(File(directory, "identity.pk8"))
+            return load({ name -> File(directory, name).inputStream() }, onSignature)
+        }
+
+        /** Also validates bundled material without installing or copying it to disk. */
+        internal fun load(openFile: (String) -> InputStream, onSignature: (Int) -> Unit = {}): LocalMfiAuthenticationClient {
+            val encodedKey = readBounded(openFile("identity.pk8"))
             val privateKey = try {
                 KeyFactory.getInstance("EC").generatePrivate(PKCS8EncodedKeySpec(encodedKey))
             } finally {
                 encodedKey.fill(0)
             }
-            val certificate = readBounded(File(directory, "certificate.p7b"))
+            val certificate = readBounded(openFile("certificate.p7b"))
             val certificates = CertificateFactory.getInstance("X.509")
                 .generateCertificates(certificate.inputStream())
             require(certificates.size == 1) { "Expected one accessory certificate" }
@@ -75,7 +81,7 @@ class LocalMfiAuthenticationClient private constructor(
             return LocalMfiAuthenticationClient(privateKey, certificate, onSignature)
         }
 
-        private fun readBounded(file: File): ByteArray = file.inputStream().use { stream ->
+        private fun readBounded(input: InputStream): ByteArray = input.use { stream ->
             val output = java.io.ByteArrayOutputStream()
             val buffer = ByteArray(1024)
             while (true) {

@@ -25,22 +25,28 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowAlertDialog
 import org.robolectric.util.ReflectionHelpers
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [29], manifest = Config.NONE)
 class CarHotspotSettingsUiTest {
-    private val profile = CarHotspotProfile("Car", "12345678", ManualHotspotSecurity.WPA2, ManualHotspotBand.GHZ_5, 149)
+    private val profile = CarHotspotProfile("Car", "12345678", ManualHotspotSecurity.WPA3, ManualHotspotBand.GHZ_5, 149)
     private lateinit var activity: Activity
     private lateinit var ui: CarHotspotSettingsUi
     private lateinit var fake: Fake
     private var changes = 0
-    private var manual = 0
     private class Fake : CarHotspotOperations {
         @Volatile var applied: CarHotspotProfile? = null
         @Volatile var enabled = false
+        var beforeApply: () -> Unit = {}
+        @Volatile var completed = false
         override fun read(): CarHotspotProfile? = null
         override fun apply(profile: CarHotspotProfile, cancelled: () -> Boolean): CarHotspotControlResult {
+            beforeApply()
+            if (cancelled()) { completed = true; return CarHotspotControlResult(false, false, null, "cancelled") }
             applied = profile
+            completed = true
             return CarHotspotControlResult(true, true, profile, "test-verified")
         }
         override fun enable(cancelled: () -> Boolean): CarHotspotControlResult {
@@ -50,73 +56,183 @@ class CarHotspotSettingsUiTest {
     }
     @Before fun setup() {
         val app = RuntimeEnvironment.getApplication()
-        for (name in listOf("diplay_managed_hotspot", "diplay_car_hotspot", "xcertplay_airplay")) app.getSharedPreferences(name,0).edit().clear().commit()
+        for (name in listOf("diplay_managed_hotspot", "diplay_car_hotspot", "xcertplay_airplay"))
+            app.getSharedPreferences(name, 0).edit().clear().commit()
         activity = Robolectric.buildActivity(Activity::class.java).setup().get()
         activity.setTheme(android.R.style.Theme_Material_NoActionBar)
         fake = Fake()
-        ui = CarHotspotSettingsUi(activity, changed = { changes++ }, manualDetails = { manual++ }, redraw = {}, controller = fake)
+        ui = CarHotspotSettingsUi(activity, changed = { changes++ }, redraw = {}, controller = fake)
     }
-    @After fun cleanup() { ui.close(); ShadowAlertDialog.getLatestAlertDialog()?.dismiss(); activity.finish(); shadowOf(Looper.getMainLooper()).idle() }
+    @After fun cleanup() {
+        ui.close()
+        ShadowAlertDialog.getLatestAlertDialog()?.dismiss()
+        activity.finish()
+        shadowOf(Looper.getMainLooper()).idle()
+    }
 
-    @Test fun cardHasExactlyTheRequestedFiveActionsAndBootDefaultsOff() {
-        val parent = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL }
-        ui.build(parent)
-        for (id in listOf(R.string.settings_hotspot_boot,R.string.settings_hotspot_system_settings,R.string.settings_hotspot_configure,R.string.settings_hotspot_start,R.string.settings_hotspot_manual))
-            assertTrue(views(parent).filterIsInstance<TextView>().any { it.text == activity.getString(id) })
+    @Test fun hotspotCredentialsAreEditedInlineWithoutASeparateManualEntry() {
+        val parent = card()
+        assertEquals("Hotspot name and password must be editable in the card", 2, inputs(parent).size)
+        assertFalse(views(parent).filterIsInstance<Button>().any { it.text == activity.getString(R.string.settings_hotspot_manual) })
+        button(parent, R.string.settings_hotspot_save)
         assertFalse(CarHotspotSettings.enabled(activity))
-        views(parent).filterIsInstance<Button>().single { it.text == activity.getString(R.string.settings_hotspot_manual) }.performClick()
-        assertEquals(1, manual)
+        assertNull(fake.applied)
+        assertFalse(fake.enabled)
     }
-    @Test fun cancellingTheEditorNeverWritesConfiguration() {
-        val dialog = editor()
-        inputs(dialog)[0].setText("Cancelled")
-        dialog.getButton(AlertDialog.BUTTON_NEGATIVE).performClick(); shadowOf(Looper.getMainLooper()).idle()
-        assertNull(fake.applied); assertNull(CarHotspotProfiles.draft(activity)); assertNull(CarHotspotProfiles.confirmed(activity))
+
+    @Test fun savingInlineCredentialsDoesNotApplyOrEnableTheSystemHotspot() {
+        val parent = card()
+        inputs(parent)[0].setText("Saved Car")
+        inputs(parent)[1].setText("abcdefgh")
+        button(parent, R.string.settings_hotspot_save).performClick()
+
+        assertEquals("Saved Car", CarHotspotProfiles.resolve(activity, manual = { null })?.profile?.ssid)
+        assertNull(fake.applied)
+        assertFalse(fake.enabled)
+        assertEquals(1, changes)
     }
-    @Test fun invalidRadioParametersKeepDialogOpenAndNeverWrite() {
-        val dialog = editor()
-        inputs(dialog)[2].setText("6") // Current band is 5 GHz.
-        dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
-        assertTrue(dialog.isShowing); assertNull(fake.applied)
-        assertTrue(views(dialog.window!!.decorView).filterIsInstance<TextView>().any { it.text == activity.getString(R.string.settings_hotspot_invalid_configuration) })
+
+    @Test fun changingCredentialsPreservesTheSavedRadioIntentAndInterface() {
+        CarHotspotProfiles.saveSaved(activity, profile)
+        AirPlayPersistence.saveManualHotspotInterface(activity, "eth0.3")
+        val parent = card()
+        inputs(parent)[0].setText("Updated Car")
+        inputs(parent)[1].setText("abcdefgh")
+        button(parent, R.string.settings_hotspot_save).performClick()
+
+        assertEquals(profile.copy(ssid = "Updated Car", passphrase = "abcdefgh"), CarHotspotProfiles.saved(activity))
+        assertEquals("eth0.3", AirPlayPersistence.loadManualHotspotInterface(activity))
+        assertNull(fake.applied)
     }
-    @Test fun saveSubmitsEveryFieldAndKeepsManualPreferencesUntouched() {
-        val legacy = activity.getSharedPreferences("xcertplay_airplay", 0)
-        legacy.edit().putString("manual-sentinel", "unchanged").commit(); val original = legacy.all.toMap()
-        val dialog = editor()
-        inputs(dialog)[0].setText("Configured Car"); inputs(dialog)[1].setText("abcdef12")
-        select(dialog, R.string.settings_hotspot_security, "WPA3")
+
+    @Test fun cancellingStartupOptionsDoesNotChangeTheSavedProfileOrHotspot() {
+        val dialog = startupDialog()
+        select(dialog, R.string.settings_hotspot_security, "WPA2")
         select(dialog, R.string.settings_hotspot_band, "2.4 GHz")
-        inputs(dialog)[2].setText("6")
+        dialog.getButton(AlertDialog.BUTTON_NEGATIVE).performClick()
+
+        assertEquals(profile, CarHotspotProfiles.saved(activity))
+        assertNull(fake.applied)
+        assertFalse(fake.enabled)
+    }
+
+    @Test fun confirmedStartupUsesTheSavedCredentialsAndChosenRadioOptions() {
+        val dialog = startupDialog()
+        select(dialog, R.string.settings_hotspot_security, "WPA2/WPA3")
+        select(dialog, R.string.settings_hotspot_band, "2.4 GHz")
+        select(dialog, R.string.settings_hotspot_channel, "6")
         dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
-        await { changes == 1 }
-        assertEquals(CarHotspotProfile("Configured Car", "abcdef12", ManualHotspotSecurity.WPA3, ManualHotspotBand.GHZ_2_4,6), fake.applied)
-        assertEquals(fake.applied, CarHotspotProfiles.draft(activity))
-        assertEquals(original, legacy.all)
+        await { fake.applied != null }
+
+        val expected = profile.copy(security = ManualHotspotSecurity.WPA3_TRANSITION, band = ManualHotspotBand.GHZ_2_4, channel = 6)
+        assertEquals(expected, fake.applied)
+        assertEquals(expected, CarHotspotProfiles.saved(activity))
+        assertFalse(fake.enabled)
     }
-    @Test fun startDoesNotApplyOrOverwriteAProfile() {
-        val parent = LinearLayout(activity);ui.build(parent)
-        views(parent).filterIsInstance<Button>().single { it.text == activity.getString(R.string.settings_hotspot_start) }.performClick()
-        await { changes == 1 }
-        assertTrue(fake.enabled);assertNull(fake.applied);assertNull(CarHotspotProfiles.draft(activity))
+
+    @Test fun aSessionStartingWhileTheHotspotRequestIsQueuedCancelsTheRequest() {
+        val entered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        fake.beforeApply = { entered.countDown(); check(release.await(3, TimeUnit.SECONDS)) }
+        val previous = ReflectionHelpers.getField<Any?>(CarPlayBackgroundSession, "stopAction")
+        try {
+            val dialog = startupDialog()
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+            assertTrue(entered.await(3, TimeUnit.SECONDS))
+            val stop: ((() -> Unit) -> Unit) = {}
+            ReflectionHelpers.setField(CarPlayBackgroundSession, "stopAction", stop)
+            release.countDown()
+            await { fake.completed }
+            assertNull("A new session must prevent the queued hotspot change", fake.applied)
+        } finally {
+            release.countDown()
+            ReflectionHelpers.setField(CarPlayBackgroundSession, "stopAction", previous)
+        }
     }
-    private fun editor(): AlertDialog {
-        ReflectionHelpers.callInstanceMethod<Unit>(ui, "showEditor", ReflectionHelpers.ClassParameter(CarHotspotProfile::class.java, profile))
+
+    @Test fun mismatchedSecurityKeepsOptionsOpenWithoutWritingOrStarting() {
+        val dialog = startupDialog()
+        select(dialog, R.string.settings_hotspot_security, activity.getString(R.string.open))
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+
+        assertTrue(dialog.isShowing)
+        assertEquals(profile, CarHotspotProfiles.saved(activity))
+        assertNull(fake.applied)
+        assertTrue(views(dialog.window!!.decorView).filterIsInstance<TextView>().any {
+            it.text == activity.getString(R.string.settings_hotspot_invalid_security_password)
+        })
+    }
+
+    @Test fun invalidInlinePasswordCannotReplaceAValidSavedProfile() {
+        CarHotspotProfiles.saveSaved(activity, profile)
+        val parent = card()
+        inputs(parent)[1].setText("short")
+        button(parent, R.string.settings_hotspot_save).performClick()
+        assertEquals(profile, CarHotspotProfiles.saved(activity))
+        assertNull(fake.applied)
+        assertEquals(0, changes)
+    }
+
+    @Test fun startRequiresAnExplicitlySavedProfile() {
+        button(card(), R.string.settings_hotspot_start).performClick()
+        assertNull(fake.applied)
+        assertFalse(fake.enabled)
+        assertFalse(ShadowAlertDialog.getLatestAlertDialog()?.isShowing == true)
+    }
+
+    @Test fun passwordVisibilityDoesNotChangeTheSavedOrEditedValue() {
+        CarHotspotProfiles.saveSaved(activity, profile)
+        val parent = card()
+        val password = inputs(parent)[1]
+        button(parent, R.string.settings_hotspot_show_password).performClick()
+        assertNull(password.transformationMethod)
+        assertEquals(profile.passphrase, password.text.toString())
+        button(parent, R.string.settings_hotspot_hide_password).performClick()
+        assertNotNull(password.transformationMethod)
+        assertEquals(profile, CarHotspotProfiles.saved(activity))
+    }
+
+    @Test fun cancellingInterfaceEditKeepsTheExistingOverride() {
+        CarHotspotProfiles.saveSaved(activity, profile)
+        AirPlayPersistence.saveManualHotspotInterface(activity, "eth0.3")
+        val parent = card()
+        views(parent).filterIsInstance<Button>().single {
+            it.text.startsWith(activity.getString(R.string.settings_hotspot_interface_short) + " · ")
+        }.performClick()
+        val dialog = ShadowAlertDialog.getLatestAlertDialog()
+        inputs(dialog.window!!.decorView).single().setText("wlan0")
+        dialog.getButton(AlertDialog.BUTTON_NEGATIVE).performClick()
+        assertEquals("eth0.3", AirPlayPersistence.loadManualHotspotInterface(activity))
+        assertEquals(profile, CarHotspotProfiles.saved(activity))
+    }
+
+    private fun card() = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL; ui.build(this) }
+    private fun startupDialog(): AlertDialog {
+        CarHotspotProfiles.saveSaved(activity, profile)
+        button(card(), R.string.settings_hotspot_start).performClick()
         shadowOf(Looper.getMainLooper()).idle()
         return ShadowAlertDialog.getLatestAlertDialog()
     }
-    private fun inputs(dialog: AlertDialog) = views(dialog.window!!.decorView).filterIsInstance<EditText>().toList()
+    private fun inputs(root: View) = views(root).filterIsInstance<EditText>().toList()
+    private fun button(root: View, id: Int) = views(root).filterIsInstance<Button>().single { it.text == activity.getString(id) }
     private fun select(dialog: AlertDialog, title: Int, value: String) {
-        views(dialog.window!!.decorView).filterIsInstance<Button>().single { it.text.startsWith(activity.getString(title)+" · ") }.performClick()
-        val choice=ShadowAlertDialog.getLatestAlertDialog()
-        val index=(0 until choice.listView.adapter.count).single { choice.listView.adapter.getItem(it).toString()==value }
-        choice.listView.performItemClick(null,index,index.toLong())
-        choice.getButton(AlertDialog.BUTTON_POSITIVE).performClick();shadowOf(Looper.getMainLooper()).idle()
+        views(dialog.window!!.decorView).filterIsInstance<Button>().single {
+            it.text.startsWith(activity.getString(title) + " · ")
+        }.performClick()
+        val choice = ShadowAlertDialog.getLatestAlertDialog()
+        val index = (0 until choice.listView.adapter.count).single { choice.listView.adapter.getItem(it).toString() == value }
+        choice.listView.performItemClick(null, index, index.toLong())
+        choice.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        shadowOf(Looper.getMainLooper()).idle()
     }
-    private fun await(predicate:()->Boolean) {
-        val end=System.nanoTime()+3_000_000_000L
-        while(!predicate() && System.nanoTime()<end){shadowOf(Looper.getMainLooper()).idle();Thread.sleep(10)}
-        assertTrue("Background operation did not complete",predicate())
+    private fun await(predicate: () -> Boolean) {
+        val end = System.nanoTime() + 3_000_000_000L
+        while (!predicate() && System.nanoTime() < end) { shadowOf(Looper.getMainLooper()).idle(); Thread.sleep(10) }
+        shadowOf(Looper.getMainLooper()).idle()
+        assertTrue("Background operation did not complete", predicate())
     }
-    private fun views(v:View):Sequence<View> = sequence {yield(v);if(v is ViewGroup)for(i in 0 until v.childCount)yieldAll(views(v.getChildAt(i)))}
+    private fun views(view: View): Sequence<View> = sequence {
+        yield(view)
+        if (view is ViewGroup) for (i in 0 until view.childCount) yieldAll(views(view.getChildAt(i)))
+    }
 }

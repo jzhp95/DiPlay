@@ -38,7 +38,7 @@
     <application>
         <service android:name="com.shilapi.xcertplay.CarHotspotBootService"
             android:permission="android.permission.BIND_JOB_SERVICE" android:exported="true" />
-        <activity android:name="com.shilapi.xcertplay.WheelTestActivity" android:exported="false" android:configChanges="uiMode" />
+        <activity android:name="com.shilapi.xcertplay.WheelTestActivity" android:exported="false" android:configChanges="uiMode|orientation|screenSize|smallestScreenSize|screenLayout|density|fontScale" />
         <provider
             android:name="com.shilapi.xcertplay.CrashRecordInstaller"
             android:authorities="${applicationId}.crash-record"

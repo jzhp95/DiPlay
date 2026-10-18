@@ -117,6 +117,94 @@ class WheelTestActivityTest {
         } finally { activity.pause().stop().destroy() }
     }
 
+    @Test fun mfiMenuChangesTheDetailsWithoutStartingWheelFocus() {
+        val activity = Robolectric.buildActivity(WheelTestActivity::class.java).setup()
+        try {
+            val screen = activity.get()
+            val probe = ReflectionHelpers.getField<WheelTestController>(screen, "controller")
+            menu(screen, "MFi 认证测试").performClick()
+            assertFalse(probe.snapshot().running)
+            assertFalse(descendants(screen.window.decorView).filterIsInstance<Button>().any {
+                it.isShown && it.text == screen.getString(R.string.wheel_test_acquire)
+            })
+            menu(screen, "方控测试").performClick()
+            assertTrue(descendants(screen.window.decorView).filterIsInstance<Button>().any {
+                it.isShown && it.text == screen.getString(R.string.wheel_test_acquire)
+            })
+            assertFalse(probe.snapshot().running)
+        } finally { activity.pause().stop().destroy() }
+    }
+
+    @Test fun leavingWheelDetailsStopsFocusAndReturningDoesNotRestartIt() {
+        val activity = Robolectric.buildActivity(WheelTestActivity::class.java).setup()
+        try {
+            val screen = activity.get()
+            val probe = ReflectionHelpers.getField<WheelTestController>(screen, "controller")
+            descendants(screen.window.decorView).filterIsInstance<Button>().single {
+                it.text == screen.getString(R.string.wheel_test_acquire)
+            }.performClick()
+            assertTrue(probe.snapshot().running)
+            menu(screen, "MFi 认证测试").performClick()
+            assertFalse("离开方控详情应立即释放测试焦点", probe.snapshot().running)
+            menu(screen, "方控测试").performClick()
+            assertFalse("返回方控详情需要再次显式获取焦点", probe.snapshot().running)
+        } finally { activity.pause().stop().destroy() }
+    }
+
+    @Test fun changingToMfiInvalidatesAPendingDisconnectAndStart() {
+        val owner = CarPlayBackgroundSession
+        val previous = ReflectionHelpers.getField<Any?>(owner, "stopAction")
+        var completion: (() -> Unit)? = null
+        val stopAction: ((() -> Unit) -> Unit) = { completion = it }
+        ReflectionHelpers.setField(owner, "stopAction", stopAction)
+        val activity = Robolectric.buildActivity(WheelTestActivity::class.java).setup()
+        try {
+            val screen = activity.get()
+            val probe = ReflectionHelpers.getField<WheelTestController>(screen, "controller")
+            descendants(screen.window.decorView).filterIsInstance<Button>().single {
+                it.text == screen.getString(R.string.wheel_test_acquire)
+            }.performClick()
+            ShadowAlertDialog.getLatestAlertDialog()
+                .getButton(android.app.AlertDialog.BUTTON_POSITIVE).performClick()
+            org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+            assertNotNull("测试应等待现有 CarPlay 会话释放", completion)
+            menu(screen, "MFi 认证测试").performClick()
+            ReflectionHelpers.setField(owner, "stopAction", null)
+            completion!!.invoke()
+            assertFalse("菜单已切换时，延迟完成回调不能重新开启方控焦点", probe.snapshot().running)
+        } finally {
+            activity.pause().stop().destroy()
+            ReflectionHelpers.setField(owner, "stopAction", previous)
+        }
+    }
+
+    @Test fun mfiSelectionAndResultsSurviveAppearanceRebuild() {
+        val activity = Robolectric.buildActivity(WheelTestActivity::class.java).setup()
+        try {
+            val screen = activity.get()
+            menu(screen, "MFi 认证测试").performClick()
+            val probe = ReflectionHelpers.getField<MfiTestController>(screen, "mfiController")
+            ReflectionHelpers.getField<java.util.concurrent.ExecutorService>(probe, "worker")
+                .submit {}.get(5, java.util.concurrent.TimeUnit.SECONDS)
+            org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+            val before = probe.snapshot()
+            val text = ReflectionHelpers.getField<MfiTestLayout.Views>(screen, "mfiViews").local.text.toString()
+            screen.onConfigurationChanged(screen.resources.configuration)
+            assertSame(probe, ReflectionHelpers.getField<MfiTestController>(screen, "mfiController"))
+            assertEquals(before, probe.snapshot())
+            assertTrue(menu(screen, "MFi 认证测试").isSelected)
+            assertEquals(text, ReflectionHelpers.getField<MfiTestLayout.Views>(screen, "mfiViews").local.text.toString())
+            assertFalse(ReflectionHelpers.getField<WheelTestLayout.Views>(screen, "views").root.isShown)
+        } finally { activity.pause().stop().destroy() }
+    }
+
+    private fun menu(screen: WheelTestActivity, title: String): Button {
+        val button = descendants(screen.window.decorView).filterIsInstance<Button>()
+            .firstOrNull { it.isShown && it.text == title }
+        assertNotNull("应提供“$title”左侧测试菜单", button)
+        return button!!
+    }
+
     private fun descendants(view: View): Sequence<View> = sequence {
         yield(view)
         if (view is ViewGroup) for (i in 0 until view.childCount) yieldAll(descendants(view.getChildAt(i)))

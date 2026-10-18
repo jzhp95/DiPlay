@@ -463,6 +463,54 @@ class CarPlayHostSettingsTest {
         assertEquals(staged, AirPlayPersistence.loadDisplayScalePercent(activity))
     }
 
+    @Test fun savingUnrelatedHostSettingsKeepsNewerSavedHotspotAndInterface() {
+        AirPlayPersistence.saveManualHotspotSsid(activity, "Old car")
+        AirPlayPersistence.saveManualHotspotPassphrase(activity, "old-password")
+        AirPlayPersistence.saveManualHotspotInterface(activity, "eth0.3")
+        invoke("loadPersistedSettings")
+        attachController()
+        invoke("openSettingsMenu")
+        activity.getSharedPreferences("diplay_managed_hotspot", 0).edit()
+            .putString("saved_ssid", "Newer car")
+            .putString("saved_password", "newer-password")
+            .putString("saved_security", "WPA3")
+            .putString("saved_band", "AUTO")
+            .putInt("saved_channel", 0).commit()
+        AirPlayPersistence.saveManualHotspotInterface(activity, "eth0.4")
+        resolutionSlider().progress = 0
+
+        saveButton().performClick()
+
+        assertFalse(field("menuOpen") as Boolean)
+        assertEquals("Newer car", AirPlayPersistence.loadManualHotspotSsid(activity))
+        assertEquals("newer-password", AirPlayPersistence.loadManualHotspotPassphrase(activity))
+        assertEquals(ManualHotspotSecurity.WPA3, AirPlayPersistence.loadManualHotspotSecurity(activity))
+        assertEquals(ManualHotspotBand.AUTO, AirPlayPersistence.loadManualHotspotBand(activity))
+        assertEquals(0, AirPlayPersistence.loadManualHotspotChannel(activity))
+        assertEquals("eth0.4", AirPlayPersistence.loadManualHotspotInterface(activity))
+    }
+
+    @Test fun savingEditedHostCredentialsUpdatesTheCompleteSavedProfile() {
+        AirPlayPersistence.saveWirelessHotspotMode(activity, WirelessHotspotMode.MANUAL)
+        AirPlayPersistence.saveManualHotspotSsid(activity, "Old car")
+        AirPlayPersistence.saveManualHotspotPassphrase(activity, "old-password")
+        invoke("loadPersistedSettings")
+        attachController()
+        invoke("openSettingsMenu")
+        setField("manualHotspotSsid", "Edited car")
+        setField("manualHotspotPassphrase", "edited-password")
+        setField("manualHotspotSecurity", ManualHotspotSecurity.WPA3_TRANSITION)
+        setField("manualHotspotBand", ManualHotspotBand.GHZ_5)
+        setField("manualHotspotChannel", 149)
+
+        saveButton().performClick()
+
+        assertFalse(field("menuOpen") as Boolean)
+        val selected = com.shilapi.xcertplay.network.CarHotspotProfiles.resolve(activity, manual = { null })
+        assertEquals(com.shilapi.xcertplay.network.CarHotspotProfile("Edited car", "edited-password",
+            ManualHotspotSecurity.WPA3_TRANSITION, ManualHotspotBand.GHZ_5, 149), selected?.profile)
+    }
+
     @Test fun returningFromFullSettingsReloadsSavedConnectionPreferences() {
         attachController()
         invoke("openSettingsMenu")

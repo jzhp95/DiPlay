@@ -152,7 +152,7 @@ object SettingsWidgets {
                 applyTextStyle(context, theme)
             }
             textCol.addView(labelView)
-            textCol.addView(descView)
+            if (description.isNotBlank()) textCol.addView(descView)
             row.addView(textCol, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             row.addView(switch)
             // The whole row is the target; the switch stays out of the focus order so D-pad stops once.

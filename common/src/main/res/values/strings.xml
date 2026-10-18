@@ -990,7 +990,20 @@
     <string name="settings_hotspot_invalid_configuration">请检查热点名称、密码、加密方式、频段和信道。开放网络密码应留空，其他加密方式密码需为 8–63 位；信道必须匹配所选频段。</string>
     <string name="settings_hotspot_working">正在操作车机热点，请稍候…</string>
     <string name="settings_hotspot_operation_success">车机热点已开启。</string>
-    <string name="settings_hotspot_operation_failed">车机热点操作失败或未能确认生效。请导出调试日志；仍可通过系统设置开启热点并手动保存信息。</string>
-    <string name="settings_hotspot_no_profile">未获取到可用的热点配置。请先配置车机热点；自动配置不可用时，再手动保存热点信息。</string>
+    <string name="settings_hotspot_operation_failed">热点操作失败或未能确认生效。</string>
+    <string name="settings_hotspot_no_profile">请先保存热点名称和密码。</string>
     <string name="settings_hotspot_security">加密方式</string>
+    <string name="settings_hotspot_save">保存热点配置</string>
+    <string name="settings_hotspot_credentials_saved">热点配置已保存，下次连接生效。</string>
+    <string name="settings_hotspot_ssid_placeholder">请输入热点名称</string>
+    <string name="settings_hotspot_password_placeholder">请输入热点密码</string>
+    <string name="settings_hotspot_show_password">显示</string>
+    <string name="settings_hotspot_hide_password">隐藏</string>
+    <string name="settings_hotspot_start_confirm">应用并开启</string>
+    <string name="settings_hotspot_disconnect_and_start">断开并开启热点</string>
+    <string name="settings_hotspot_save_first">请先保存热点名称和密码。</string>
+    <string name="settings_hotspot_interface_auto">自动检测</string>
+    <string name="settings_hotspot_invalid_security_password">加密方式与已保存的密码不匹配。开放网络请清空密码；加密网络需要有效密码。</string>
+    <string name="settings_hotspot_session_changed">CarPlay 会话已变化，请重新确认开启热点。</string>
+    <string name="settings_hotspot_interface_short">网络接口</string>
 </resources>

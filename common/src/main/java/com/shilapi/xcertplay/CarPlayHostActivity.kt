@@ -552,6 +552,8 @@ class CarPlayHostActivity : ComponentActivity() {
     private var manualHotspotChannel = 0
     private var manualHotspotSecurity = ManualHotspotSecurity.OPEN
     private var manualHotspotInterface = ""
+    private var loadedManualHotspotProfile: com.shilapi.xcertplay.network.CarHotspotProfile? = null
+    private var loadedManualHotspotInterface = ""
     private var awaitingVpnConsent = false
     private var vpnAdbConsentTried = false
     private var awaitingWirelessPermissions = false
@@ -934,6 +936,8 @@ class CarPlayHostActivity : ComponentActivity() {
         manualHotspotChannel = AirPlayPersistence.loadManualHotspotChannel(this)
         manualHotspotSecurity = AirPlayPersistence.loadManualHotspotSecurity(this)
         manualHotspotInterface = AirPlayPersistence.loadManualHotspotInterface(this)
+        loadedManualHotspotProfile = stagedManualHotspotProfile()
+        loadedManualHotspotInterface = manualHotspotInterface
     }
 
     private fun requestStartupPrerequisites() {
@@ -3371,6 +3375,10 @@ class CarPlayHostActivity : ComponentActivity() {
         return overlay
     }
 
+    private fun stagedManualHotspotProfile() = com.shilapi.xcertplay.network.CarHotspotProfile(
+        manualHotspotSsid, manualHotspotPassphrase, manualHotspotSecurity, manualHotspotBand, manualHotspotChannel,
+    )
+
     private fun persistMenuSettings() {
         AirPlayPersistence.saveHideBydCallPopup(this, hideBydCallPopup)
         AirPlayPersistence.saveSettingsGestureFingers(this, gestureFingerCount)
@@ -3381,12 +3389,16 @@ class CarPlayHostActivity : ComponentActivity() {
         AirPlayPersistence.saveRemoteMfiToken(this, remoteMfiToken)
         AirPlayPersistence.saveWirelessHotspotMode(this, wirelessHotspotMode)
         AirPlayPersistence.saveExistingWifiCredentials(this, existingWifiSsid, existingWifiPassphrase)
-        AirPlayPersistence.saveManualHotspotSsid(this, manualHotspotSsid)
-        AirPlayPersistence.saveManualHotspotPassphrase(this, manualHotspotPassphrase)
-        AirPlayPersistence.saveManualHotspotBand(this, manualHotspotBand)
-        AirPlayPersistence.saveManualHotspotChannel(this, manualHotspotChannel)
-        AirPlayPersistence.saveManualHotspotSecurity(this, manualHotspotSecurity)
-        AirPlayPersistence.saveManualHotspotInterface(this, manualHotspotInterface)
+        val editedHotspot = stagedManualHotspotProfile()
+        // Unrelated menu saves must not write stale cached credentials over newer full settings.
+        if (editedHotspot != loadedManualHotspotProfile && editedHotspot.error() == null) {
+            com.shilapi.xcertplay.network.CarHotspotProfiles.saveSaved(this, editedHotspot)
+            loadedManualHotspotProfile = editedHotspot
+        }
+        if (manualHotspotInterface != loadedManualHotspotInterface) {
+            AirPlayPersistence.saveManualHotspotInterface(this, manualHotspotInterface)
+            loadedManualHotspotInterface = manualHotspotInterface
+        }
         AirPlayPersistence.saveLocationReportingEnabled(this, locationReportingEnabled)
         AirPlayPersistence.saveAutoStartOnBoot(this, autoStartOnBoot)
         AirPlayPersistence.saveAdvancedAudioChannelMapping(this, advancedAudioChannelMapping)

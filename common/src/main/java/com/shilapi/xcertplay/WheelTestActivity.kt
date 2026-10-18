@@ -24,6 +24,11 @@ class WheelTestActivity : Activity(), AppAppearanceOwner {
     private var appearanceObserverRemoval: (() -> Unit)? = null
     private lateinit var controller: WheelTestController
     private lateinit var views: WheelTestLayout.Views
+    private lateinit var diagnosticsViews: DiagnosticsTestLayout.Views
+    private lateinit var mfiController: MfiTestController
+    private lateinit var mfiLayout: MfiTestLayout
+    private lateinit var mfiViews: MfiTestLayout.Views
+    private var selectedPage = DiagnosticsTestLayout.Page.WHEEL
     private val appearanceHandler = Handler(Looper.getMainLooper())
     private val appearancePoll = object : Runnable {
         override fun run() {
@@ -42,11 +47,16 @@ class WheelTestActivity : Activity(), AppAppearanceOwner {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         controller = WheelTestController(this, ::showState)
+        mfiController = MfiTestController(this, ::showMfiState)
+        selectedPage = savedInstanceState?.getString("diagnostics_page")?.let { name ->
+            DiagnosticsTestLayout.Page.entries.firstOrNull { it.name == name }
+        } ?: DiagnosticsTestLayout.Page.WHEEL
         renderAppearance()
     }
 
     private fun renderAppearance() {
         val scrollY = if (::views.isInitialized) views.root.scrollY else 0
+        val mfiScrollY = if (::mfiViews.isInitialized) mfiViews.root.scrollY else 0
         currentAppNight = resolveAppNightNow()
         val palette = DiPlayPalette.of(currentAppNight)
         window.setBackgroundDrawable(ColorDrawable(palette.background))
@@ -59,16 +69,20 @@ class WheelTestActivity : Activity(), AppAppearanceOwner {
         views = WheelTestLayout(this, palette).build(DetailedDebugLog.enabled(this), { enabled ->
             DetailedDebugLog.setEnabled(this, enabled)
             Toast.makeText(this, if (enabled) R.string.settings_detailed_debug_started else R.string.settings_detailed_debug_stopped, Toast.LENGTH_SHORT).show()
-        }, ::action)
-        ViewCompat.setOnApplyWindowInsetsListener(views.root) { view, insets ->
+        }, ::action, availableWidthDp = DiagnosticsTestLayout.detailWidthDp(resources.configuration.screenWidthDp))
+        mfiLayout = MfiTestLayout(this, palette)
+        mfiViews = mfiLayout.build(mfiController::refresh, mfiController::probe, ::finish)
+        diagnosticsViews = DiagnosticsTestLayout(this, palette).build(views.root, mfiViews.root, selectedPage, ::selectPage)
+        ViewCompat.setOnApplyWindowInsetsListener(diagnosticsViews.root) { view, insets ->
             val safe = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
             view.setPadding(safe.left, safe.top, safe.right, safe.bottom)
             insets
         }
-        setContentView(views.root)
+        setContentView(diagnosticsViews.root)
         showState(controller.snapshot())
-        val root = views.root
-        root.post { root.scrollTo(0, scrollY) }
+        showMfiState(mfiController.snapshot())
+        views.root.post { views.root.scrollTo(0, scrollY) }
+        mfiViews.root.post { mfiViews.root.scrollTo(0, mfiScrollY) }
     }
 
     override fun onResume() {
@@ -83,6 +97,29 @@ class WheelTestActivity : Activity(), AppAppearanceOwner {
         appearanceHandler.removeCallbacks(appearancePoll)
         appearanceHandler.postDelayed(appearancePoll, 5_000L)
         showState(controller.snapshot())
+        if (selectedPage == DiagnosticsTestLayout.Page.MFI) mfiController.refresh()
+    }
+
+    private fun selectPage(page: DiagnosticsTestLayout.Page) {
+        if (page == selectedPage) return
+        startGeneration++
+        disconnectDialog?.dismiss()
+        disconnectDialog = null
+        if (page != DiagnosticsTestLayout.Page.WHEEL) controller.stop()
+        if (page != DiagnosticsTestLayout.Page.MFI) mfiController.cancel()
+        selectedPage = page
+        diagnosticsViews.select(page)
+        showState(controller.snapshot())
+        if (page == DiagnosticsTestLayout.Page.MFI && foreground) mfiController.refresh()
+    }
+
+    private fun showMfiState(state: MfiTestController.State) {
+        if (::mfiViews.isInitialized) mfiLayout.show(mfiViews, state)
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putString("diagnostics_page", selectedPage.name)
+        super.onSaveInstanceState(outState)
     }
 
     private fun checkAppearance() {
@@ -91,7 +128,7 @@ class WheelTestActivity : Activity(), AppAppearanceOwner {
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        checkAppearance()
+        renderAppearance()
     }
 
     private fun action(action: WheelTestLayout.Action) {
@@ -109,7 +146,7 @@ class WheelTestActivity : Activity(), AppAppearanceOwner {
     }
 
     private fun acquire() {
-        if (!foreground) return
+        if (!foreground || selectedPage != DiagnosticsTestLayout.Page.WHEEL) return
         if (!CarPlayBackgroundSession.hasSession()) { controller.start(); return }
         if (disconnectDialog?.isShowing == true) return
         disconnectDialog = appDialogBuilder().setTitle(R.string.wheel_test_title)
@@ -120,7 +157,7 @@ class WheelTestActivity : Activity(), AppAppearanceOwner {
                 views.acquire.isEnabled = false
                 CarPlayBackgroundSession.stop {
                     runOnUiThread {
-                        if (!isFinishing && foreground && startGeneration == expected && !CarPlayBackgroundSession.hasSession()) {
+                        if (!isFinishing && foreground && selectedPage == DiagnosticsTestLayout.Page.WHEEL && startGeneration == expected && !CarPlayBackgroundSession.hasSession()) {
                             controller.start()
                         } else if (foreground && startGeneration == expected) {
                             showState(controller.snapshot())
@@ -161,7 +198,7 @@ class WheelTestActivity : Activity(), AppAppearanceOwner {
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        if (::controller.isInitialized && controller.key(event, "前台按键")) return true
+        if (selectedPage == DiagnosticsTestLayout.Page.WHEEL && ::controller.isInitialized && controller.key(event, "前台按键")) return true
         return super.dispatchKeyEvent(event)
     }
 
@@ -174,11 +211,13 @@ class WheelTestActivity : Activity(), AppAppearanceOwner {
         disconnectDialog?.dismiss()
         disconnectDialog = null
         if (::controller.isInitialized) controller.stop()
+        if (::mfiController.isInitialized) mfiController.cancel()
         super.onStop()
     }
 
     override fun onDestroy() {
         if (::controller.isInitialized) controller.close()
+        if (::mfiController.isInitialized) mfiController.close()
         super.onDestroy()
     }
 }

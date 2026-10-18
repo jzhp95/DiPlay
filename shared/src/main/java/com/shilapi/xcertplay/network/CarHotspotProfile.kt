@@ -34,11 +34,11 @@ data class CarHotspotProfile(
     }
 }
 
-enum class CarHotspotProfileSource { SYSTEM, CONFIRMED, MANUAL }
+enum class CarHotspotProfileSource { SAVED, SYSTEM, CONFIRMED, MANUAL }
 data class ResolvedCarHotspotProfile(val profile: CarHotspotProfile, val source: CarHotspotProfileSource)
 
 object CarHotspotProfileSelection {
-    /** Lazy loaders keep the manual store completely out of the successful managed path. */
+    /** Initial import order only; an existing saved profile is resolved before these loaders. */
     fun resolve(
         system: () -> CarHotspotProfile?,
         confirmed: () -> CarHotspotProfile?,

@@ -2090,20 +2090,14 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
 
     private fun wirelessLinkControls(parent: LinearLayout) {
         val mode = selectedWirelessHotspotMode()
-        parent.addView(label(getString(when (mode) {
-            WirelessHotspotMode.MANUAL -> R.string.hotspot_mode_manual_desc
-            WirelessHotspotMode.EXISTING_WIFI -> R.string.existing_wifi_description
-            else -> R.string.hotspot_mode_p2p_desc
-        }), 16, MUTED))
+        if (mode != WirelessHotspotMode.MANUAL) {
+            parent.addView(label(getString(if (mode == WirelessHotspotMode.EXISTING_WIFI)
+                R.string.existing_wifi_description else R.string.hotspot_mode_p2p_desc), 16, MUTED))
+        }
         if (mode == WirelessHotspotMode.MANUAL) {
             val ui = hotspotSettingsUi ?: CarHotspotSettingsUi(this,
-                changed = { markReconnectNeeded(); render() },
+                changed = { pendingCarHotspotSetup = false; markReconnectNeeded(); render() },
                 redraw = { render() },
-                manualDetails = { askHotspotCredentials { ssid, password, security ->
-                    saveHotspotCredentials(ssid, password, security)
-                    pendingCarHotspotSetup = false
-                    render()
-                } },
             ).also { hotspotSettingsUi = it }
             ui.build(parent)
         } else if (mode == WirelessHotspotMode.EXISTING_WIFI) {
@@ -2259,11 +2253,11 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
     )
 
     private fun saveHotspotCredentials(ssid: String, password: String, security: ManualHotspotSecurity) {
-        AirPlayPersistence.saveManualHotspotSsid(this, ssid)
-        AirPlayPersistence.saveManualHotspotPassphrase(this, password)
-        AirPlayPersistence.saveManualHotspotSecurity(this, security)
-        AirPlayPersistence.saveManualHotspotBand(this, com.shilapi.xcertplay.orchestration.ManualHotspotBand.AUTO)
-        AirPlayPersistence.saveManualHotspotChannel(this, 0)
+        val previous = com.shilapi.xcertplay.network.CarHotspotProfiles.saved(this)
+        com.shilapi.xcertplay.network.CarHotspotProfiles.saveSaved(this,
+            com.shilapi.xcertplay.network.CarHotspotProfile(ssid, password, security,
+                previous?.band ?: com.shilapi.xcertplay.orchestration.ManualHotspotBand.AUTO,
+                previous?.channel ?: 0))
         markReconnectNeeded()
     }
 

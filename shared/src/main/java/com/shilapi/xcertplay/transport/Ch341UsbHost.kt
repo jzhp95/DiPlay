@@ -15,6 +15,9 @@ import android.os.Build
 import android.util.Log
 import java.io.Closeable
 import java.util.concurrent.Executor
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Semaphore
+import java.util.concurrent.TimeUnit
 
 /**
  * Android USB Host discovery and authorization for a configured CH341 identity.
@@ -28,6 +31,8 @@ class Ch341UsbHost(
     private val usbManager: UsbManager,
     private val matcher: Ch341DeviceMatcher,
     private val permissionAction: String = "${context.packageName}.CH341_USB_PERMISSION",
+    private val diagnostic: Boolean = false,
+    private val canOpen: () -> Boolean = { true },
 ) {
     private val appContext = context.applicationContext
     sealed class PermissionRequest {
@@ -110,14 +115,36 @@ class Ch341UsbHost(
         }
         val endpoints = findBulkEndpoints(device)
             ?: throw I2cTransportException.DeviceUnavailable("No USB interface has both bulk IN and OUT endpoints")
-        val connection = usbManager.openDevice(device)
-            ?: throw I2cTransportException.DeviceUnavailable("UsbManager could not open the CH341 device")
-
-        if (!connection.claimInterface(endpoints.usbInterface, true)) {
-            connection.close()
-            throw I2cTransportException.DeviceUnavailable("Could not claim CH341 USB interface")
+        // All normal and diagnostic hosts share ownership until the session is closed.
+        // A probe never waits for or forcefully detaches an existing owner.
+        val ownership = owners.getOrPut(device.deviceName) { Semaphore(1, true) }
+        val acquired = try {
+            if (diagnostic) ownership.tryAcquire() else ownership.tryAcquire(OWNER_WAIT_MILLIS, TimeUnit.MILLISECONDS)
+        } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
+            false
         }
-        return Ch341UsbSession(connection, endpoints.usbInterface, endpoints.input, endpoints.output)
+        if (!acquired) throw I2cTransportException.DeviceUnavailable("CH341 USB interface is busy")
+        var connection: UsbDeviceConnection? = null
+        try {
+            if (!canOpen() || Thread.currentThread().isInterrupted)
+                throw I2cTransportException.DeviceUnavailable("CH341 open cancelled")
+            connection = usbManager.openDevice(device)
+                ?: throw I2cTransportException.DeviceUnavailable("UsbManager could not open the CH341 device")
+            // openDevice may block while the foreground session or diagnostic page changes.
+            if (!canOpen() || Thread.currentThread().isInterrupted)
+                throw I2cTransportException.DeviceUnavailable("CH341 open cancelled")
+            if (!connection.claimInterface(endpoints.usbInterface, !diagnostic))
+                throw I2cTransportException.DeviceUnavailable("Could not claim CH341 USB interface")
+            return Ch341UsbSession(connection, endpoints.usbInterface, endpoints.input, endpoints.output) { ownership.release() }
+        } catch (error: Exception) {
+            try { connection?.close() } finally { ownership.release() }
+            throw when (error) {
+                is I2cTransportException -> error
+                is SecurityException -> I2cTransportException.PermissionDenied("CH341 USB permission was denied")
+                else -> I2cTransportException.DeviceUnavailable("Could not open CH341 USB interface", error)
+            }
+        }
     }
 
     private fun requireConfiguredDevice(device: UsbDevice) {
@@ -168,6 +195,8 @@ class Ch341UsbHost(
     )
 
     companion object {
+        private val owners = ConcurrentHashMap<String, Semaphore>()
+        private const val OWNER_WAIT_MILLIS = 5_000L
         /** `1a86:5512 /dev/bus/usb/001/004`: the USB identity and device node only, no serial number. */
         fun describe(device: UsbDevice): String =
             "%04x:%04x %s".format(device.vendorId, device.productId, device.deviceName)
@@ -180,6 +209,7 @@ class Ch341UsbSession internal constructor(
     private val usbInterface: UsbInterface,
     val inputEndpoint: UsbEndpoint,
     val outputEndpoint: UsbEndpoint,
+    private val releaseOwnership: () -> Unit = {},
 ) : Closeable {
     private var closed = false
 
@@ -264,8 +294,8 @@ class Ch341UsbSession internal constructor(
     override fun close() {
         if (closed) return
         closed = true
-        connection.releaseInterface(usbInterface)
-        connection.close()
+        try { connection.releaseInterface(usbInterface) }
+        finally { try { connection.close() } finally { releaseOwnership() } }
     }
 
     private fun transfer(

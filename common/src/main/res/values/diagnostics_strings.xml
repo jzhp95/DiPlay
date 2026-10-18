@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="diagnostics_test_title">测试工具</string>
+    <string name="diagnostics_mfi_title">MFi 认证测试</string>
+    <string name="diagnostics_mfi_description">检查认证材料与 CH341 通信；最终认证结果以实际连接 iPhone 为准。</string>
+    <string name="diagnostics_mfi_local_title">本地认证材料</string>
+    <string name="diagnostics_mfi_usb_title">CH341 USB</string>
+    <string name="diagnostics_mfi_chip_title">认证芯片与证书</string>
+    <string name="diagnostics_mfi_refresh">刷新检查</string>
+    <string name="diagnostics_mfi_probe">授权并检测 CH341</string>
+    <string name="diagnostics_mfi_unchecked">尚未检查</string>
+    <string name="diagnostics_mfi_present">已检测到</string>
+    <string name="diagnostics_mfi_missing">未检测到</string>
+    <string name="diagnostics_mfi_installed">已安装材料</string>
+    <string name="diagnostics_mfi_bundled">应用内材料</string>
+    <string name="diagnostics_mfi_materials">来源：%1$s\n证书：%2$s\n私钥文件：%3$s\n%4$s</string>
+    <string name="diagnostics_mfi_materials_missing">材料不完整，无法验证证书与私钥配对。</string>
+    <string name="diagnostics_mfi_materials_invalid">材料解析或配对验证失败。</string>
+    <string name="diagnostics_mfi_materials_ready">证书可解析，私钥配对验证通过（%1$d 字节）。</string>
+    <string name="diagnostics_mfi_usb_unavailable">当前系统不提供 USB 主机服务。</string>
+    <string name="diagnostics_mfi_usb_absent">未检测到配置的 CH341（1A86:5512）。</string>
+    <string name="diagnostics_mfi_usb_devices">已检测到 %1$d 个 CH341\n%2$s\nUSB 权限：%3$s</string>
+    <string name="diagnostics_mfi_permission_missing">未授权</string>
+    <string name="diagnostics_mfi_permission_granted">已授权</string>
+    <string name="diagnostics_mfi_permission_denied">授权被拒绝</string>
+    <string name="diagnostics_mfi_permission_waiting">等待 USB 授权…</string>
+    <string name="diagnostics_mfi_permission_timeout">USB 授权未完成，可重新点击检测。</string>
+    <string name="diagnostics_mfi_not_probed">尚未主动检测。点击“授权并检测 CH341”后读取芯片与证书。</string>
+    <string name="diagnostics_mfi_refreshing">正在检查材料与 USB 状态…</string>
+    <string name="diagnostics_mfi_probing">正在读取认证芯片与证书…</string>
+    <string name="diagnostics_mfi_session_busy">当前存在 CarPlay 会话。主动检测暂不可用；本页不会断开会话。</string>
+    <string name="diagnostics_mfi_failed">USB 检测失败，请检查设备连接与权限后重试。</string>
+    <string name="diagnostics_mfi_cancelled">检测已取消，可重新点击检测。</string>
+    <string name="diagnostics_mfi_chip_missing">CH341 已打开，但未收到认证芯片响应。</string>
+    <string name="diagnostics_mfi_chip_unreadable">芯片有响应（地址 %1$s），证书无法读取。</string>
+    <string name="diagnostics_mfi_chip_ready">芯片有响应（地址 %1$s，协议版本 %2$s）\n证书可读取（%3$d 字节）。</string>
+</resources>

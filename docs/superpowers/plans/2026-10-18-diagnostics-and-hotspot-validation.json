@@ -1,0 +1,43 @@
+{
+  "date": "2026-10-18",
+  "focused": {
+    "tests": 256,
+    "failed": 0
+  },
+  "full": {
+    "flyme-eas": {
+      "tests": 10,
+      "failed": 0,
+      "skipped": 0,
+      "added": 0,
+      "resolved": 0
+    },
+    "shared": {
+      "tests": 1534,
+      "failed": 13,
+      "skipped": 1,
+      "added": 0,
+      "resolved": 0
+    },
+    "common": {
+      "tests": 1368,
+      "failed": 113,
+      "skipped": 0,
+      "added": 0,
+      "resolved": 0
+    },
+    "home": {
+      "tests": 6,
+      "failed": 2,
+      "skipped": 0,
+      "added": 0,
+      "resolved": 0
+    }
+  },
+  "full_ci_passed": false,
+  "ndk": "28.0.13004108",
+  "builds": "passed",
+  "lint": "passed",
+  "flyme_manifest": "passed",
+  "hardware_verified": false
+}

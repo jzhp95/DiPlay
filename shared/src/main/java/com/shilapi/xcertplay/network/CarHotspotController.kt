@@ -14,7 +14,7 @@ interface CarHotspotOperations {
     fun enable(cancelled: () -> Boolean = { false }): CarHotspotControlResult
 }
 
-/** Explicit AP changes only. Never disables client Wi-Fi or alters the legacy manual credentials. */
+/** Starts the saved configuration without changing client Wi-Fi or deleting legacy credentials. */
 class CarHotspotController(context: Context, private val log: (String) -> Unit = {}) : CarHotspotOperations {
     private val app = context.applicationContext
     private val wifi = app.getSystemService(WifiManager::class.java)
@@ -27,11 +27,23 @@ class CarHotspotController(context: Context, private val log: (String) -> Unit =
     override fun read(): CarHotspotProfile? = control.read()
 
     /** Run on a worker. All callers share the lock, including boot and UI requests. */
-    override fun apply(profile: CarHotspotProfile, cancelled: () -> Boolean): CarHotspotControlResult = lock.withLock {
-        control.apply(profile, cancelled).also { if (it.success) it.profile?.let { p -> CarHotspotProfiles.saveConfirmed(app, p) } }
+    override fun apply(profile: CarHotspotProfile, cancelled: () -> Boolean): CarHotspotControlResult {
+        val previousSaved = CarHotspotProfiles.saved(app)
+        return lock.withLock { applyAndRecord(profile, previousSaved, cancelled) }
+    }
+
+    private fun applyAndRecord(profile: CarHotspotProfile, previousSaved: CarHotspotProfile?, cancelled: () -> Boolean): CarHotspotControlResult {
+        return control.apply(profile, cancelled).also { result ->
+            if (result.success) {
+                // Keep AUTO and security intent in saved; the verified radio belongs in confirmed.
+                CarHotspotProfiles.saveSavedIfUnchanged(app, previousSaved, profile)
+                result.profile?.let { CarHotspotProfiles.saveConfirmed(app, it) }
+            }
+        }
     }
 
     override fun enable(cancelled: () -> Boolean): CarHotspotControlResult = lock.withLock {
+        CarHotspotProfiles.saved(app)?.let { return@withLock applyAndRecord(it, it, cancelled) }
         val direct = control.enable(cancelled)
         if (direct.success || cancelled()) return@withLock direct
         val fallback = CarHotspotTethering.enable(app, cancelled, timeoutMillis = 8_000, log = log)
