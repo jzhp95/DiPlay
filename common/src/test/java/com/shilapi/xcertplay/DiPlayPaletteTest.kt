@@ -15,31 +15,28 @@ import kotlin.math.pow
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33], manifest = Config.NONE)
 class DiPlayPaletteTest {
-    @Test fun darkPalettePreservesTheCurrentFlymeColors() {
-        val palette = DiPlayPalette.DARK
-        assertEquals(Color.rgb(18, 18, 18), palette.background)
-        assertEquals(Color.rgb(31, 31, 34), palette.surface)
-        assertEquals(Color.rgb(48, 48, 52), palette.button)
-        assertEquals(Color.rgb(66, 66, 72), palette.outline)
-        assertEquals(Color.rgb(40, 51, 70), palette.railSelected)
-        assertEquals(Color.rgb(66, 86, 116), palette.railSelectedOutline)
-        assertEquals(Color.rgb(245, 245, 247), palette.primaryText)
-        assertEquals(Color.rgb(174, 174, 184), palette.secondaryText)
-        assertEquals(Color.rgb(142, 184, 255), palette.accent)
-        assertEquals(Color.rgb(255, 196, 128), palette.warning)
-        assertEquals(Color.rgb(127, 205, 154), palette.success)
-        assertEquals(Color.rgb(190, 45, 45), palette.danger)
-        assertEquals(0x336F9FD9, palette.ripple)
-        assertFalse(palette.systemBarIconsAreDark)
+    @Test fun paletteKeepsBrandFillSeparateFromReadableTextAndDialogRoles() {
+        assertEquals(Color.rgb(32, 39, 46), DiPlayPalette.DARK.background)
+        assertEquals(Color.rgb(211, 219, 229), DiPlayPalette.LIGHT.background)
+        for (palette in listOf(DiPlayPalette.LIGHT, DiPlayPalette.DARK)) {
+            assertEquals(Color.rgb(19, 104, 251), palette.accent)
+            assertEquals(Color.WHITE, palette.onAccent)
+            assertEquals(palette.accent, palette.overlayAccent)
+            assertEquals(Color.WHITE, palette.overlayOnAccent)
+            assertEquals(255, Color.alpha(palette.dialogSurface))
+        }
+        assertEquals(Color.rgb(218, 226, 235), DiPlayPalette.LIGHT.dialogSurface)
+        assertEquals(Color.rgb(36, 40, 46), DiPlayPalette.DARK.dialogSurface)
+        assertFalse(DiPlayPalette.DARK.systemBarIconsAreDark)
     }
 
     @Test fun waitingScreenDelegationKeepsItsExactLightAndDarkColors() {
         assertEquals(
-            WaitingScreenColors(Color.rgb(18, 18, 18), Color.rgb(245, 245, 247), Color.rgb(174, 174, 184)),
+            WaitingScreenColors(Color.rgb(32, 39, 46), 0xE5FFFFFF.toInt(), 0x99FFFFFF.toInt()),
             WaitingScreenColors.of(night = true),
         )
         assertEquals(
-            WaitingScreenColors(Color.rgb(242, 243, 246), Color.rgb(28, 28, 30), Color.rgb(106, 108, 119)),
+            WaitingScreenColors(Color.rgb(211, 219, 229), 0xE5000000.toInt(), 0x99000000.toInt()),
             WaitingScreenColors.of(night = false),
         )
     }
@@ -48,7 +45,12 @@ class DiPlayPaletteTest {
         for (palette in listOf(DiPlayPalette.DARK, DiPlayPalette.LIGHT)) {
             assertContrastAtLeast(palette.primaryText, palette.background, 4.5)
             assertContrastAtLeast(palette.secondaryText, palette.background, 4.5)
-            assertContrastAtLeast(palette.accent, palette.background, 4.5)
+            assertContrastAtLeast(palette.accentText, palette.background, 4.5)
+            assertContrastAtLeast(palette.accent, palette.background, 3.0)
+            val surface = androidx.core.graphics.ColorUtils.compositeColors(palette.surface, palette.background)
+            assertContrastAtLeast(palette.accentText, surface, 4.5)
+            assertContrastAtLeast(palette.primaryText, surface, 4.5)
+            assertContrastAtLeast(palette.secondaryText, surface, 4.5)
             assertContrastAtLeast(palette.onAccent, palette.accent, 4.5)
             assertContrastAtLeast(palette.warning, palette.background, 4.5)
             assertContrastAtLeast(palette.success, palette.background, 4.5)
@@ -56,21 +58,20 @@ class DiPlayPaletteTest {
             assertContrastAtLeast(palette.danger, palette.background, 3.0)
             assertContrastAtLeast(palette.overlayPrimaryText, palette.overlayBackground, 4.5)
             assertContrastAtLeast(palette.overlaySecondaryText, palette.overlayBackground, 4.5)
-            assertContrastAtLeast(palette.overlayAccent, palette.overlayBackground, 4.5)
+            assertContrastAtLeast(palette.overlayAccentText, palette.overlayBackground, 4.5)
             assertContrastAtLeast(palette.overlayOnAccent, palette.overlayAccent, 4.5)
             assertContrastAtLeast(palette.overlayDanger, palette.overlayBackground, 3.0)
         }
-        assertContrastAtLeast(DiPlayPalette.LIGHT.accentTrack, DiPlayPalette.LIGHT.trackOff, 3.0)
-        assertContrastAtLeast(
-            DiPlayPalette.LIGHT.overlayAccentTrack,
-            DiPlayPalette.LIGHT.overlayTrackOff,
-            3.0,
-        )
+        // State is also conveyed by thumb position. Verify the checked content against its
+        // fill, rather than requiring unrelated on/off tracks to act as foreground text.
+        assertContrastAtLeast(Color.WHITE, DiPlayPalette.LIGHT.accentTrack, 4.5)
+        assertContrastAtLeast(Color.WHITE, DiPlayPalette.DARK.accentTrack, 4.5)
         assertTrue(DiPlayPalette.LIGHT.systemBarIconsAreDark)
     }
 
     private fun assertContrastAtLeast(foreground: Int, background: Int, minimum: Double) {
-        val foregroundLuminance = luminance(foreground)
+        val visible = androidx.core.graphics.ColorUtils.compositeColors(foreground, background)
+        val foregroundLuminance = luminance(visible)
         val backgroundLuminance = luminance(background)
         val ratio = (max(foregroundLuminance, backgroundLuminance) + 0.05) /
             (min(foregroundLuminance, backgroundLuminance) + 0.05)

@@ -5,8 +5,8 @@
     getResourceId(), so a literal colour there leaves the window with no background at all and
     dialogs draw over the screen behind them (#640, #617).
     -->
-    <color name="window_background_dark">#121212</color>
-    <color name="window_background_light">#F2F3F6</color>
-    <color name="dialog_background_dark">#1F1F22</color>
-    <color name="dialog_background_light">#FFFFFF</color>
+    <color name="window_background_dark">#20272E</color>
+    <color name="window_background_light">#D3DBE5</color>
+    <color name="dialog_background_dark">#24282E</color>
+    <color name="dialog_background_light">#DAE2EB</color>
 </resources>

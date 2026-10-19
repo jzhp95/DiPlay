@@ -57,7 +57,7 @@ object SettingsWidgets {
     ): TextView = TextView(context).apply {
         text = title
         textSize = if (theme.isOverlay) FlymeAutoStyle.BUTTON_TEXT_SP else 22f
-        setTextColor(if (theme.isOverlay) theme.accent else theme.textPrimary)
+        setTextColor(if (theme.isOverlay) theme.accentText else theme.textPrimary)
         applyTextStyle(context, theme, bold = true)
     }
 
@@ -284,7 +284,7 @@ object SettingsWidgets {
         val valueTextView = TextView(context).apply {
             text = "$initial%"
             textSize = 28f
-            setTextColor(theme.accent)
+            setTextColor(theme.accentText)
             applyTextStyle(context, theme, bold = true)
         }
         header.addView(

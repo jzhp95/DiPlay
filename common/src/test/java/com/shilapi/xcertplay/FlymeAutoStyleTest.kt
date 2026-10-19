@@ -13,14 +13,17 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [29], manifest = Config.NONE)
 class FlymeAutoStyleTest {
-    @Test fun chromeUsesNeutralLayersInsteadOfBlueTintedBackgrounds() {
-        for (p in listOf(DiPlayPalette.LIGHT, DiPlayPalette.DARK)) {
-            for(c in listOf(p.background, p.surface, p.button)) {
-                val channels = listOf(Color.red(c), Color.green(c), Color.blue(c))
-                assertTrue("Flyme surfaces must stay neutral", channels.max() - channels.min() <= 8)
-            }
-            assertTrue(Color.blue(p.accent) > Color.red(p.accent))
-        }
+    @Test fun chromeUsesTheVerifiedSystemBlueAndBlueGreyLayers() {
+        assertEquals(Color.rgb(19, 104, 251), DiPlayPalette.LIGHT.accent)
+        assertEquals(Color.rgb(19, 104, 251), DiPlayPalette.DARK.accent)
+        assertEquals(Color.WHITE, DiPlayPalette.DARK.onAccent)
+        assertEquals(Color.rgb(211, 219, 229), DiPlayPalette.LIGHT.background)
+        assertEquals(Color.rgb(32, 39, 46), DiPlayPalette.DARK.background)
+        assertEquals(0xE5F6FBFF.toInt(), DiPlayPalette.LIGHT.surface)
+        assertEquals(0x66495460, DiPlayPalette.DARK.surface)
+        val button = Button(RuntimeEnvironment.getApplication())
+        FlymeAutoStyle.button(button, DiPlayPalette.DARK, primary = true)
+        assertEquals("Night primary actions retain white content on the system brand blue", Color.WHITE, button.currentTextColor)
     }
 
     @Test fun homeActionsUseTheAppAccentAndRemainFunctional() {

@@ -54,7 +54,7 @@ internal class WheelTestLayout(private val context: Context, private val palette
             gravity = Gravity.CENTER
             typeface = Typeface.DEFAULT_BOLD
             minHeight = dp(90)
-            setTextColor(palette.accent)
+            setTextColor(palette.accentText)
         }
         feedback.addView(event, LinearLayout.LayoutParams(-1, -2))
         val status = text(R.string.wheel_test_stopped, FlymeAutoStyle.BODY_TEXT_SP)

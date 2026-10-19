@@ -3744,7 +3744,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
 
     private fun label(value: String, size: Int, color: Int, bold: Boolean = false, centreGlyphs: Boolean = false) =
         (if (centreGlyphs) HeaderTitleView(this) else TextView(this)).apply {
-        text = value; textSize = if (size in 14..15) FlymeAutoStyle.SECONDARY_TEXT_SP else size.toFloat(); setTextColor(color); gravity = Gravity.CENTER_VERTICAL
+        text = value; textSize = if (size in 14..15) FlymeAutoStyle.SECONDARY_TEXT_SP else size.toFloat(); setTextColor(if (color == ACCENT) palette.accentText else color); gravity = Gravity.CENTER_VERTICAL
         typeface = if (bold) Typeface.create("sans-serif-medium", Typeface.NORMAL) else Typeface.create("sans-serif", Typeface.NORMAL)
         setLineSpacing(dp(3).toFloat(), 1f)
     }

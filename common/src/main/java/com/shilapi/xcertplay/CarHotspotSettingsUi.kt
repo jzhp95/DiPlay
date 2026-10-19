@@ -134,7 +134,7 @@ internal class CarHotspotSettingsUi(
         val error = label("").apply {
             visibility = View.GONE
             accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
-            setTextColor(palette.accent)
+            setTextColor(palette.accentText)
         }
         parent.addView(error, gap())
         parent.addView(button(R.string.settings_hotspot_save, primary = true) {

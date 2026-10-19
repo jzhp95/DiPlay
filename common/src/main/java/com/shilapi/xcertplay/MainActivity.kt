@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -55,6 +56,10 @@ class MainActivity : ComponentActivity() {
                             onValueChange = { devicePath = it },
                             modifier = Modifier.fillMaxWidth(),
                             label = { Text("Linux I2C device") },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedLabelColor = androidx.compose.ui.graphics.Color(DiPlayPalette.of(appNight).accentText),
+                                cursorColor = androidx.compose.ui.graphics.Color(DiPlayPalette.of(appNight).accentText),
+                            ),
                             singleLine = true,
                             enabled = status !is DiagnosticStatus.Running,
                         )

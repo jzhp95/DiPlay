@@ -63,7 +63,7 @@ internal object CarDialogStyle {
         fun dp(value: Int) = (value * decor.resources.displayMetrics.density + .5f).toInt()
         val availableWidth = dp(decor.resources.configuration.screenWidthDp)
         val width = min(dp(MAX_WIDTH_DP), max(1, availableWidth - dp(WINDOW_MARGIN_DP * 2)))
-        window.setBackgroundDrawable(shape(palette.surface, dp(CORNER_DP).toFloat()))
+        window.setBackgroundDrawable(shape(palette.dialogSurface, dp(CORNER_DP).toFloat()))
         decor.clipToOutline = true
         window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
         window.attributes = window.attributes.apply { dimAmount = .6f }

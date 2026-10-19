@@ -4554,7 +4554,7 @@ class CarPlayHostActivity : ComponentActivity() {
     ): TextView = TextView(this).apply {
         this.text = text
         textSize = sizeSp
-        setTextColor(color)
+        setTextColor(if (color == MENU_ACCENT) overlayPalette.overlayAccentText else color)
         typeface = if (bold) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
         includeFontPadding = false
     }
