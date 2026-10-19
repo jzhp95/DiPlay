@@ -27,7 +27,7 @@ object SettingsWidgets {
         val requestedSp = textSize / context.resources.displayMetrics.scaledDensity
         FlymeAutoStyle.text(this, when {
             bold -> FlymeAutoStyle.TextRole.SECTION_TITLE
-            requestedSp <= 16 -> FlymeAutoStyle.TextRole.SECONDARY
+            requestedSp <= FlymeAutoStyle.SECONDARY_TEXT_SP -> FlymeAutoStyle.TextRole.SECONDARY
             else -> FlymeAutoStyle.TextRole.BODY
         }, compact = !theme.isOverlay && FlymeAutoStyle.compact(context))
         gravity = Gravity.CENTER_VERTICAL

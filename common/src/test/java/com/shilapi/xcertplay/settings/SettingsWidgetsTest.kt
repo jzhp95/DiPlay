@@ -14,6 +14,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
+import org.robolectric.annotation.GraphicsMode
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
@@ -64,13 +65,13 @@ class SettingsWidgetsTest {
     @Test fun overlayUsesFlymeBlueAndKeepsTheLabelMetrics() {
         val row = ConnectionSettingsSection.createWirelessCarPlayRow(context, true, onChanged = {})
         val label = (row.rowView as ViewGroup).getChildAt(0) as TextView
-        assertEquals(20f, label.textSize / context.resources.displayMetrics.scaledDensity, 0.01f)
+        assertEquals(22f, label.textSize / context.resources.displayMetrics.scaledDensity, 0.01f)
         assertFalse(label.includeFontPadding)
-        assertEquals(Color.rgb(174, 174, 184), label.currentTextColor)
-        assertEquals(Color.rgb(142, 184, 255), row.switch.thumbTintList!!.getColorForState(
+        assertEquals(DiPlayPalette.DARK.overlaySecondaryText, label.currentTextColor)
+        assertEquals(Color.WHITE, row.switch.thumbTintList!!.getColorForState(
             intArrayOf(android.R.attr.state_enabled, android.R.attr.state_checked), 0))
         val heading = SettingsWidgets.createCategoryHeader(context, "Heading")
-        assertEquals(Color.rgb(142, 184, 255), heading.currentTextColor)
+        assertEquals(DiPlayPalette.DARK.overlayAccentText, heading.currentTextColor)
         assertFalse(heading.includeFontPadding)
     }
 
@@ -87,12 +88,20 @@ class SettingsWidgetsTest {
         }
     }
 
-    @Test fun cardDescriptionsKeepMultilineSpacingAndTheirAccessibleTitle() {
+    @Test @Config(qualifiers = "w400dp-h800dp-port")
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun cardDescriptionsKeepMultilineSpacingAndTheirAccessibleTitle() {
         val row = SettingsWidgets.createSwitchRow(context, "Title", "First line\nSecond line", false,
             SettingsTheme.CARD, onChanged = {})
         val texts = views(row.rowView).filterIsInstance<TextView>().filter { it !== row.switch }.toList()
         assertEquals(listOf("Title", "First line\nSecond line"), texts.map { it.text.toString() })
-        assertTrue(texts.all { it.lineSpacingExtra == SettingsTheme.CARD.dp(context, 3).toFloat() })
+        assertEquals(22f, texts[0].textSize / context.resources.displayMetrics.scaledDensity, 0.01f)
+        assertEquals(16f, texts[1].textSize / context.resources.displayMetrics.scaledDensity, 0.01f)
+        for ((view, targetLineSp) in texts.zip(listOf(30f, 24f))) {
+            val metrics = view.paint.fontMetricsInt
+            val lineSp = (metrics.descent - metrics.ascent + view.lineSpacingExtra) / context.resources.displayMetrics.scaledDensity
+            assertEquals("Paired type size and line height", targetLineSp, lineSp, 1f)
+        }
         assertEquals("Title", row.switch.contentDescription)
     }
 
@@ -105,7 +114,7 @@ class SettingsWidgetsTest {
         assertEquals(DiPlayPalette.LIGHT.secondaryText, texts[1].currentTextColor)
         assertEquals(DiPlayPalette.LIGHT.trackOff, row.switch.trackTintList!!.getColorForState(intArrayOf(android.R.attr.state_enabled), 0))
         assertEquals(
-            DiPlayPalette.LIGHT.accent,
+            Color.WHITE,
             row.switch.thumbTintList!!.getColorForState(intArrayOf(android.R.attr.state_enabled, android.R.attr.state_checked), 0),
         )
         assertEquals(DiPlayPalette.LIGHT.ripple, theme.ripple)
@@ -126,7 +135,7 @@ class SettingsWidgetsTest {
 
         assertEquals(DiPlayPalette.LIGHT.overlaySecondaryText, label.currentTextColor)
         assertEquals(
-            DiPlayPalette.LIGHT.overlayAccent,
+            Color.WHITE,
             row.switch.thumbTintList!!.getColorForState(intArrayOf(android.R.attr.state_enabled, android.R.attr.state_checked), 0),
         )
         assertEquals(

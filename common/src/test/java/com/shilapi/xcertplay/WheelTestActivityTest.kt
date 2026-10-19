@@ -84,7 +84,7 @@ class WheelTestActivityTest {
             assertEquals(before.simulated, probe.snapshot().simulated)
             assertEquals(before.event, probe.snapshot().event)
             val views = ReflectionHelpers.getField<WheelTestLayout.Views>(screen, "views")
-            assertEquals(DiPlayPalette.LIGHT.accent, views.event.currentTextColor)
+            assertEquals(DiPlayPalette.LIGHT.accentText, views.event.currentTextColor)
             assertFalse(views.acquire.isEnabled)
             assertTrue(views.release.isEnabled)
             prefs.edit().putString("app_appearance", "dark").commit()
