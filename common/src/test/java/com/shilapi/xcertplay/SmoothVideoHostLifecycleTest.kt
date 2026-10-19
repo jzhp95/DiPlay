@@ -43,7 +43,7 @@ import org.robolectric.shadows.ShadowMediaCodec
  * sessions are being torn down.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [30])
+@Config(sdk = [30], shadows = [VpnConsentTestShadow::class])
 @LooperMode(LooperMode.Mode.PAUSED)
 class SmoothVideoHostLifecycleTest {
     private lateinit var activity: CarPlayHostActivity
@@ -56,6 +56,9 @@ class SmoothVideoHostLifecycleTest {
 
     @Before fun setUp() {
         CarPlayBackgroundSession.clear()
+        // These lifecycle fixtures model an already authorized wired connection.
+        VpnConsentTestShadow.consent = null
+        VpnConsentTestShadow.failure = null
         activity = Robolectric.buildActivity(CarPlayHostActivity::class.java).get()
         AirPlayPersistence.saveAdaptPipResolution(activity, false)
         AirPlayPersistence.saveMfiTarget(activity, MfiTarget.USB_CH341)

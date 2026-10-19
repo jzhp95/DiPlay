@@ -852,10 +852,10 @@ class CarPlayHostActivity : ComponentActivity() {
             "Host started; MFI target=${mfiTargetLabel(mfiTarget)}; " +
                 "transport=${if (wirelessEnabled) "wireless" else "wired"}",
         )
-        val reusedBackgroundSession = adoptBackgroundSession()
         microphoneAvailable =
             checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
         microphonePermissionResolved = microphoneAvailable
+        val reusedBackgroundSession = adoptBackgroundSession()
         if (reusedBackgroundSession) {
             updateDebugOverlays()
         } else if (microphonePermissionResolved) {
@@ -5354,6 +5354,9 @@ class CarPlayHostActivity : ComponentActivity() {
         displayDiagnosticAttempt = DisplayDiagnosticSnapshot.currentAttempt(this)
         adbClusterConfigured = AdbClusterRouter.enabled(this) && snapshot.controller.configuredClusterSize() ==
             (DiLink4ClusterDisplay.STREAM_WIDTH to DiLink4ClusterDisplay.STREAM_HEIGHT)
+        // The retained controller already resolved the microphone choice, including a refusal.
+        // Keep the actual grant in microphoneAvailable for the replacement stack.
+        microphonePermissionResolved = true
         controller = snapshot.controller
         updateClusterMapShown()
         sink = snapshot.sink
@@ -5976,9 +5979,10 @@ class CarPlayHostActivity : ComponentActivity() {
                     }
                     authenticationReconnectRequiresClosed = false
                     retiringAuthenticationController = null
-                    // The display can rotate again while the old stack is closing. Use the
-                    // latest accepted size, and wait for any pending resize to settle first.
-                    maybeStartCarPlay()
+                    // Adoption skips startup prompts while a session is live. Recheck transport
+                    // prerequisites now, including VPN consent that may have been revoked.
+                    // Their completion uses maybeStartCarPlay with the latest settled display size.
+                    requestStartupPrerequisites()
                 }
             }
         }
