@@ -1,5 +1,7 @@
 package com.shilapi.xcertplay.airplay
 
+import java.io.IOException
+
 /**
  * RTSP/HTTP-style request framing for the CarPlay control channel.
  *
@@ -26,6 +28,11 @@ object RtspMessage {
 
     data class Parsed(val messages: List<Request>, val rest: ByteArray)
 
+    // A partial request is retained between reads, so limits apply before constructing strings
+    // or waiting for its body. Artwork and corner-mask payloads must still fit normal requests.
+    internal const val MAX_HEADER_BYTES = 64 * 1024
+    internal const val MAX_BODY_BYTES = 8 * 1024 * 1024
+
     private val headerEnd = "\r\n\r\n".toByteArray(Charsets.US_ASCII)
     private val statusText = mapOf(
         200 to "OK",
@@ -39,7 +46,14 @@ object RtspMessage {
         val messages = ArrayList<Request>()
         var offset = 0
         while (offset < buffer.size) {
-            val headerEndIndex = indexOf(buffer, headerEnd, offset) ?: break
+            val headerEndIndex = indexOf(buffer, headerEnd, offset)
+            if (headerEndIndex == null) {
+                if (buffer.size - offset > MAX_HEADER_BYTES) throw IOException("RTSP header exceeds limit")
+                break
+            }
+            if (headerEndIndex - offset + headerEnd.size > MAX_HEADER_BYTES) {
+                throw IOException("RTSP header exceeds limit")
+            }
             val headerText = String(buffer, offset, headerEndIndex - offset, Charsets.US_ASCII)
             val lines = headerText.split("\r\n")
             if (lines.isEmpty()) {
@@ -51,13 +65,25 @@ object RtspMessage {
             for (line in lines.drop(1)) {
                 val separator = line.indexOf(':')
                 if (separator == -1) continue
-                headers[line.substring(0, separator).trim().lowercase()] =
-                    line.substring(separator + 1).trim()
+                val name = line.substring(0, separator).trim().lowercase()
+                val value = line.substring(separator + 1).trim()
+                if (name == "content-length" && headers[name]?.let { it != value } == true) {
+                    throw IOException("Conflicting RTSP Content-Length headers")
+                }
+                headers[name] = value
             }
             val bodyStart = headerEndIndex + headerEnd.size
-            val contentLength = headers["content-length"]?.toIntOrNull()?.coerceAtLeast(0) ?: 0
-            val bodyEnd = bodyStart + contentLength
-            if (bodyEnd > buffer.size) break
+            val contentLength = headers["content-length"]?.let { value ->
+                if (value.isEmpty() || value.any { it !in '0'..'9' }) {
+                    throw IOException("Invalid RTSP Content-Length")
+                }
+                val length = value.toLongOrNull() ?: throw IOException("Invalid RTSP Content-Length")
+                if (length > MAX_BODY_BYTES) throw IOException("RTSP body exceeds limit")
+                length
+            } ?: 0L
+            val bodyEndLong = bodyStart.toLong() + contentLength
+            if (bodyEndLong > buffer.size) break
+            val bodyEnd = bodyEndLong.toInt()
             messages.add(
                 Request(
                     method = requestLine[0],
