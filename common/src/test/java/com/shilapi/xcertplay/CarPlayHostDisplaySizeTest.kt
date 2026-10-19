@@ -38,7 +38,7 @@ import org.robolectric.annotation.LooperMode
 import org.robolectric.shadows.ShadowLog
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [29])
+@Config(sdk = [29], shadows = [VpnConsentTestShadow::class])
 @LooperMode(LooperMode.Mode.PAUSED)
 class CarPlayHostDisplaySizeTest {
     private lateinit var activity: CarPlayHostActivity
@@ -46,6 +46,9 @@ class CarPlayHostDisplaySizeTest {
     private val sizeClass = Class.forName("com.shilapi.xcertplay.CarPlayHostActivity\$DisplaySize")
 
     @Before fun setUp() {
+        // Reconnect now verifies the real VPN grant as well as the cached host flag.
+        VpnConsentTestShadow.consent = null
+        VpnConsentTestShadow.failure = null
         activity = Robolectric.buildActivity(CarPlayHostActivity::class.java).get()
         AirPlayPersistence.saveAdaptPipResolution(activity, false)
         AirPlayPersistence.saveHarmanFullscreen(activity, false)
@@ -522,6 +525,7 @@ class CarPlayHostDisplaySizeTest {
         startSession()
         applySize(990, 1920)
         setField("vpnReady", false)
+        VpnConsentTestShadow.consent = android.content.Intent("test.vpn.CONSENT")
 
         finishTeardown()
 
