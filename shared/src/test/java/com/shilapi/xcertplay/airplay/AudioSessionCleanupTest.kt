@@ -104,6 +104,29 @@ class AudioSessionCleanupTest {
         } finally { engine.onSessionClosed(old); engine.onSessionClosed(candidate); old.close(); candidate.close() }
     }
 
+    @Test fun teardownSnapshotCannotRetireAnotherTypesNewRegistration() {
+        lateinit var engine: CarPlayMediaEngine
+        val live = session(); var armed = false
+        var replacement: Map<String, Any?>? = null
+        engine = CarPlayMediaEngine(object : MediaSink {
+            override fun onAudioStopped(id: AudioStreamId) {
+                if (armed) {
+                    armed = false
+                    val other = if (id.audioType == "media") "default" else "media"
+                    replacement = engine.onAudio(live, 100, setup(other))
+                }
+            }
+        })
+        try {
+            engine.onAudio(live, 100, setup("media"))
+            engine.onAudio(live, 100, setup("default"))
+            armed = true
+            engine.onTeardown(live, 100)
+            assertNotNull("Callback installed a distinct new registration", replacement)
+            assertNotNull("A retirement snapshot must not target a newer generation", engine.onFeedback(live))
+        } finally { engine.onSessionClosed(live); live.close() }
+    }
+
     private fun withSessions(block: (CarPlayMediaEngine, AirPlaySession, AirPlaySession, RecordingSink) -> Unit) {
         val sink = RecordingSink(); val engine = CarPlayMediaEngine(sink)
         val first = session(); val second = session()
