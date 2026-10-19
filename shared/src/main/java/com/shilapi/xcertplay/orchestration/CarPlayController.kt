@@ -1689,10 +1689,7 @@ class CarPlayController(
                         )
                     }
                 }
-                Iap2WirelessControlTerminal.TIMED_OUT ->
-                    if (!wirelessActiveReported.get()) {
-                        onStatus(CarPlayStatus.ControlEnded)
-                    }
+                Iap2WirelessControlTerminal.TIMED_OUT -> handleWirelessBootstrapTimeout(generation)
             }
         } catch (error: Throwable) {
             if (isStaleWirelessRun(generation)) {
@@ -1908,6 +1905,14 @@ class CarPlayController(
             },
             WIRELESS_HANDOFF_TIMEOUT_MILLIS,
         )
+    }
+
+    private fun handleWirelessBootstrapTimeout(generation: Int) = synchronized(wirelessResourceLock) {
+        if (isStaleWirelessRun(generation) || wirelessActiveReported.get()) return@synchronized
+        // Record the terminal failure before closing transports: their late EOF callbacks must
+        // not replace this reason or publish readiness. Failed enters the host's retry budget.
+        fail(IOException("Wireless CarPlay bootstrap timed out before handoff"), generation)
+        closeWirelessStack(generation = generation)
     }
 
     private fun handleWirelessHandoffTimeout(generation: Int) = synchronized(wirelessResourceLock) {

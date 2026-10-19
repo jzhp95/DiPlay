@@ -212,6 +212,92 @@ class WirelessHandoffWatchdogTest {
         verify(bootstrap, never()).close()
     }
 
+    @Test fun bootstrapTimeoutFailsOnceAndReleasesResourcesBeforeLateReadiness() {
+        ReflectionHelpers.setField(controller, "activeSession", null)
+        bootstrapTimeout()
+        bootstrapTimeout()
+        tunnelReady(0)
+        awaitHandoff()
+        assertEquals(1, statuses.size)
+        assertTrue("Bootstrap timeout must enter the host failure/retry path", statuses.single() is CarPlayStatus.Failed)
+        assertTrue((statuses.single() as CarPlayStatus.Failed).message.contains("bootstrap timed out"))
+        assertEquals(1, hotspotCloses)
+        verify(bootstrap, times(1)).close()
+    }
+
+    @Test fun staleBootstrapTimeoutCannotRetireReplacementResources() {
+        ReflectionHelpers.getField<AtomicInteger>(controller, "wirelessGeneration").set(1)
+        bootstrapTimeout()
+        assertTrue(statuses.isEmpty())
+        assertEquals(0, hotspotCloses)
+        verify(bootstrap, never()).close()
+    }
+
+    @Test fun priorFailureIsNotOverwrittenByBootstrapTimeout() {
+        controller.javaClass.getDeclaredMethod("fail", Throwable::class.java, Int::class.javaObjectType)
+            .apply { isAccessible = true }.invoke(controller, java.io.IOException("original failure"), 0)
+        bootstrapTimeout()
+        assertEquals(1, statuses.size)
+        assertEquals("original failure", (statuses.single() as CarPlayStatus.Failed).message)
+        assertEquals(0, hotspotCloses)
+        verify(bootstrap, never()).close()
+    }
+
+    @Test fun closedControllerIgnoresLateBootstrapTimeout() {
+        controller.close()
+        assertTrue(controller.awaitClosed(2_000))
+        statuses.clear()
+        val closes = hotspotCloses
+        clearInvocations(bootstrap)
+        bootstrapTimeout()
+        assertTrue(statuses.isEmpty())
+        assertEquals(closes, hotspotCloses)
+        verify(bootstrap, never()).close()
+    }
+
+    @Test fun usableNormalAndFallbackProjectionSurviveBootstrapTimeout() {
+        for (fallback in listOf(false, true)) {
+            flag("wirelessActiveReported").set(true)
+            flag("wirelessHandoffFellBack").set(fallback)
+            bootstrapTimeout()
+            assertTrue(flag("wirelessActiveReported").get())
+            assertEquals(fallback, flag("wirelessHandoffFellBack").get())
+            assertTrue(statuses.isEmpty())
+            assertEquals(0, hotspotCloses)
+            verify(bootstrap, never()).close()
+        }
+    }
+
+    @Test fun completedReadinessWinsAgainstQueuedBootstrapTimeout() {
+        val entered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        doAnswer { entered.countDown(); check(release.await(2, TimeUnit.SECONDS)); null }.`when`(bootstrap).close()
+        tunnelReady(0)
+        assertTrue(entered.await(2, TimeUnit.SECONDS))
+        val timeoutFailure = java.util.concurrent.atomic.AtomicReference<Throwable?>()
+        val worker = Thread {
+            try { bootstrapTimeoutOnWorker() } catch (error: Throwable) { timeoutFailure.set(error) }
+        }
+        worker.start()
+        release.countDown()
+        worker.join(2_000)
+        awaitHandoff()
+        assertFalse(worker.isAlive)
+        timeoutFailure.get()?.let { throw AssertionError(it) }
+        assertEquals(listOf(CarPlayStatus.WirelessActive), statuses)
+        assertEquals(0, hotspotCloses)
+        verify(bootstrap, times(1)).close()
+    }
+
+    private fun bootstrapTimeoutOnWorker() {
+        controller.javaClass.getDeclaredMethod("handleWirelessBootstrapTimeout", Int::class.javaPrimitiveType)
+            .apply { isAccessible = true }.invoke(controller, 0)
+    }
+    private fun bootstrapTimeout() {
+        bootstrapTimeoutOnWorker()
+        shadowOf(Looper.getMainLooper()).idle()
+    }
+
     private fun timeout() {
         controller.javaClass.getDeclaredMethod("handleWirelessHandoffTimeout", Int::class.javaPrimitiveType)
             .apply { isAccessible = true }.invoke(controller, 0)
