@@ -84,6 +84,17 @@ class CarPlayMediaEngine(
     )
 
     private val streams = ConcurrentHashMap<StreamKey, Closeable>()
+    // Normal audio shares one sink renderer per AudioStreamId across control sessions.
+    // Each accepted SETUP gets a unique registration, including same-key replacements.
+    private class NormalAudioRegistration(
+        val key: StreamKey, val stream: AudioStream,
+        val microphone: MicrophoneConfig?, val capture: AudioPacketCapture?,
+    )
+    private val normalAudioLock = Any()
+    private val normalAudioRegistrations = HashMap<StreamKey, NormalAudioRegistration>()
+    private val normalAudioOwners = HashMap<AudioStreamId, NormalAudioRegistration>()
+    private val normalAudioTransitions = HashSet<AudioStreamId>()
+    private val retiredNormalSessions = Collections.newSetFromMap(WeakHashMap<AirPlaySession, Boolean>())
     private val audioMeta = ConcurrentHashMap<StreamKey, AudioMeta>()
     private val pendingMicrophone = ConcurrentHashMap<StreamKey, MicrophoneConfig>()
     private val audioCaptures = ConcurrentHashMap<StreamKey, AudioPacketCapture>()
@@ -165,18 +176,22 @@ class CarPlayMediaEngine(
         return port
     }
 
-    override fun onAudio(session: AirPlaySession, type: Int, stream: Map<String, Any?>): Map<String, Any?>? {
+    override fun onAudio(session: AirPlaySession, type: Int, stream: Map<String, Any?>): Map<String, Any?>? =
+        synchronized(normalAudioLock) {
+            val id = AudioStreamId(type, stream["audioType"]?.toString()?.lowercase() ?: "default")
+            // Sink retirement callbacks may reenter SETUP. Do not overwrite a nested candidate.
+            if (!normalAudioTransitions.add(id)) return@synchronized null
+            try { setupNormalAudioLocked(session, type, stream) }
+            finally { normalAudioTransitions.remove(id) }
+        }
+
+    private fun setupNormalAudioLocked(session: AirPlaySession, type: Int, stream: Map<String, Any?>): Map<String, Any?>? {
+        if (session.isClosed || session in retiredNormalSessions) return null
         val audioType = stream["audioType"]?.toString()?.lowercase() ?: "default"
         // Concurrent streams may share a type (e.g. music, guidance and Siri can all arrive as
         // type 100); only the same (type, audioType) pair replaces a previous stream.
         val streamKey = StreamKey(session, type, audioType)
         val streamId = AudioStreamId(type, audioType)
-        streams.remove(streamKey)?.close()
-        audioMeta.remove(streamKey)
-        audioCaptures.remove(streamKey)?.close()
-        if (pendingMicrophone.remove(streamKey) != null) sink.onMicrophoneStopped(streamId)
-        sink.onAudioStopped(streamId)
-
         val key = outputKey(session, stream) ?: return null
         val format = AudioStreamCodec.fromFormatBits(
             (stream["audioFormat"] as? Number)?.toLong() ?: 0L,
@@ -194,7 +209,6 @@ class CarPlayMediaEngine(
         val latencyMs = (stream["audioLatencyMs"] as? Number)?.toInt() ?: 0
         val meta = AudioMeta(type, format, connectionId, latencyMs)
         val microphone = microphoneConfig(session, type, stream, format)
-        if (microphone != null) pendingMicrophone[streamKey] = microphone
         if (type == STREAM_TYPE_MAIN_AUDIO && audioType != "media") {
             session.logDebug(
                 "Audio: setup type=$type audioType=$audioType input=${stream["input"] ?: "none"} " +
@@ -206,10 +220,10 @@ class CarPlayMediaEngine(
         }
 
         val capture = audioCaptureDirectory?.let { AudioPacketCapture(it, type) }
-        if (capture != null) audioCaptures[streamKey] = capture
         val clockProbe = RtpClockProbe()
         val microphoneStart = microphone?.let { config -> MicrophoneStart { sink.onMicrophoneStarted(streamId, config) } }
         val audio = AudioStream(key, type, session::logDebug)
+        val registration = NormalAudioRegistration(streamKey, audio, microphone, capture)
         val (dataPort, controlPort) = audio.listen(
             object : AudioStream.Listener {
                 override fun onStarted(firstSample: Int) {
@@ -241,8 +255,24 @@ class CarPlayMediaEngine(
                 }
             },
         )
+        // A close may happen while binding or reenter from the old sink's stop callback.
+        fun candidateCancelled(): Boolean {
+            if (!session.isClosed && session !in retiredNormalSessions) return false
+            audio.close()
+            capture?.close()
+            return true
+        }
+        if (candidateCancelled()) return null
+        // Do not retire the accepted stream until the replacement has validated and bound.
+        try { normalAudioOwners[streamId]?.let(::retireNormalAudioLocked) }
+        catch (error: Throwable) { audio.close(); capture?.close(); throw error }
+        if (candidateCancelled()) return null
+        normalAudioRegistrations[streamKey] = registration
+        normalAudioOwners[streamId] = registration
         streams[streamKey] = audio
         audioMeta[streamKey] = meta
+        if (microphone != null) pendingMicrophone[streamKey] = microphone
+        if (capture != null) audioCaptures[streamKey] = capture
         if (microphoneStart != null && MicrophoneStart.startsWithoutDownlink(audioType)) {
             microphoneStart.scheduleSilentStart(microphoneScheduler, MicrophoneStart.SILENT_START_MILLIS) { startNow ->
                 // Atomic with TEARDOWN, which removes the pending entry before it stops the microphone.
@@ -475,7 +505,7 @@ class CarPlayMediaEngine(
     }
 
     override fun onFeedback(session: AirPlaySession): Map<String, Any?>? {
-        val active = audioMeta.values.toList()
+        val active = audioMeta.entries.filter { it.key.session === session }.map { it.value }
         val buffered = bufferedStreams[session]
         if (active.isEmpty() && buffered == null) return null
         val streams = active.map { meta ->
@@ -517,35 +547,49 @@ class CarPlayMediaEngine(
             return
         }
         // TEARDOWN carries only the stream type; release every audioType variant of it.
-        val tornDown = streams.keys.filter { it.session === session && it.type == type }
-        tornDown.forEach { key ->
-            val streamId = AudioStreamId(key.type, key.audioType)
-            if (pendingMicrophone.remove(key) != null) sink.onMicrophoneStopped(streamId)
-            audioMeta.remove(key)
-            audioCaptures.remove(key)?.close()
-            // BufferedAudioStream owns serialized sink cleanup; stopping it first from here
-            // could interleave with its in-flight delivery and recreate a stale renderer.
-            if (key.type != BufferedAudioStream.STREAM_TYPE) sink.onAudioStopped(streamId)
-            streams.remove(key)?.close()
+        val tornDown = synchronized(normalAudioLock) {
+            streams.keys.filter { it.session === session && it.type == type }
         }
+        tornDown.forEach(::retireStream)
         if (isScreenStreamType(type)) sink.onScreenStreamActive(type, false)
     }
 
     override fun onSessionClosed(session: AirPlaySession) {
+        val sessionStreams = synchronized(normalAudioLock) {
+            retiredNormalSessions.add(session)
+            streams.keys.filter { it.session === session && it.type != BufferedAudioStream.STREAM_TYPE }
+        }
         clearPendingIapTunnel(session)
         retireBuffered(session)
         videoSettingsChannels.remove(session)?.close()
-        val sessionStreams = streams.keys.filter {
-            it.session === session && it.type != BufferedAudioStream.STREAM_TYPE
-        }
         sessionStreams
             .filter { isScreenStreamType(it.type) }
             .forEach { sink.onScreenStreamActive(it.type, false) }
-        sessionStreams.forEach { streams.remove(it)?.close() }
-        audioMeta.clear()
-        pendingMicrophone.clear()
-        audioCaptures.values.forEach(AudioPacketCapture::close)
-        audioCaptures.clear()
+        sessionStreams.forEach(::retireStream)
+    }
+
+    private fun retireStream(key: StreamKey) = synchronized(normalAudioLock) {
+        val registration = normalAudioRegistrations[key]
+        if (registration != null) retireNormalAudioLocked(registration)
+        else streams.remove(key)?.close()
+    }
+
+    /** The caller holds normalAudioLock. Only the current sink owner may stop its output. */
+    private fun retireNormalAudioLocked(registration: NormalAudioRegistration) {
+        val key = registration.key
+        val id = AudioStreamId(key.type, key.audioType)
+        if (normalAudioRegistrations.remove(key, registration)) {
+            audioMeta.remove(key)
+            pendingMicrophone.remove(key)
+            audioCaptures.remove(key)
+        }
+        streams.remove(key, registration.stream)
+        registration.stream.close()
+        registration.capture?.close()
+        if (normalAudioOwners.remove(id, registration)) {
+            if (registration.microphone != null) sink.onMicrophoneStopped(id)
+            sink.onAudioStopped(id)
+        }
     }
 
     /** Removes ownership before a close that may block on delivery or invoke the sink. */
