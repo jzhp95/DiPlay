@@ -2234,6 +2234,10 @@ class CarPlayController(
         iphoneHost.openIap2UsbSessionAsync(device, executor) { result ->
             when (result) {
                 is IphoneUsbHost.Iap2SessionResult.Connected -> {
+                    if (closed) {
+                        result.session.close()
+                        return@openIap2UsbSessionAsync
+                    }
                     try {
                         val ncm = openNcm(device)
                         runStack(result.session, ncm)
@@ -2265,13 +2269,32 @@ class CarPlayController(
         return NcmUsbBridge.open(connection, function, onDiagnostic = ::connectionDiagnostic)
     }
 
-    private fun runStack(usbSession: Iap2UsbSession, ncm: NcmUsbBridge) {
+    private fun runStack(usbSession: Iap2UsbSession, ncm: NcmUsbBridge) =
+        runStackWithMux(usbSession, ncm) { Iap2UsbMuxHost.open(it, onDiagnostic = ::connectionDiagnostic) }
+
+    private fun runStackWithMux(
+        usbSession: Iap2UsbSession,
+        ncm: NcmUsbBridge,
+        openMux: (Iap2UsbSession) -> Iap2UsbMuxHost,
+    ) {
         phase = Phase.CONTROL
         var ncmOwnedLocally = true
+        // Before publication, teardown cannot see these resources and this call must own them.
+        var localUsb: Iap2UsbSession? = usbSession
+        var localMux: Iap2UsbMuxHost? = null
         try {
             if (closed) return
-            val mux = Iap2UsbMuxHost.open(usbSession, onDiagnostic = ::connectionDiagnostic)
-            this.mux = mux
+            val mux = openMux(usbSession)
+            localUsb = null // A successfully opened mux now owns the USB pipe.
+            localMux = mux
+            val published = synchronized(wirelessResourceLock) {
+                if (closed) false else {
+                    this.mux = mux
+                    true
+                }
+            }
+            if (!published) return
+            localMux = null // close() now owns cleanup, ordered with its closed flag under the lock.
             debugLog("wired USBMUX host opened")
             onStatus(CarPlayStatus.Pairing)
             val pairingClient = LockdownPairingClient(mux)
@@ -2459,7 +2482,15 @@ class CarPlayController(
             fail(error)
         } finally {
             wiredStartWatchdog?.terminate()
-            if (ncmOwnedLocally) ncm.close()
+            try {
+                localMux?.close()
+            } finally {
+                try {
+                    localUsb?.close()
+                } finally {
+                    if (ncmOwnedLocally) ncm.close()
+                }
+            }
         }
     }
 
