@@ -35,10 +35,9 @@ internal object CarDialogStyle {
     private const val BUTTON_HEIGHT_DP = FlymeAutoStyle.DIALOG_CONTROL_HEIGHT_DP
     private const val ROW_HEIGHT_DP = 68
     private const val INPUT_HEIGHT_DP = 64
-    private const val ACTION_GAP_DP = 12
     private const val BUTTON_PADDING_DP = 20
-    private const val TITLE_SP = 26f
-    private const val BODY_SP = FlymeAutoStyle.BUTTON_TEXT_SP
+    private const val ACTION_GAP_DP = 12
+    private const val BODY_SP = FlymeAutoStyle.BODY_TEXT_SP
     private const val INPUT_SP = 22f
 
     fun install(dialog: Dialog, palette: DiPlayPalette) {
@@ -74,9 +73,8 @@ internal object CarDialogStyle {
         if (dialog !is AlertDialog) return
         val titleId = decor.resources.getIdentifier("alertTitle", "id", "android")
         (if (titleId != 0) decor.findViewById<TextView>(titleId) else null)?.apply {
-            textSize = TITLE_SP
+            FlymeAutoStyle.text(this, FlymeAutoStyle.TextRole.PAGE_TITLE, compact = false)
             setTextColor(palette.primaryText)
-            setTypeface(typeface, Typeface.BOLD)
             isSingleLine = false
             maxLines = Int.MAX_VALUE
         }
@@ -237,29 +235,16 @@ internal object CarDialogStyle {
     }
 
     private fun styleButton(button: Button, palette: DiPlayPalette, primary: Boolean) {
-        fun dp(value: Int) = (value * button.resources.displayMetrics.density + .5f).toInt()
-        enlargeText(button, BODY_SP)
-        button.isAllCaps = false
+        val previousMinimum = button.minimumHeight
+        FlymeAutoStyle.button(button, palette, primary)
         button.isSingleLine = false
         button.maxLines = Int.MAX_VALUE
-        button.gravity = Gravity.CENTER
-        button.minimumHeight = max(button.minimumHeight, dp(BUTTON_HEIGHT_DP))
+        button.minimumHeight = max(previousMinimum, FlymeAutoStyle.dp(button.context, BUTTON_HEIGHT_DP))
         button.minHeight = button.minimumHeight
         button.minimumWidth = 0
         button.minWidth = 0
-        button.setPadding(dp(BUTTON_PADDING_DP), dp(ACTION_GAP_DP), dp(BUTTON_PADDING_DP), dp(ACTION_GAP_DP))
-        button.layoutParams?.let { params -> if (params.height >= 0 && params.height < button.minimumHeight) params.height = button.minimumHeight }
-        val fill = if (primary) palette.accent else palette.button
-        val text = if (primary) palette.onAccent else palette.primaryText
-        button.setTextColor(ColorStateList(arrayOf(intArrayOf(-android.R.attr.state_enabled), intArrayOf()),
-            intArrayOf((text and 0x00ffffff) or 0x66000000, text)))
-        button.backgroundTintList = null
-        val radius = dp(BUTTON_HEIGHT_DP).toFloat() / 4f
-        val states = StateListDrawable().apply {
-            addState(intArrayOf(android.R.attr.state_focused), shape(fill, radius, dp(2), palette.focusRing))
-            addState(intArrayOf(), shape(fill, radius))
-        }
-        button.background = RippleDrawable(ColorStateList.valueOf(palette.ripple), states, shape(Color.WHITE, radius))
+        button.layoutParams?.let { if (it.height >= 0 && it.height < button.minimumHeight) it.height = button.minimumHeight }
+        // The background updates its radius from these final measured bounds.
     }
 
     private fun shape(color: Int, radius: Float, stroke: Int = 0, outline: Int = color) = GradientDrawable().apply {

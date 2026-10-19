@@ -3744,9 +3744,16 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
 
     private fun label(value: String, size: Int, color: Int, bold: Boolean = false, centreGlyphs: Boolean = false) =
         (if (centreGlyphs) HeaderTitleView(this) else TextView(this)).apply {
-        text = value; textSize = if (size in 14..15) FlymeAutoStyle.SECONDARY_TEXT_SP else size.toFloat(); setTextColor(if (color == ACCENT) palette.accentText else color); gravity = Gravity.CENTER_VERTICAL
-        typeface = if (bold) Typeface.create("sans-serif-medium", Typeface.NORMAL) else Typeface.create("sans-serif", Typeface.NORMAL)
-        setLineSpacing(dp(3).toFloat(), 1f)
+        text = value
+        FlymeAutoStyle.text(this, when {
+            size >= 28 -> FlymeAutoStyle.TextRole.PAGE_TITLE
+            size >= 22 && bold -> FlymeAutoStyle.TextRole.SECTION_TITLE
+            size >= 18 -> FlymeAutoStyle.TextRole.BODY
+            else -> FlymeAutoStyle.TextRole.SECONDARY
+        }, compact = isCompactLayout)
+        setTextColor(if (color == ACCENT) palette.accentText else color)
+        gravity = Gravity.CENTER_VERTICAL
+        if (bold) typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
     }
     private fun headerIconSize(compact: Boolean) = dp(if (compact) 20 else 24)
 
@@ -3793,20 +3800,10 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
 
     private fun button(title: String, primary: Boolean, click: () -> Unit) = SettingButton(this, MUTED, ACCENT).apply {
         FlymeAutoStyle.button(this, palette, primary, compact = isCompactLayout)
-        isAllCaps = false
-        typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-        background = FlymeAutoStyle.control(this@DiPlayActivity, palette, primary, dp(FlymeAutoStyle.CONTROL_HEIGHT_DP))
-        setPadding(dp(16), dp(8), dp(16), dp(8)); minHeight = dp(if (isCompactLayout) FlymeAutoStyle.COMPACT_CONTROL_HEIGHT_DP else FlymeAutoStyle.CONTROL_HEIGHT_DP); stateListAnimator = null
-        compoundDrawablePadding = dp(12)
-        foreground = buttonFocusRing()
+        compoundDrawablePadding = dp(FlymeAutoStyle.CONTROL_GAP_DP)
         text = title
         searchIndexSink?.add(title.substringBefore(VALUE_SEPARATOR))
         setOnClickListener { click() }
-        doOnLayout {
-            val shape = buttonShape(if (primary) ACCENT else BUTTON, if (primary) ACCENT else BORDER, height)
-            background = FlymeAutoStyle.control(this@DiPlayActivity, palette, primary, height)
-            foreground = focusRing((shape.cornerRadius / resources.displayMetrics.density).roundToInt())
-        }
     }
 
     private fun iconButton(icon: Int, description: String, click: () -> Unit) = ImageButton(this).apply {
@@ -3848,6 +3845,14 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
 
         fun textAlignmentCentreY(): Float {
             return alignedTextCentreY(this, text, glyphBounds)
+        }
+
+        override fun setLayoutParams(params: ViewGroup.LayoutParams) {
+            if (params.height > 0) {
+                minHeight = maxOf(minHeight, params.height)
+                params.height = ViewGroup.LayoutParams.WRAP_CONTENT
+            }
+            super.setLayoutParams(params)
         }
 
         override fun onDraw(canvas: android.graphics.Canvas) {
@@ -3895,7 +3900,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
     // Remote and D-pad users need to see where they are; touch mode never shows it.
     private fun focusRing(radiusDp: Int = 20) = android.graphics.drawable.StateListDrawable().apply {
         addState(intArrayOf(android.R.attr.state_focused), GradientDrawable().apply {
-            setColor(Color.TRANSPARENT); cornerRadius = dp(radiusDp).toFloat(); setStroke(dp(3), FOCUS_RING)
+            setColor(Color.TRANSPARENT); cornerRadius = dp(radiusDp).toFloat(); setStroke(dp(FlymeAutoStyle.FOCUS_STROKE_DP), FOCUS_RING)
         })
     }
 

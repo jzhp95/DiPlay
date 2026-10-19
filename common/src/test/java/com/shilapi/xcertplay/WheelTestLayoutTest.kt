@@ -33,7 +33,7 @@ class WheelTestLayoutTest {
             val actions = mutableListOf<WheelTestLayout.Action>()
             var debug = false
             val ui = WheelTestLayout(context, DiPlayPalette.of(night)).build(false, { debug = it }, { actions += it })
-            assertEquals(DiPlayPalette.of(night).accent, ui.event.currentTextColor)
+            assertEquals(DiPlayPalette.of(night).accentText, ui.event.currentTextColor)
             ui.event.text = context.getString(R.string.wheel_test_event, context.getString(R.string.wheel_test_next_label),
                 context.getString(R.string.wheel_test_real), 3)
             ui.status.text = context.getString(R.string.wheel_test_status, "已开启", "已获得", "已获得")

@@ -19,7 +19,11 @@ internal class MfiTestLayout(private val context: Context, private val palette: 
     private val contentPadding get() = dp(if (DiagnosticsTestLayout.detailWidthDp(
         context.resources.configuration.screenWidthDp) < 480) FlymeAutoStyle.CONTROL_GAP_DP else FlymeAutoStyle.CARD_PADDING_DP)
     private fun text(id: Int, size: Float = FlymeAutoStyle.BODY_TEXT_SP) = TextView(context).apply {
-        setText(id); textSize = size; setTextColor(palette.primaryText)
+        setText(id); FlymeAutoStyle.text(this, when (size) {
+            FlymeAutoStyle.PAGE_TITLE_SP -> FlymeAutoStyle.TextRole.PAGE_TITLE
+            FlymeAutoStyle.SECONDARY_TEXT_SP -> FlymeAutoStyle.TextRole.SECONDARY
+            else -> FlymeAutoStyle.TextRole.BODY
+        }); setTextColor(palette.primaryText)
         val gap = dp(FlymeAutoStyle.BUTTON_PADDING_VERTICAL_DP)
         setPadding(0, gap, 0, gap)
     }

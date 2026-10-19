@@ -24,14 +24,13 @@ import kotlin.math.roundToInt
 object SettingsWidgets {
 
     private fun TextView.applyTextStyle(context: Context, theme: SettingsTheme, bold: Boolean = false) {
-        if (theme.isOverlay) {
-            typeface = if (bold) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
-            includeFontPadding = false
-        } else {
-            typeface = Typeface.create(if (bold) "sans-serif-medium" else "sans-serif", Typeface.NORMAL)
-            gravity = Gravity.CENTER_VERTICAL
-            setLineSpacing(theme.dp(context, 3).toFloat(), 1f)
-        }
+        val requestedSp = textSize / context.resources.displayMetrics.scaledDensity
+        FlymeAutoStyle.text(this, when {
+            bold -> FlymeAutoStyle.TextRole.SECTION_TITLE
+            requestedSp <= 16 -> FlymeAutoStyle.TextRole.SECONDARY
+            else -> FlymeAutoStyle.TextRole.BODY
+        }, compact = !theme.isOverlay && FlymeAutoStyle.compact(context))
+        gravity = Gravity.CENTER_VERTICAL
     }
 
     data class SwitchRowResult(
@@ -82,8 +81,6 @@ object SettingsWidgets {
             cornerRadius = px(17).toFloat()
             setSize(px(60), px(34))
             setColor(Color.WHITE)
-            // Same 30% track as the platform switch, so the colours match the smaller switches.
-            alpha = (0.3f * 255).roundToInt()
         }
         switch.switchMinWidth = px(60)
         switch.showText = false
@@ -119,7 +116,7 @@ object SettingsWidgets {
             isChecked = checked
             this.contentDescription = contentDescription
             isEnabled = enabled
-            applyLargeSwitchStyle(this, theme.accent, theme.textSecondary, theme.accentTrack, theme.trackOff)
+            applyLargeSwitchStyle(this, Color.WHITE, theme.textPrimary, theme.accentTrack, theme.trackOff)
             minHeight = theme.dp(context, FlymeAutoStyle.CONTROL_HEIGHT_DP)
             setOnCheckedChangeListener { _, isChecked -> onChanged(isChecked) }
         }

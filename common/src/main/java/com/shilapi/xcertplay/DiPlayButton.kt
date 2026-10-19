@@ -1,12 +1,8 @@
 package com.shilapi.xcertplay
 
 import android.content.Context
-import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.Typeface
-import android.graphics.drawable.GradientDrawable
-import android.graphics.drawable.RippleDrawable
-import android.graphics.drawable.StateListDrawable
 import android.widget.Button
 import androidx.core.graphics.ColorUtils
 
@@ -23,8 +19,7 @@ internal class DiPlayButton(context: Context) : Button(context) {
 
     init {
         isAllCaps = false
-        stateListAnimator = null
-        textSize = FlymeAutoStyle.BUTTON_TEXT_SP
+        FlymeAutoStyle.text(this, FlymeAutoStyle.TextRole.BUTTON)
         minHeight = FlymeAutoStyle.dp(context, FlymeAutoStyle.COMPACT_CONTROL_HEIGHT_DP)
         typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
     }
@@ -44,25 +39,20 @@ internal class DiPlayButton(context: Context) : Button(context) {
 
     private fun repaint() {
         val palette = palette ?: return
-        val density = resources.displayMetrics.density
         val fill: Int
         val text: Int
-        val stroke: Int
         when (kind) {
             DiPlayButtonKind.PRIMARY -> {
                 fill = if (overlay) palette.overlayAccent else palette.accent
                 text = if (overlay) palette.overlayOnAccent else palette.onAccent
-                stroke = fill
             }
             DiPlayButtonKind.SECONDARY -> {
                 fill = if (overlay) palette.overlayTrackOff else palette.button
                 text = if (overlay) palette.overlayPrimaryText else palette.primaryText
-                stroke = if (overlay) fill else palette.outline
             }
             DiPlayButtonKind.DANGER -> {
                 fill = palette.overlayDanger
                 text = Color.WHITE
-                stroke = fill
             }
             DiPlayButtonKind.TONAL_DANGER -> {
                 val surface = if (overlay) palette.overlayBackground else palette.surface
@@ -70,27 +60,10 @@ internal class DiPlayButton(context: Context) : Button(context) {
                 text = if (ColorUtils.calculateLuminance(surface) < 0.5)
                     ColorUtils.blendARGB(palette.overlayDanger, Color.WHITE, 0.40f)
                 else palette.overlayDanger
-                stroke = ColorUtils.blendARGB(surface, palette.overlayDanger, 0.48f)
             }
         }
-        val radius = FlymeAutoStyle.radius(context, if (height > 0) height else minHeight)
-        setTextColor(text)
-        background = RippleDrawable(
-            ColorStateList.valueOf(palette.ripple),
-            GradientDrawable().apply {
-                setColor(fill)
-                cornerRadius = radius
-                setStroke((1 * density).toInt().coerceAtLeast(1), stroke)
-            },
-            null,
-        )
-        // Remote and D-pad users need to see where they are; touch mode never shows it.
-        foreground = StateListDrawable().apply {
-            addState(intArrayOf(android.R.attr.state_focused), GradientDrawable().apply {
-                setColor(Color.TRANSPARENT)
-                cornerRadius = radius
-                setStroke((3 * density).toInt(), palette.focusRing)
-            })
-        }
+        setTextColor(FlymeAutoStyle.contentColors(text))
+        background = FlymeAutoStyle.control(context, palette, fill, if (height > 0) height else minHeight)
+        FlymePressFeedback.install(this)
     }
 }

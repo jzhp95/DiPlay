@@ -16,7 +16,12 @@ internal class UidTestLayout(private val context: Context, private val palette: 
         val padding = dp(if (DiagnosticsTestLayout.detailWidthDp(context.resources.configuration.screenWidthDp) < 480)
             FlymeAutoStyle.CONTROL_GAP_DP else FlymeAutoStyle.CARD_PADDING_DP)
         fun text(id: Int, size: Float, secondary: Boolean = false) = TextView(context).apply {
-            setText(id); textSize = size
+            setText(id)
+            FlymeAutoStyle.text(this, when (size) {
+                FlymeAutoStyle.PAGE_TITLE_SP -> FlymeAutoStyle.TextRole.PAGE_TITLE
+                FlymeAutoStyle.SECONDARY_TEXT_SP -> FlymeAutoStyle.TextRole.SECONDARY
+                else -> FlymeAutoStyle.TextRole.BODY
+            })
             setTextColor(if (secondary) palette.secondaryText else palette.primaryText)
             setPadding(0, dp(FlymeAutoStyle.BUTTON_PADDING_VERTICAL_DP), 0, dp(FlymeAutoStyle.BUTTON_PADDING_VERTICAL_DP))
         }

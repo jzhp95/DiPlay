@@ -25,7 +25,11 @@ internal class WheelTestLayout(private val context: Context, private val palette
         setPadding(padding, padding, padding, padding)
     }
     private fun text(id: Int, size: Float) = TextView(context).apply {
-        setText(id); textSize = size; setTextColor(palette.primaryText)
+        setText(id); FlymeAutoStyle.text(this, when (size) {
+            FlymeAutoStyle.PAGE_TITLE_SP -> FlymeAutoStyle.TextRole.PAGE_TITLE
+            FlymeAutoStyle.SECONDARY_TEXT_SP -> FlymeAutoStyle.TextRole.SECONDARY
+            else -> FlymeAutoStyle.TextRole.BODY
+        }); setTextColor(palette.primaryText)
         setPadding(0, dp(FlymeAutoStyle.BUTTON_PADDING_VERTICAL_DP), 0, dp(FlymeAutoStyle.BUTTON_PADDING_VERTICAL_DP))
     }
 
@@ -93,7 +97,7 @@ internal class WheelTestLayout(private val context: Context, private val palette
             setTextColor(palette.primaryText)
             minHeight = dp(FlymeAutoStyle.CONTROL_HEIGHT_DP)
             thumbTintList = ColorStateList(arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()), intArrayOf(palette.accent, palette.secondaryText))
-            trackTintList = ColorStateList(arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()), intArrayOf(palette.railSelected, palette.button))
+            trackTintList = ColorStateList(arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()), intArrayOf(palette.accentTrack, palette.trackOff))
             isChecked = debugEnabled
             setOnCheckedChangeListener { _, checked -> debugChanged(checked) }
         })
