@@ -60,7 +60,7 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         val palette = FlymeSampleStyle.palette(this)
         mapWidth = savedInstanceState?.getInt("map_width", mapWidth) ?: mapWidth
-        status = TextView(this).apply { setTextColor(palette.secondaryText); textSize = FlymeAutoStyle.BODY_TEXT_SP }
+        status = TextView(this).apply { setTextColor(palette.secondaryText); FlymeAutoStyle.text(this, FlymeAutoStyle.TextRole.BODY) }
         mapView = SurfaceView(this)
         mapView.holder.addCallback(object : SurfaceHolder.Callback {
             override fun surfaceCreated(holder: SurfaceHolder) {
@@ -100,7 +100,9 @@ class MainActivity : Activity() {
             val inset = FlymeAutoStyle.dp(context, FlymeAutoStyle.CARD_PADDING_DP)
             setPadding(inset, inset, inset, inset)
             addView(TextView(context).apply {
-                text = getString(R.string.maphost_title); setTextColor(palette.primaryText); textSize = FlymeAutoStyle.PAGE_TITLE_SP
+                text = getString(R.string.maphost_title)
+                setTextColor(palette.primaryText)
+                FlymeAutoStyle.text(this, FlymeAutoStyle.TextRole.PAGE_TITLE)
             })
             addView(status)
             addView(buttons)

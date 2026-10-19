@@ -32,6 +32,14 @@ internal class DiPlayButton(context: Context) : Button(context) {
         repaint()
     }
 
+    override fun setLayoutParams(params: android.view.ViewGroup.LayoutParams) {
+        if (params.height > 0) {
+            minHeight = maxOf(minHeight, params.height)
+            params.height = android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+        }
+        super.setLayoutParams(params)
+    }
+
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
         if (h != oldh) repaint()

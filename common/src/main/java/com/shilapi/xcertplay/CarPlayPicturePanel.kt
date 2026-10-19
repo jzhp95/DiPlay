@@ -20,17 +20,22 @@ internal class CarPlayPicturePanel(
     private val original = Switch(context)
     private fun dp(n: Int) = (n * resources.displayMetrics.density).toInt()
     private fun text(value: String) = TextView(context).apply {
-        text = value; textSize = 15f; setTextColor(palette.overlayPrimaryText)
+        text = value
+        FlymeAutoStyle.text(this, FlymeAutoStyle.TextRole.BODY)
+        setTextColor(palette.overlayPrimaryText)
     }
     init {
         orientation = VERTICAL
         setPadding(dp(12), dp(8), dp(12), dp(8))
         setBackgroundColor(palette.overlayBackground)
         isClickable = true
-        addView(text(context.getString(R.string.picture_adjustments)))
         val rows = LinearLayout(context).apply { orientation = VERTICAL }
-        val scroll = ScrollView(context).apply { addView(rows) }
+        val scroll = ScrollView(context).apply {
+            isFillViewport = true
+            addView(rows, LayoutParams(-1, -2))
+        }
         addView(scroll, LayoutParams(-1, 0, 1f))
+        rows.addView(text(context.getString(R.string.picture_adjustments)))
         rows.addView(text(context.getString(if (adjustmentsAvailable) R.string.picture_live_hint
             else R.string.picture_surface_output_unavailable)))
         val labels = listOf(R.string.picture_brightness, R.string.picture_contrast,
@@ -77,7 +82,9 @@ internal class CarPlayPicturePanel(
                 controls.values.forEach { it.second.isEnabled = adjustmentsAvailable && !checked }
             }
         }
-        addView(original, LayoutParams(-1, dp(48)))
+        FlymeAutoStyle.text(original, FlymeAutoStyle.TextRole.BODY)
+        original.minimumHeight = dp(FlymeAutoStyle.CONTROL_HEIGHT_DP)
+        rows.addView(original, LayoutParams(-1, -2))
         val actions = LinearLayout(context)
         actions.addView(DiPlayButton(context).apply {
             text = context.getString(R.string.picture_reset)
@@ -95,7 +102,8 @@ internal class CarPlayPicturePanel(
             text = context.getString(R.string.picture_done)
             setOnClickListener { close() }
         }, LayoutParams(0, dp(48), 1f))
-        addView(actions)
+        rows.addView(actions)
+        applyPalette(initialPalette)
     }
 
     fun applyPalette(palette: DiPlayPalette) {

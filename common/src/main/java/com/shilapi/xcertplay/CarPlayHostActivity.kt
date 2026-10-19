@@ -2691,8 +2691,7 @@ class CarPlayHostActivity : ComponentActivity() {
     private val overlayPalette: DiPlayPalette get() = DiPlayPalette.of(appNight)
     private val settingsOverlayTheme: SettingsTheme get() = SettingsTheme.overlay(overlayPalette)
     private val MENU_BACKGROUND: Int get() = overlayPalette.overlayBackground
-    // The side panel card follows the app theme: black when dark, white (for now) when light.
-    private val SIDE_PANEL_CARD: Int get() = if (appNight) Color.BLACK else Color.WHITE
+    private val SIDE_PANEL_CARD: Int get() = overlayPalette.dialogSurface
     private val SIDE_PANEL_PRIMARY: Int get() = MENU_PRIMARY
     private val SIDE_PANEL_SECONDARY: Int get() = MENU_SECONDARY
     private val MENU_PRIMARY: Int get() = overlayPalette.overlayPrimaryText
@@ -4553,10 +4552,14 @@ class CarPlayHostActivity : ComponentActivity() {
         bold: Boolean = false,
     ): TextView = TextView(this).apply {
         this.text = text
-        textSize = sizeSp
+        FlymeAutoStyle.text(this, when {
+            sizeSp >= 28 -> FlymeAutoStyle.TextRole.PAGE_TITLE
+            sizeSp >= 22 && bold -> FlymeAutoStyle.TextRole.SECTION_TITLE
+            sizeSp >= 18 -> FlymeAutoStyle.TextRole.BODY
+            else -> FlymeAutoStyle.TextRole.SECONDARY
+        }, compact = false)
         setTextColor(if (color == MENU_ACCENT) overlayPalette.overlayAccentText else color)
-        typeface = if (bold) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
-        includeFontPadding = false
+        if (bold) typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
     }
 
     private fun updateHotspotStatus(status: CarPlayStatus) {

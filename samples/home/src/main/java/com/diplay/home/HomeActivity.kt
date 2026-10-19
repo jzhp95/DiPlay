@@ -201,7 +201,7 @@ class HomeActivity : ComponentActivity() {
             format12Hour = datePattern
             format24Hour = datePattern
             setTextColor(palette.secondaryText)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
+            FlymeAutoStyle.text(this, FlymeAutoStyle.TextRole.BODY)
             setPadding(if (resources.configuration.screenWidthDp < 840) 0 else dp(FlymeAutoStyle.BLOCK_GAP_DP), 0, 0, dp(FlymeAutoStyle.BUTTON_PADDING_VERTICAL_DP))
         })
     }
@@ -209,7 +209,8 @@ class HomeActivity : ComponentActivity() {
     private fun label(text: String, size: Float) = TextView(this).apply {
         this.text = text
         setTextColor(palette.primaryText)
-        setTextSize(TypedValue.COMPLEX_UNIT_SP, size)
+        FlymeAutoStyle.text(this, if (size >= FlymeAutoStyle.PAGE_TITLE_SP)
+            FlymeAutoStyle.TextRole.PAGE_TITLE else FlymeAutoStyle.TextRole.BODY)
     }
 
     private fun pill(text: String, onClick: () -> Unit) = Button(this).apply {
@@ -288,7 +289,7 @@ private class AppsAdapter(private val context: Context) : BaseAdapter() {
             addView(ImageView(context), LinearLayout.LayoutParams((72 * density).toInt(), (72 * density).toInt()))
             addView(TextView(context).apply {
                 setTextColor(FlymeSampleStyle.palette(context).primaryText)
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+                FlymeAutoStyle.text(this, FlymeAutoStyle.TextRole.SECONDARY)
                 gravity = Gravity.CENTER
                 maxLines = 2
             }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (8 * density).toInt() })

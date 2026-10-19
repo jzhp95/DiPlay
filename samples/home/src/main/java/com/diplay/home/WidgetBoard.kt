@@ -146,20 +146,25 @@ class WidgetBoard(private val activity: Activity, private val column: LinearLayo
         val density = activity.resources.displayMetrics.density
         val height = maxOf(info.minHeight, (MIN_HEIGHT_DP * density).toInt())
         val widget = host.createView(activity.applicationContext, id, info)
-        val remove = TextView(activity).apply {
+        val remove = android.widget.Button(activity).apply {
+            val palette = FlymeSampleStyle.palette(activity)
+            FlymeAutoStyle.button(this, palette, compact = true)
+            minimumWidth = 0; minWidth = 0
+            minHeight = (48 * density).toInt()
+            setPadding(0, 0, 0, 0)
             text = "✕"
             contentDescription = activity.getString(R.string.home_remove_widget)
             setTextColor(Color.WHITE)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
             gravity = Gravity.CENTER
-            background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(FlymeSampleStyle.palette(activity).danger) }
+            background = FlymeAutoStyle.control(activity, palette, palette.danger, (48 * density).toInt())
             visibility = if (editing) View.VISIBLE else View.GONE
         }
         val card = FrameLayout(activity).apply {
             background = FlymeAutoStyle.card(activity, FlymeSampleStyle.palette(activity))
             setPadding((8 * density).toInt(), (8 * density).toInt(), (8 * density).toInt(), (8 * density).toInt())
             addView(widget, FrameLayout.LayoutParams(-1, -1))
-            addView(remove, FrameLayout.LayoutParams((44 * density).toInt(), (44 * density).toInt(), Gravity.TOP or Gravity.END))
+            addView(remove, FrameLayout.LayoutParams((48 * density).toInt(), (48 * density).toInt(), Gravity.TOP or Gravity.END))
         }
         remove.setOnClickListener {
             column.removeView(card)

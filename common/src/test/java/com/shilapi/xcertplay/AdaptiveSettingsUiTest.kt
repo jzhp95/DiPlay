@@ -494,9 +494,11 @@ class AdaptiveSettingsUiTest {
         buttons.forEach { button ->
             val lp = button.layoutParams as LinearLayout.LayoutParams
             assertEquals(button.text.toString(), ViewGroup.LayoutParams.WRAP_CONTENT, lp.height)
-            assertTrue(button.text.toString(), button.minHeight >= dp(FlymeAutoStyle.CONTROL_HEIGHT_DP))
+            assertTrue(button.text.toString(), button.minHeight >= dp(
+                if (FlymeAutoStyle.compact(screen)) FlymeAutoStyle.COMPACT_CONTROL_HEIGHT_DP
+                else FlymeAutoStyle.CONTROL_HEIGHT_DP))
             assertEquals(button.text.toString(), 0, lp.topMargin)
-            assertTrue(button.text.toString(), lp.bottomMargin in setOf(0, dp(6), dp(12)))
+            assertTrue(button.text.toString(), lp.bottomMargin in setOf(0, dp(6), dp(FlymeAutoStyle.CONTROL_GAP_DP)))
         }
         val page = scroll.getChildAt(0)
         assertFalse(descendants(scroll).any { it.tag == "spacer" && it.parent !== page })

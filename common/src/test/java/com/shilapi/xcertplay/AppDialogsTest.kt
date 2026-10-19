@@ -72,7 +72,7 @@ class AppDialogsTest {
         )
         try {
             assertEquals(palette.accent, attributes.getColor(0, 0))
-            assertEquals(palette.surface, (attributes.getDrawable(1) as ColorDrawable).color)
+            assertEquals(palette.dialogSurface, (attributes.getDrawable(1) as ColorDrawable).color)
         } finally {
             attributes.recycle()
         }

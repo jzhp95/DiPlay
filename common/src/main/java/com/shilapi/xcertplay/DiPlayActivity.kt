@@ -812,10 +812,9 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
     }
 
     private fun settingsRail(): LinearLayout = column().apply {
-        background = FlymeAutoStyle.card(this@DiPlayActivity, palette)
-        setPadding(dp(12), dp(12), dp(12), dp(12))
+        setPadding(dp(FlymeAutoStyle.CONTROL_GAP_DP), 0, dp(FlymeAutoStyle.CONTROL_GAP_DP), 0)
         SettingsCategory.entries.forEach { category ->
-            addView(settingsRailDestination(category), matchButton(0, 52).apply {
+            addView(settingsRailDestination(category), LinearLayout.LayoutParams(-1, -2).apply {
                 bottomMargin = if (category == SettingsCategory.entries.last()) 0 else dp(8)
             })
         }
@@ -829,14 +828,15 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             isClickable = true
             isFocusable = true
             isSelected = selected
-            foreground = focusRing(12)
+            minimumHeight = dp(FlymeAutoStyle.NAVIGATION_HEIGHT_DP)
+            val navRadius = FlymeAutoStyle.radius(this@DiPlayActivity, minimumHeight)
+            foreground = focusRing((navRadius / resources.displayMetrics.density).roundToInt())
             contentDescription = getString(R.string.settings_open_category, title)
             background = android.graphics.drawable.RippleDrawable(
                 ColorStateList.valueOf(RIPPLE),
                 GradientDrawable().apply {
                     setColor(if (selected) RAIL_SELECTED else Color.TRANSPARENT)
-                    cornerRadius = dp(12).toFloat()
-                    if (selected) setStroke(dp(1), RAIL_SELECTED_BORDER)
+                    cornerRadius = navRadius
                 },
                 null,
             )
@@ -854,8 +854,9 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                 importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
             }, LinearLayout.LayoutParams(dp(26), dp(26)).apply { marginEnd = dp(12) })
             addView(label(title, FlymeAutoStyle.NAVIGATION_TEXT_SP.toInt(), if (selected) ACCENT else TEXT, true,
-                centreGlyphs = usesChineseGlyphAlignment(resources.configuration.locales[0].language, title)),
-                LinearLayout.LayoutParams(0, -1, 1f))
+                centreGlyphs = usesChineseGlyphAlignment(resources.configuration.locales[0].language, title)).apply {
+                    FlymeAutoStyle.text(this, FlymeAutoStyle.TextRole.NAVIGATION, compact = false)
+                }, LinearLayout.LayoutParams(0, -2, 1f))
             setOnClickListener {
                 openSettingsCategory(category)
             }
@@ -3551,7 +3552,10 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
 
     private fun section(parent: LinearLayout, title: String, icon: Int? = null, build: (LinearLayout) -> Unit) {
         searchIndexSink?.add(title)
-        val card = card()
+        val card = if (page == "settings" && settingsCategory != SettingsCategory.OVERVIEW) column().apply {
+            val inset = dp(FlymeAutoStyle.CARD_PADDING_DP)
+            setPadding(inset, dp(FlymeAutoStyle.CONTROL_GAP_DP), inset, dp(FlymeAutoStyle.CONTROL_GAP_DP))
+        } else card()
         val heading = row().apply { gravity = Gravity.CENTER_VERTICAL; setPadding(0, 0, 0, dp(16)) }
         if (icon != null) heading.addView(ImageView(this).apply {
             setImageResource(icon); imageTintList = ColorStateList.valueOf(ACCENT)
