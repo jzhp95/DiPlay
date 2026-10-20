@@ -90,6 +90,10 @@ class CarPlayMediaEngine(
         val key: StreamKey, val stream: AudioStream,
         val microphone: MicrophoneConfig?, val capture: AudioPacketCapture?,
     )
+    private class VideoRegistration(val key: StreamKey, val stream: ScreenStream)
+    private val videoLock = Any()
+    private val videoOwners = HashMap<Int, VideoRegistration>()
+    private val retiredVideoSessions = Collections.newSetFromMap(WeakHashMap<AirPlaySession, Boolean>())
     private val normalAudioLock = Any()
     private val normalAudioRegistrations = HashMap<StreamKey, NormalAudioRegistration>()
     private val normalAudioOwners = HashMap<AudioStreamId, NormalAudioRegistration>()
@@ -138,42 +142,76 @@ class CarPlayMediaEngine(
 
     override fun onScreen(session: AirPlaySession, type: Int, stream: Map<String, Any?>): Int? {
         val key = outputKey(session, stream) ?: return null
-        val streamKey = StreamKey(session, type)
-        Log.i(TAG, "airplay screen key connectionID=${unsignedPlistDecimal(stream["streamConnectionID"])}")
-        val screen = ScreenStream(key, session::logDebug)
-        sink.setVideoDiagnosticHandler(type) {
-            if (it == "first frame rendered") session.videoFrameRendered()
-            session.logDebug("Video: $it")
-        }
-        sink.setVideoRecoveryHandler(type) {
-            if (streams[streamKey] === screen) {
-                // The cluster asks for a keyframe of its own screen; the plain command is the main screen's.
-                val command = if (type == STREAM_TYPE_ALT_SCREEN) {
-                    mapOf("type" to "forceKeyFrame", "params" to mapOf("uuid" to AirPlayInfoPlist.ALT_UUID))
-                } else {
-                    mapOf("type" to "forceKeyFrame")
-                }
-                val sent = session.sendCommand(command)
-                session.logDebug("Video recovery: requested keyframe sent=$sent")
-            }
-        }
-        val port = screen.listen(
-            object : ScreenStream.Listener by currentScreenListener(type, sink, isCurrent = { streams[streamKey] === screen }) {
+        return synchronized(videoLock) {
+            if (session.isClosed || session in retiredVideoSessions) return null
+            val streamKey = StreamKey(session, type)
+            val screen = ScreenStream(key, session::logDebug)
+            val registration = VideoRegistration(streamKey, screen)
+            val listener = object : ScreenStream.Listener {
+                override fun onCodec(codec: VideoCodec) = deliverVideo(registration) { sink.onVideoCodec(type, codec) }
+                override fun onConfig(codecData: ByteArray) = deliverVideo(registration) { sink.onVideoConfig(type, codecData) }
+                override fun onFrame(naluBytes: ByteArray) = deliverVideo(registration) { sink.onVideoFrame(type, naluBytes) }
+                override fun onFrame(naluBytes: ByteArray, senderNanos: Long, arrivalNanos: Long) =
+                    deliverVideo(registration) { sink.onVideoFrame(type, naluBytes, senderNanos, arrivalNanos) }
                 override fun onClosed(cause: Throwable?) {
-                    Log.w(
-                        TAG,
-                        "screen stream ended type=$type reason=${cause?.message ?: "peer EOF"}",
-                    )
-                    if (streams.remove(streamKey, screen)) {
-                        sink.onScreenStreamActive(type, false)
+                    val current = synchronized(videoLock) {
+                        if (videoOwners[type] !== registration) false
+                        else {
+                            // Reserve the session's retirement before a sink callback or another
+                            // SETUP can publish a replacement while close() runs outside this lock.
+                            retiredVideoSessions.add(session)
+                            retireVideoLocked(registration)
+                        }
                     }
-                    session.close()
+                    if (current) session.close()
                 }
-            },
-        )
-        streams.put(streamKey, screen)?.close()
-        sink.onScreenStreamActive(type, true)
-        return port
+            }
+            val port = try { screen.listen(listener) } catch (error: Throwable) {
+                screen.close()
+                throw error
+            }
+            // A sink output belongs to one registration across all control sessions.
+            videoOwners.put(type, registration)?.let { previous ->
+                streams.remove(previous.key, previous.stream)
+                previous.stream.close()
+            }
+            streams[streamKey] = screen
+            sink.setVideoDiagnosticHandler(type) { message ->
+                deliverVideo(registration) {
+                    if (message == "first frame rendered") session.videoFrameRendered()
+                    session.logDebug("Video: $message")
+                }
+            }
+            if (!isVideoCurrentLocked(registration)) return null
+            sink.setVideoRecoveryHandler(type) {
+                deliverVideo(registration) {
+                    val command = if (type == STREAM_TYPE_ALT_SCREEN) {
+                        mapOf("type" to "forceKeyFrame", "params" to mapOf("uuid" to AirPlayInfoPlist.ALT_UUID))
+                    } else mapOf("type" to "forceKeyFrame")
+                    val sent = session.sendCommand(command)
+                    session.logDebug("Video recovery: requested keyframe sent=$sent")
+                }
+            }
+            if (!isVideoCurrentLocked(registration)) return null
+            sink.onScreenStreamActive(type, true)
+            port
+        }
+    }
+
+    private fun isVideoCurrentLocked(registration: VideoRegistration): Boolean =
+        !registration.key.session.isClosed && registration.key.session !in retiredVideoSessions &&
+            videoOwners[registration.key.type] === registration && streams[registration.key] === registration.stream
+
+    private fun deliverVideo(registration: VideoRegistration, deliver: () -> Unit) {
+        synchronized(videoLock) { if (isVideoCurrentLocked(registration)) deliver() }
+    }
+
+    private fun retireVideoLocked(registration: VideoRegistration): Boolean {
+        if (!videoOwners.remove(registration.key.type, registration)) return false
+        streams.remove(registration.key, registration.stream)
+        registration.stream.close()
+        sink.onScreenStreamActive(registration.key.type, false)
+        return true
     }
 
     override fun onAudio(session: AirPlaySession, type: Int, stream: Map<String, Any?>): Map<String, Any?>? =
@@ -540,6 +578,12 @@ class CarPlayMediaEngine(
     }
 
     override fun onTeardown(session: AirPlaySession, type: Int) {
+        if (isScreenStreamType(type)) {
+            synchronized(videoLock) {
+                videoOwners[type]?.takeIf { it.key.session === session }?.let(::retireVideoLocked)
+            }
+            return
+        }
         if (type == STREAM_TYPE_DATA) clearPendingIapTunnel(session)
         if (type == BufferedAudioStream.STREAM_TYPE) {
             retireBuffered(session)
@@ -551,10 +595,13 @@ class CarPlayMediaEngine(
                 .map { it.key to it.value }
         }
         tornDown.forEach { (key, stream) -> retireStream(key, stream) }
-        if (isScreenStreamType(type)) sink.onScreenStreamActive(type, false)
     }
 
     override fun onSessionClosed(session: AirPlaySession) {
+        synchronized(videoLock) {
+            retiredVideoSessions.add(session)
+            videoOwners.values.filter { it.key.session === session }.toList().forEach(::retireVideoLocked)
+        }
         val sessionStreams = synchronized(normalAudioLock) {
             retiredNormalSessions.add(session)
             streams.entries.filter { it.key.session === session && it.key.type != BufferedAudioStream.STREAM_TYPE }
@@ -563,9 +610,6 @@ class CarPlayMediaEngine(
         clearPendingIapTunnel(session)
         retireBuffered(session)
         videoSettingsChannels.remove(session)?.close()
-        sessionStreams
-            .filter { isScreenStreamType(it.first.type) }
-            .forEach { sink.onScreenStreamActive(it.first.type, false) }
         sessionStreams.forEach { (key, stream) -> retireStream(key, stream) }
     }
 

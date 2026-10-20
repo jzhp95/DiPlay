@@ -4,6 +4,7 @@ import java.io.Closeable
 import java.net.Socket
 import java.math.BigInteger
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -28,11 +29,14 @@ class CarPlayMediaEngineTest {
         }
         val session = testSession()
 
+        val engine = CarPlayMediaEngine(sink)
         try {
-            val engine = CarPlayMediaEngine(sink)
+            assertNotNull(engine.onScreen(session, 110, mapOf("streamConnectionID" to 42L)))
+            events.clear()
             engine.onTeardown(session, 110)
             engine.onTeardown(session, 100)
         } finally {
+            engine.onSessionClosed(session)
             session.close()
         }
 
@@ -55,10 +59,9 @@ class CarPlayMediaEngineTest {
         @Suppress("UNCHECKED_CAST")
         val streams = streamsField.get(engine) as
             MutableMap<CarPlayMediaEngine.StreamKey, Closeable>
-        streams[CarPlayMediaEngine.StreamKey(session, 110)] = Closeable {}
-        streams[CarPlayMediaEngine.StreamKey(session, 111)] = Closeable {}
-        streams[CarPlayMediaEngine.StreamKey(session, 100)] = Closeable {}
-
+        assertNotNull(engine.onScreen(session, 110, mapOf("streamConnectionID" to 42L)))
+        assertNotNull(engine.onScreen(session, 111, mapOf("streamConnectionID" to 43L)))
+        events.clear()
         engine.onSessionClosed(session)
         session.close()
 
@@ -99,5 +102,8 @@ class CarPlayMediaEngineTest {
         mfi = null,
         listener = object : AirPlaySessionListener {},
         media = object : AirPlayMediaHandler {},
-    )
+    ).also { session ->
+        session.pairVerify.javaClass.getDeclaredField("sharedSecret").apply { isAccessible = true }
+            .set(session.pairVerify, ByteArray(32) { 1 })
+    }
 }
