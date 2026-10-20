@@ -331,6 +331,12 @@ class AndroidMediaSink(
         synchronized(videoOwnershipLock) {
             surfaces.entries.removeIf { it.value === surface } // future workers must not start on it
             if (defaultSurface === surface) defaultSurface = null
+            synchronized(mirrorLock) {
+                mirrorSurfaces.entries.filter { it.value === surface }.map { it.key }.forEach { id ->
+                    mirrorSurfaces.remove(id)
+                    mirrorDecoders[id]?.let { retire(id.first, it) }
+                }
+            }
             for ((type, decoder) in videoDecoders.entries.toList()) {
                 val request = decoder.requestDetach(surface, park = parkMain && type == MAIN_SCREEN_TYPE)
                 requests += request
@@ -369,9 +375,11 @@ class AndroidMediaSink(
         synchronized(videoOwnershipLock) {
             // A timed-out detach can reach here after the worker has already completed cleanup. Its
             // onExit removed both registrations; do not republish it after its sole release notification.
-            if (videoDecoders[type] !== decoder && decoder !in closingVideoDecoders) return
+            val mirror = synchronized(mirrorLock) { mirrorDecoders.values.any { it === decoder } }
+            if (videoDecoders[type] !== decoder && !mirror && decoder !in closingVideoDecoders) return
             closingVideoDecoders += decoder
             videoDecoders.remove(type, decoder)
+            synchronized(mirrorLock) { mirrorDecoders.entries.removeIf { it.value === decoder } }
             decoder.close()
         }
     }
@@ -387,7 +395,7 @@ class AndroidMediaSink(
     fun whenVideoReleased(onReleased: () -> Unit) {
         val alreadyReleased = synchronized(videoOwnershipLock) {
             check(videoClosed) { "close before observing video release" }
-            if (videoDecoders.isEmpty() && closingVideoDecoders.isEmpty()) true
+            if (videoDecoders.isEmpty() && mirrorDecoders.isEmpty() && closingVideoDecoders.isEmpty()) true
             else {
                 videoReleasedListeners += onReleased
                 false
@@ -400,7 +408,8 @@ class AndroidMediaSink(
         val listeners = synchronized(videoOwnershipLock) {
             closingVideoDecoders -= decoder
             videoDecoders.entries.removeIf { it.value === decoder }
-            if (videoClosed && videoDecoders.isEmpty() && closingVideoDecoders.isEmpty()) {
+            synchronized(mirrorLock) { mirrorDecoders.entries.removeIf { it.value === decoder } }
+            if (videoClosed && videoDecoders.isEmpty() && mirrorDecoders.isEmpty() && closingVideoDecoders.isEmpty()) {
                 videoReleasedListeners.toList().also { videoReleasedListeners.clear() }
             } else emptyList()
         }
@@ -427,7 +436,7 @@ class AndroidMediaSink(
             if (videoClosed) return
             val id = type to key
             synchronized(mirrorLock) {
-                mirrorDecoders.remove(id)?.close()
+                mirrorDecoders[id]?.let { retire(type, it) }
                 if (surface == null) {
                     mirrorSurfaces.remove(id)
                     return
@@ -495,7 +504,7 @@ class AndroidMediaSink(
                 videoDiagnosticHandlers.remove(type)
                 videoDecoders[type]?.let { retire(type, it) }
                 synchronized(mirrorLock) {
-                    mirrorDecoders.keys.filter { it.first == type }.forEach { mirrorDecoders.remove(it)?.close() }
+                    mirrorDecoders.keys.filter { it.first == type }.forEach { id -> mirrorDecoders[id]?.let { retire(type, it) } }
                 }
                 lastVideoConfig.remove(type)
                 pendingVideoCodec.remove(type)
@@ -633,7 +642,7 @@ class AndroidMediaSink(
             videoClosed = true
             videoDecoders.entries.toList().forEach { (type, decoder) -> retire(type, decoder) }
             synchronized(mirrorLock) {
-                mirrorDecoders.values.forEach(VideoDecoder::close)
+                mirrorDecoders.entries.toList().forEach { (id, decoder) -> retire(id.first, decoder) }
                 mirrorDecoders.clear()
                 mirrorSurfaces.clear()
             }

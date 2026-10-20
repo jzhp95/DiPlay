@@ -87,6 +87,54 @@ class AndroidMediaSinkCodecDetachTest {
         }
     }
 
+    @Test fun mirrorExitIsIncludedInReleaseCompletion() {
+        val sink = AndroidMediaSink(surface = null)
+        sinks += sink
+        val surface = newSurface()
+        var worker: Thread? = null
+        try {
+            sink.setMirrorSurface(111, "launcher:audit", surface)
+            sink.onVideoConfig(111, avcC)
+            codec.blockNext()
+            sink.onVideoFrame(111, idr)
+            assertTrue("Mirror must reach the controlled native call", codec.entered.await(5, TimeUnit.SECONDS))
+            val mirrors = sink.field<Map<Pair<Int, String>, Any>>("mirrorDecoders")
+            worker = mirrors[111 to "launcher:audit"]!!.field<Thread>("thread")
+            sink.close()
+            val notified = CountDownLatch(1)
+            sink.whenVideoReleased { notified.countDown() }
+            val released = sink.awaitVideoReleased(200)
+            assertTrue("The controlled mirror decoder is still blocked", worker.isAlive)
+            assertFalse("Release must wait for mirror decoder native exit", released)
+            assertEquals("Observer must wait for mirror native exit", 1L, notified.count)
+        } finally {
+            codec.release(); worker?.join(5000); sink.close(); surface.release()
+        }
+    }
+
+    @Test fun detachingAMirrorSurfaceWaitsForItsBlockedDecoder() {
+        val sink = AndroidMediaSink(surface = null)
+        sinks += sink
+        val surface = newSurface()
+        try {
+            sink.detachTimeoutNanos = TimeUnit.MILLISECONDS.toNanos(30)
+            sink.detachGraceNanos = TimeUnit.MILLISECONDS.toNanos(30)
+            sink.setMirrorSurface(111, "launcher:detach", surface)
+            sink.onVideoConfig(111, avcC)
+            codec.blockNext()
+            sink.onVideoFrame(111, idr)
+            assertTrue(codec.entered.await(5, TimeUnit.SECONDS))
+            val detach = sink.beginSurfaceDetach(surface, parkMain = true)
+            assertFalse("A blocked mirror still owns this surface", detach.await())
+            codec.release()
+            sink.close()
+            assertTrue(sink.awaitVideoReleased(5000))
+            val notified = CountDownLatch(1)
+            sink.whenVideoReleased { notified.countDown() }
+            assertTrue(notified.await(5, TimeUnit.SECONDS))
+        } finally { codec.release(); sink.close(); sink.awaitVideoReleased(5000); surface.release() }
+    }
+
     @Before fun setUp() {
         codec = GateCodec()
         ShadowMediaCodec.addDecoder(MediaFormat.MIMETYPE_VIDEO_AVC, ShadowMediaCodec.CodecConfig(64 * 1024, 64 * 1024, codec))
