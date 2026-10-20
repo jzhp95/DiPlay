@@ -292,6 +292,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             android.util.Log.e("DiPlaySetup", "CarPlay authentication could not be loaded", it)
             getString(R.string.setup_error_auth)
         }
+        notificationTransport = savedInstanceState?.getBoolean("notification_transport", true) ?: true
         pendingCarHotspotSetup = savedInstanceState?.getBoolean("pending_car_hotspot") ?: false
         settingsCategory = savedInstanceState?.getString("settings_category")
             ?.let { runCatching { SettingsCategory.valueOf(it) }.getOrNull() }
@@ -346,6 +347,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         outState.putString("page", page)
         outState.putString("settings_category", settingsCategory.name)
         outState.putBoolean("pending_car_hotspot", pendingCarHotspotSetup)
+        outState.putBoolean("notification_transport", notificationTransport)
         super.onSaveInstanceState(outState)
     }
     override fun onConfigurationChanged(newConfig: Configuration) {
