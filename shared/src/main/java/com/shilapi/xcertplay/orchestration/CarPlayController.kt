@@ -468,6 +468,13 @@ class CarPlayController(
 
     fun isClosed(): Boolean = closed
 
+    /** Current live session for a new UI adopting this retained controller. */
+    fun currentAirPlaySession(): AirPlaySession? {
+        if (closed) return null
+        val session = activeSession ?: return null
+        return session.takeIf { !it.isClosed && !closed && activeSession === it }
+    }
+
     /** Nonblocking identity for wheel controls: only an unclosed phone with an accepted primary stream. */
     fun activeAirPlaySessionToken(): Any? {
         if (closed) return null

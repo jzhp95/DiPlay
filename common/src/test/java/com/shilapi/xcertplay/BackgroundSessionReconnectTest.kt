@@ -32,7 +32,14 @@ class BackgroundSessionReconnectTest {
     @Test fun adoptedWirelessSessionCanRestartAfterMicrophoneWasDenied() = exercise(true, false)
     @Test fun revokedWiredConsentWaitsForUserOnRestart() = exercise(false, true)
 
-    private fun exercise(wireless: Boolean, revokeConsent: Boolean) {
+    @Test fun adoptionRestoresTheLiveSessionAndSynchronizesThemeWithoutMaskMode() =
+        exercise(true, false, restoreSession = true)
+
+    @Test fun adoptionObservesASessionChangeWhileInstallingTheNewListener() =
+        exercise(true, false, restoreSession = true, switchDuringAttach = true)
+
+    private fun exercise(wireless: Boolean, revokeConsent: Boolean, restoreSession: Boolean = false,
+        switchDuringAttach: Boolean = false) {
         val app = RuntimeEnvironment.getApplication()
         app.getSharedPreferences("xcertplay_airplay", Context.MODE_PRIVATE).edit().clear().commit()
         AirPlayPersistence.saveWirelessEnabled(app, wireless)
@@ -47,17 +54,40 @@ class BackgroundSessionReconnectTest {
         val old = mock(CarPlayController::class.java)
         `when`(old.nowPlayingSnapshot()).thenReturn(CarPlayNowPlaying())
         `when`(old.awaitClosed(anyLong())).thenReturn(true)
+        val activeSession = mock(com.shilapi.xcertplay.airplay.AirPlaySession::class.java)
+        if (restoreSession) `when`(old.currentAirPlaySession()).thenReturn(activeSession)
+        val replacementSession = mock(com.shilapi.xcertplay.airplay.AirPlaySession::class.java)
+        if (switchDuringAttach) doAnswer {
+            `when`(old.currentAirPlaySession()).thenReturn(replacementSession)
+            null
+        }.`when`(old).attachUi(
+            any<com.shilapi.xcertplay.airplay.AirPlaySessionListener>()
+                ?: object : com.shilapi.xcertplay.airplay.AirPlaySessionListener {},
+            any<(com.shilapi.xcertplay.orchestration.CarPlayStatus) -> Unit>() ?: {},
+        )
+        val expectedSession = if (switchDuringAttach) replacementSession else activeSession
         val oldSink = mock(AndroidMediaSink::class.java)
         CarPlayBackgroundSession.store(old, oldSink, 800, 480, Any(),
             CarPlaySessionDisplay(800, 480, 0, true, true, 800, 480)) { it() }
         val construction = mockConstruction(CarPlayController::class.java) { controller, _ ->
             `when`(controller.nowPlayingSnapshot()).thenReturn(CarPlayNowPlaying())
         }
-        val owner = Robolectric.buildActivity(CarPlayHostActivity::class.java).create()
+        val owner = Robolectric.buildActivity(CarPlayHostActivity::class.java)
         val activity = owner.get()
+        val commands = if (restoreSession) PausedExecutorService().also {
+            field<ExecutorService>(activity, "airPlayCommandExecutor").shutdownNow()
+            ReflectionHelpers.setField(activity, "airPlayCommandExecutor", it)
+        } else null
+        owner.create()
         try {
             assertSame(old, field<CarPlayController>(activity, "controller"))
             assertEquals("Adoption must not disturb the live connection with a VPN prompt", 0, Vpn.calls)
+            if (restoreSession) {
+                assertEquals(0, field<Int>(activity, "blackCornerRadiusDp"))
+                assertSame(expectedSession, field<Any?>(activity, "activeAirPlaySession"))
+                commands!!.runAll()
+                verify(expectedSession).setNightMode(anyBoolean())
+            }
             if (revokeConsent) Vpn.consent = Intent("test.vpn.CONSENT")
             field<ExecutorService>(activity, "teardownExecutor").shutdownNow()
             val executor = PausedExecutorService()

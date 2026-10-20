@@ -5399,13 +5399,18 @@ class CarPlayHostActivity : ComponentActivity() {
             createSessionListener(generation),
             createStatusReporter(generation),
         )
+        // Install the listener before reading the snapshot: a later transition reaches this UI,
+        // while an earlier transition is represented by the controller's current session.
+        activeAirPlaySession = snapshot.controller.currentAirPlaySession()
         // A new Activity adopts the running stream without another AirPlay SETUP or session-active
         // callback. Restore iOS's captured mask when the controller still owns that live session.
         if (blackCornerRadiusDp == CarPlayBlackCornerOverlay.IPHONE_MASK) {
-            snapshot.controller.activeIphoneCornerMask()?.let { (session, png, width) ->
-                activeAirPlaySession = session
-                installIphoneCornerMask(session, png, width)
-            }
+            snapshot.controller.activeIphoneCornerMask()?.takeIf { it.first === activeAirPlaySession }
+                ?.let { (session, png, width) -> installIphoneCornerMask(session, png, width) }
+        }
+        if (activeAirPlaySession != null) {
+            logThemeState(ThemeModeDiagnostics.Source.SESSION_ACTIVE, resources.configuration)
+            syncAirPlayDarkMode(ThemeModeDiagnostics.Source.SESSION_ACTIVE)
         }
         snapshot.sink.setScreenStreamActiveChangedListener { type, active ->
             onScreenStreamStateChanged(restartGeneration, type, active)
