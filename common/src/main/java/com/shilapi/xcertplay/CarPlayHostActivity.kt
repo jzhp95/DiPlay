@@ -945,6 +945,15 @@ class CarPlayHostActivity : ComponentActivity() {
         loadedManualHotspotInterface = manualHotspotInterface
     }
 
+    private fun refreshMicrophonePermission() {
+        val granted = checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        if (microphoneAvailable != granted) {
+            appendLog("Microphone permission changed: available=$granted; applies to the next connection")
+        }
+        microphoneAvailable = granted
+        if (granted) microphonePermissionResolved = true
+    }
+
     private fun requestStartupPrerequisites() {
         if (locationReportingEnabled && !locationPermissionAvailable) {
             requestLocationPermission()
@@ -1175,6 +1184,7 @@ class CarPlayHostActivity : ComponentActivity() {
         // The settings screen returns here with FLAG_ACTIVITY_REORDER_TO_FRONT, so this screen is
         // resumed, not recreated: refresh what that screen can change before it is used again.
         if (!menuOpen) loadConnectionSettings()
+        refreshMicrophonePermission()
         locationPermissionAvailable = hasFineLocationPermission()
         if (locationReportingEnabled && !locationPermissionAvailable && !menuOpen) {
             requestLocationPermission()
@@ -5436,6 +5446,7 @@ class CarPlayHostActivity : ComponentActivity() {
     }
 
     private fun startCarPlay(size: DisplaySize) {
+        refreshMicrophonePermission()
         if (CarPlayBackgroundSession.hasSession() && !CarPlayBackgroundSession.isOwner(this)) return
         if (shuttingDown.get() || menuOpen || handshakeResetInProgress || controller != null ||
             CarPlayBackgroundSession.authenticationTeardownPending()) return

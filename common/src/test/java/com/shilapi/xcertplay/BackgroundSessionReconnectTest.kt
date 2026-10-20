@@ -35,10 +35,13 @@ class BackgroundSessionReconnectTest {
     @Test fun adoptionRestoresTheLiveSessionAndSynchronizesThemeWithoutMaskMode() =
         exercise(true, false, restoreSession = true)
 
+    @Test fun microphoneGrantedInSystemSettingsIsUsedByTheReplacementStack() =
+        exercise(true, false, grantMic = true)
+
     @Test fun adoptionObservesASessionChangeWhileInstallingTheNewListener() =
         exercise(true, false, restoreSession = true, switchDuringAttach = true)
 
-    private fun exercise(wireless: Boolean, revokeConsent: Boolean, restoreSession: Boolean = false,
+    private fun exercise(wireless: Boolean, revokeConsent: Boolean, restoreSession: Boolean = false, grantMic: Boolean = false,
         switchDuringAttach: Boolean = false) {
         val app = RuntimeEnvironment.getApplication()
         app.getSharedPreferences("xcertplay_airplay", Context.MODE_PRIVATE).edit().clear().commit()
@@ -69,7 +72,9 @@ class BackgroundSessionReconnectTest {
         val oldSink = mock(AndroidMediaSink::class.java)
         CarPlayBackgroundSession.store(old, oldSink, 800, 480, Any(),
             CarPlaySessionDisplay(800, 480, 0, true, true, 800, 480)) { it() }
-        val construction = mockConstruction(CarPlayController::class.java) { controller, _ ->
+        val constructedConfigs = mutableListOf<com.shilapi.xcertplay.airplay.AirPlayConfig>()
+        val construction = mockConstruction(CarPlayController::class.java) { controller, context ->
+            constructedConfigs += context.arguments().filterIsInstance<com.shilapi.xcertplay.airplay.AirPlayConfig>().single()
             `when`(controller.nowPlayingSnapshot()).thenReturn(CarPlayNowPlaying())
         }
         val owner = Robolectric.buildActivity(CarPlayHostActivity::class.java)
@@ -87,6 +92,13 @@ class BackgroundSessionReconnectTest {
                 assertSame(expectedSession, field<Any?>(activity, "activeAirPlaySession"))
                 commands!!.runAll()
                 verify(expectedSession).setNightMode(anyBoolean())
+            }
+            if (grantMic) {
+                owner.start().resume().pause().stop()
+                shadowOf(app).grantPermissions(Manifest.permission.RECORD_AUDIO)
+                owner.restart().start().resume()
+                assertTrue(field(activity, "microphoneAvailable"))
+                verify(old, never()).close()
             }
             if (revokeConsent) Vpn.consent = Intent("test.vpn.CONSENT")
             field<ExecutorService>(activity, "teardownExecutor").shutdownNow()
@@ -107,7 +119,10 @@ class BackgroundSessionReconnectTest {
                 verify(construction.constructed().single()).start()
                 if (!wireless) assertEquals(1, Vpn.calls)
                 assertTrue(field(activity, "microphonePermissionResolved"))
-                if (wireless) assertFalse(field(activity, "microphoneAvailable"))
+                if (wireless) {
+                    assertEquals(grantMic, field<Boolean>(activity, "microphoneAvailable"))
+                    assertEquals(grantMic, constructedConfigs.single().microphone)
+                }
             }
         } finally {
             field<AtomicBoolean>(activity, "shuttingDown").set(true)
