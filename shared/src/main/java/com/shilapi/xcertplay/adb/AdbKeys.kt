@@ -1,7 +1,7 @@
 package com.shilapi.xcertplay.adb
 
 import android.content.Context
-import com.shilapi.xcertplay.compat.Base64Compat
+import java.util.Base64
 import java.io.File
 import java.math.BigInteger
 import java.nio.ByteBuffer
@@ -75,7 +75,7 @@ object AdbKeys {
             put(littleEndian(rr, KEY_BITS / 8))
             putInt(rsa.publicExponent.toInt())
         }.array()
-        return (Base64Compat.encode(blob) + NAME + "\u0000").toByteArray(Charsets.UTF_8)
+        return (Base64.getEncoder().encodeToString(blob) + NAME + "\u0000").toByteArray(Charsets.UTF_8)
     }
 
     private fun littleEndian(value: BigInteger, size: Int): ByteArray {

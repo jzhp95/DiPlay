@@ -1,6 +1,6 @@
 # DiPlay · Flyme Auto 适配分支
 
-本分支面向 **吉利星瑞 2026 款昆仑**，目标车机环境为 **Flyme Auto／Android 9（API 28）**。界面使用简体中文与 Flyme Auto 风格，方向盘控制以现有 Flyme EAS 适配为准。
+本分支面向 **吉利星瑞 2026 款昆仑**，目标车机环境为 **Flyme Auto／Android 9（API 28）**，主应用最低支持 API 28。界面使用简体中文与 Flyme Auto 风格，方向盘控制以现有 Flyme EAS 适配为准。
 
 ## 功能与范围
 

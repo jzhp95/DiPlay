@@ -66,6 +66,28 @@ class Iap2LocationClientTest {
     }
 
     @Test
+    fun nmeaDatesRemainUtcAcrossLeapYearsAndThe2038Boundary() {
+        val before = java.util.TimeZone.getDefault()
+        java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("Pacific/Honolulu"))
+        try {
+            for ((instant, time, date) in listOf(
+                Triple("2000-02-29T23:59:59Z", "235959.00", "290200"),
+                Triple("2038-01-19T03:14:08Z", "031408.00", "190138"),
+                Triple("2100-03-01T00:00:01Z", "000001.00", "010300"),
+            )) {
+                val fields = NmeaLocationEncoder.encode(CarPlayLocationFix(
+                    latitudeDegrees = 30.0, longitudeDegrees = 120.0,
+                    timestampMillis = Instant.parse(instant).toEpochMilli(),
+                )).split("\r\n").single { it.startsWith("\$GPRMC") }.substringBefore('*').split(',')
+                assertEquals(instant, time, fields[1])
+                assertEquals(instant, date, fields[9])
+            }
+        } finally {
+            java.util.TimeZone.setDefault(before)
+        }
+    }
+
+    @Test
     fun identificationAdvertisesLocationMessagesAndComponentOnlyWhenEnabled() {
         val base = wiredIdentification(locationInformationEnabled = false)
         val enabled = wiredIdentification(locationInformationEnabled = true)

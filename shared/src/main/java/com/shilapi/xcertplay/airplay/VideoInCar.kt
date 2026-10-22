@@ -1,6 +1,6 @@
 package com.shilapi.xcertplay.airplay
 
-import com.shilapi.xcertplay.compat.Base64Compat
+import java.util.Base64
 import java.math.BigInteger
 
 /** Whether the latest video availability update was sent now or retained for a later AirPlay stage. */
@@ -110,7 +110,7 @@ object VideoInCar {
         var bits = BigInteger.valueOf(legacyFeatures)
         ADDITIONAL_FEATURE_BITS.forEach { bits = bits.setBit(it) }
         val littleEndian = bits.toByteArray().reversedArray().dropLastWhile { it == 0.toByte() }.toByteArray()
-        return Base64Compat.encode(littleEndian)
+        return Base64.getEncoder().encodeToString(littleEndian)
     }
 
     /**

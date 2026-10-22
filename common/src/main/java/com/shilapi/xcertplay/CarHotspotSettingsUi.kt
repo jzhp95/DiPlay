@@ -191,7 +191,7 @@ internal class CarHotspotSettingsUi(
                 else InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
             if (secret && !passwordVisible) transformationMethod = PasswordTransformationMethod.getInstance()
             isEnabled = !busy
-            if (Build.VERSION.SDK_INT >= 26) importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO
+            importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO
         }
         row.addView(input, LinearLayout.LayoutParams(0, -1, 1f))
         if (secret) {

@@ -16,7 +16,7 @@ import kotlin.system.exitProcess
 /**
  * Shell-UID entry point that [WifiScanPause] starts through the head unit's adb with app_process.
  * Hidden framework calls are allowed there, and the shell holds the permission they check
- * (CONNECTIVITY_INTERNAL on Android 7.1-10, NETWORK_SETTINGS on 11+). Prints only the protocol line.
+ * (CONNECTIVITY_INTERNAL on Android 9-10, NETWORK_SETTINGS on 11+). Prints only the protocol line.
  */
 object WifiScanPauseMain {
     internal const val PAUSE = "pause"
@@ -53,7 +53,7 @@ object WifiScanPauseMain {
 /**
  * Switches the framework's automatic joining, and with it the periodic connectivity scans, through
  * the IWifiManager binder proxy. Methods are found by name and shape because BYD firmware renumbers
- * binder transactions: `enableWifiConnectivityManager(boolean)` on Android 7.1-10,
+ * binder transactions: `enableWifiConnectivityManager(boolean)` on Android 9-10,
  * `allowAutojoinGlobal(boolean)` on 11-13 and `allowAutojoinGlobal(boolean, String, Bundle)` on 14+.
  * Android 13+ also reports the current setting, so one that someone else turned off is left alone
  * and every change is read back.

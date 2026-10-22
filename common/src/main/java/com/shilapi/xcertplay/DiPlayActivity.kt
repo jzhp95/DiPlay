@@ -52,7 +52,6 @@ import com.shilapi.xcertplay.airplay.ClusterSpeedometerOverlay
 import com.shilapi.xcertplay.reportshare.ReportShareEndpoint
 import com.shilapi.xcertplay.reportshare.ReportShareServer
 import com.shilapi.xcertplay.reportshare.ReportShareQrCode
-import com.shilapi.xcertplay.compat.closeCompat
 import com.shilapi.xcertplay.host.R
 import com.shilapi.xcertplay.media.MtkDecoderTuning
 import com.shilapi.xcertplay.network.CarHotspotSettings
@@ -279,11 +278,10 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             com.shilapi.xcertplay.network.restoreWifiScanAfterInterruptedSession(applicationContext)
         }
         WindowCompat.setDecorFitsSystemWindows(window, false)
-        if (Build.VERSION.SDK_INT >= 28) {
-            window.attributes = window.attributes.apply {
-                layoutInDisplayCutoutMode = android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
-            }
+        window.attributes = window.attributes.apply {
+            layoutInDisplayCutoutMode = android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
         }
+
         applyWindowAppearance()
         setupError = runCatching { DiPlayBootstrap.ensure(this, AirPlayPersistence.loadMfiTarget(this)) }.exceptionOrNull()?.let {
             android.util.Log.e("DiPlaySetup", "CarPlay authentication could not be loaded", it)
@@ -467,7 +465,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
     }
 
     private fun applyFullscreenMode() {
-        val multiWindow = Build.VERSION.SDK_INT >= 24 && isInMultiWindowMode
+        val multiWindow = isInMultiWindowMode
         WindowInsetsControllerCompat(window, window.decorView).apply {
             isAppearanceLightStatusBars = palette.systemBarIconsAreDark
             isAppearanceLightNavigationBars = palette.systemBarIconsAreDark
@@ -3128,16 +3126,16 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         val channel = manager.initialize(this, mainLooper, null)
         try {
             manager.requestGroupInfo(channel) { group ->
-                if (group == null) { channel.closeCompat(); connect(true); return@requestGroupInfo }
+                if (group == null) { channel.close(); connect(true); return@requestGroupInfo }
                 manager.removeGroup(channel, object : android.net.wifi.p2p.WifiP2pManager.ActionListener {
                     override fun onSuccess() {
                         val deadline = android.os.SystemClock.elapsedRealtime() + 4000
                         fun waitUntilRemoved() {
                             manager.requestGroupInfo(channel) { remaining ->
                                 when {
-                                    remaining == null -> { channel.closeCompat(); if (!isFinishing && !isDestroyed) connect(true) }
+                                    remaining == null -> { channel.close(); if (!isFinishing && !isDestroyed) connect(true) }
                                     android.os.SystemClock.elapsedRealtime() >= deadline -> {
-                                        channel.closeCompat(); toast(getString(R.string.wi_fi_direct_is_still_busy_close_the_other_projection_app))
+                                        channel.close(); toast(getString(R.string.wi_fi_direct_is_still_busy_close_the_other_projection_app))
                                     }
                                     else -> handler.postDelayed({ waitUntilRemoved() }, 200)
                                 }
@@ -3145,11 +3143,11 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                         }
                         waitUntilRemoved()
                     }
-                    override fun onFailure(reason: Int) { channel.closeCompat(); toast(getString(R.string.could_not_reset_wi_fi_direct_close_the_other_projection_ap)) }
+                    override fun onFailure(reason: Int) { channel.close(); toast(getString(R.string.could_not_reset_wi_fi_direct_close_the_other_projection_ap)) }
                 })
             }
         } catch (_: SecurityException) {
-            channel.closeCompat(); permissionHelp(getString(R.string.wireless_permissions), getString(R.string.allow_nearby_devices_and_on_older_android_versions_locatio))
+            channel.close(); permissionHelp(getString(R.string.wireless_permissions), getString(R.string.allow_nearby_devices_and_on_older_android_versions_locatio))
         }
     }
 
@@ -3581,7 +3579,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                 )
                 val hintLayout = android.text.StaticLayout.Builder.obtain(value, 0, value.length, paint, hintWidth)
                     .setMaxLines(1).setIncludePad(includeFontPadding).apply {
-                        if (Build.VERSION.SDK_INT >= 28) setUseLineSpacingFromFallbacks(isFallbackLineSpacing)
+                        setUseLineSpacingFromFallbacks(isFallbackLineSpacing)
                     }.build()
                 measuredHintBaseline = extendedPaddingTop +
                     ((height - extendedPaddingTop - extendedPaddingBottom - hintLayout.height).coerceAtLeast(0) / 2) +

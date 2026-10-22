@@ -22,7 +22,7 @@ import com.shilapi.xcertplay.airplay.MediaSink
 import com.shilapi.xcertplay.airplay.MicrophoneConfig
 import com.shilapi.xcertplay.airplay.VideoCodec
 import com.shilapi.xcertplay.airplay.toHexString
-import com.shilapi.xcertplay.compat.AudioFocusRequestCompat
+import com.shilapi.xcertplay.media.AudioFocusRequestHandle
 import java.io.Closeable
 import java.nio.ByteBuffer
 import java.util.concurrent.ConcurrentHashMap
@@ -48,7 +48,7 @@ internal class AudioFocusCoordinator(
 
     private val manager = context?.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
     private val active = LinkedHashMap<AudioTrack, Entry>()
-    private var request: AudioFocusRequestCompat? = null
+    private var request: AudioFocusRequestHandle? = null
     private var requestedChannel: AudioChannel? = null
     private var mediaVolume = FULL_VOLUME
     private var closed = false
@@ -134,7 +134,7 @@ internal class AudioFocusCoordinator(
             AudioChannel.NAVIGATION -> return
         }
         currentListener = listenerFor(focusGeneration)
-        val next = AudioFocusRequestCompat(gain, primary.attributes, currentListener, Handler(Looper.getMainLooper()))
+        val next = AudioFocusRequestHandle(gain, primary.attributes, currentListener, Handler(Looper.getMainLooper()))
         request = next
         requestedChannel = primary.channel
         val result = manager?.let(next::request)
@@ -2172,12 +2172,7 @@ private class AudioRenderer(
     private fun usageFor(channel: AudioChannel): Int = when (channel) {
         AudioChannel.MEDIA -> AudioAttributes.USAGE_MEDIA
         AudioChannel.PHONE -> AudioAttributes.USAGE_VOICE_COMMUNICATION
-        // Android 7.x has no assistant usage and would record the track as an unknown usage.
-        AudioChannel.ASSISTANT -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            AudioAttributes.USAGE_ASSISTANT
-        } else {
-            AudioAttributes.USAGE_MEDIA
-        }
+        AudioChannel.ASSISTANT -> AudioAttributes.USAGE_ASSISTANT
         AudioChannel.NAVIGATION -> AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE
     }
 

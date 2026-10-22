@@ -20,7 +20,7 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [25, 29, 33], manifest = Config.NONE, qualifiers = "w960dp-h540dp-mdpi")
+@Config(sdk = [28, 29, 33], manifest = Config.NONE, qualifiers = "w960dp-h540dp-mdpi")
 class CarDialogUiTest {
     private val controllers = mutableListOf<org.robolectric.android.controller.ActivityController<Activity>>()
     private fun activity() = Robolectric.buildActivity(Activity::class.java).also(controllers::add).setup().get()

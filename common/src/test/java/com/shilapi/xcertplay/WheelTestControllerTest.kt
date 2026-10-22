@@ -14,7 +14,7 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [25, 29, 33], manifest = Config.NONE)
+@Config(sdk = [28, 29, 33], manifest = Config.NONE)
 class WheelTestControllerTest {
     private val app get() = RuntimeEnvironment.getApplication()
     private val controller = WheelTestController(app) {}

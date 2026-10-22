@@ -84,8 +84,8 @@ class PlatformTetheringStartTest {
         // Android 7 refuses it from every app (MANAGE_USERS); Android 8.0 is the first that accepts it.
         assertFalse(PlatformTetheringStart.supported(24))
         assertFalse(PlatformTetheringStart.supported(25))
-        assertTrue(PlatformTetheringStart.supported(26))
-        assertTrue(PlatformTetheringStart.supported(27))
+        assertFalse(PlatformTetheringStart.supported(26))
+        assertFalse(PlatformTetheringStart.supported(27))
         assertTrue(PlatformTetheringStart.supported(28))
         assertTrue(PlatformTetheringStart.supported(29))
         assertFalse(PlatformTetheringStart.supported(30))

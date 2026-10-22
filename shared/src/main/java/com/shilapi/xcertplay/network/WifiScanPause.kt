@@ -26,7 +26,7 @@ fun restoreWifiScanAfterInterruptedSession(context: Context) {
  *
  * Android offers apps no way to do this. Through the approved local adb shell, [WifiScanPauseMain]
  * runs as the shell user and turns off the framework's automatic joining, which stops these scans:
- * `enableWifiConnectivityManager` on Android 7.1-10 and `allowAutojoinGlobal` on Android 11+. One
+ * `enableWifiConnectivityManager` on Android 9-10 and `allowAutojoinGlobal` on Android 11+. One
  * process-wide worker owns controller leases and restores the search only after the last lease
  * ends. A durable marker precedes every disable; failed restores retry and recover when the app
  * next opens, and the framework resets the setting itself when the car restarts. Nothing happens
@@ -64,7 +64,7 @@ internal class WifiScanPause(
         internal const val HELPER_TIMEOUT_MS = 15_000
 
         fun eligible(backend: WirelessHotspotBackend, sdk: Int = Build.VERSION.SDK_INT): Boolean =
-            backend == WirelessHotspotBackend.WIFI_P2P && sdk >= Build.VERSION_CODES.N_MR1
+            backend == WirelessHotspotBackend.WIFI_P2P && sdk >= Build.VERSION_CODES.P
 
         fun restoreIfNeeded(context: Context) = ProcessWifiScanPause.recover(context.applicationContext)
 

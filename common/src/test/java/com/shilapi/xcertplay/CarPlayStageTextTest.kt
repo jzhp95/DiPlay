@@ -21,7 +21,7 @@ import org.robolectric.util.ReflectionHelpers.ClassParameter
 
 /** The stage line must not fall back to "Getting CarPlay ready" just because the UI is not English. */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [25, 29])
+@Config(sdk = [28, 29])
 @LooperMode(LooperMode.Mode.PAUSED)
 class CarPlayStageTextTest {
     private lateinit var activity: CarPlayHostActivity

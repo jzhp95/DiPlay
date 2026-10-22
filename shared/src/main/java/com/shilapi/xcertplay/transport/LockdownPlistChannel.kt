@@ -1,7 +1,7 @@
 package com.shilapi.xcertplay.transport
 
 import android.util.Xml
-import com.shilapi.xcertplay.compat.Base64Compat
+import java.util.Base64
 import java.io.Closeable
 import java.io.StringReader
 import java.nio.charset.StandardCharsets
@@ -214,7 +214,7 @@ class LockdownPlistChannel(
             "data" -> {
                 val encoded = simpleText(parser, "data").filterNot(Char::isWhitespace)
                 try {
-                    LockdownPlistValue.Data(Base64Compat.decode(encoded))
+                    LockdownPlistValue.Data(Base64.getDecoder().decode(encoded))
                 } catch (error: IllegalArgumentException) {
                     throw IphoneUsbException.Protocol("Invalid base64 Lockdown plist data")
                 }
@@ -249,7 +249,7 @@ class LockdownPlistChannel(
             is LockdownPlistValue.Integer -> append("<integer>").append(value.value).append("</integer>")
             is LockdownPlistValue.Boolean -> append(if (value.value) "<true/>" else "<false/>")
             is LockdownPlistValue.Data -> append("<data>")
-                .append(Base64Compat.encode(value.bytes))
+                .append(Base64.getEncoder().encodeToString(value.bytes))
                 .append("</data>")
         }
     }

@@ -442,8 +442,7 @@ class Iap2UsbSession internal constructor(
     private var closed = false
     private var failure: IphoneUsbException? = null
     private var pendingRead: UsbRequest? = null
-    private val readQueuePolicy = UsbReadQueuePolicy.forCurrentPlatform()
-    private val requests = UsbRequestQueue(connection, "usbmux-read-reaper")
+    private val readQueuePolicy = UsbReadQueuePolicy()
 
     fun write(data: ByteArray, timeoutMillis: Int) = synchronized(writeLock) {
         checkOpen()
@@ -474,7 +473,7 @@ class Iap2UsbSession internal constructor(
             val queueResult = synchronized(stateLock) {
                 checkOpenLocked()
                 pendingRead = request
-                readQueuePolicy.queue(buffer, ::checkOpenLocked) { requests.queue(request, it) }
+                readQueuePolicy.queue(buffer, ::checkOpenLocked) { request.queue(it) }
             }
             if (!queueResult.queued) {
                 throw IphoneUsbException.DeviceUnavailable(
@@ -491,7 +490,7 @@ class Iap2UsbSession internal constructor(
                 )
             }
             val completed = try {
-                requests.await(timeoutMillis)
+                connection.requestWait(timeoutMillis)
             } catch (_: TimeoutException) {
                 return@synchronized drainTimedOutRead(request, buffer)
             }
@@ -525,7 +524,6 @@ class Iap2UsbSession internal constructor(
             pendingRead
         }
         requestToCancel?.cancel()
-        requests.close()
         connection.close()
     }
 
@@ -548,7 +546,7 @@ class Iap2UsbSession internal constructor(
     private fun drainTimedOutRead(request: UsbRequest, buffer: ByteBuffer): ByteArray? {
         val cancelled = request.cancel()
         val completed = try {
-            requests.await(CANCEL_DRAIN_TIMEOUT_MILLIS)
+            connection.requestWait(CANCEL_DRAIN_TIMEOUT_MILLIS)
         } catch (_: TimeoutException) {
             throw failSession(
                 if (cancelled) "Timed out draining cancelled USBMUX read request"

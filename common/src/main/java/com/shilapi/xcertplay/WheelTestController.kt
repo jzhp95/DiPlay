@@ -13,7 +13,7 @@ import android.view.KeyEvent
 import com.shilapi.flymeeas.FlymeWheelBridge
 import com.shilapi.flymeeas.PlaybackSnapshot
 import com.shilapi.xcertplay.airplay.CarPlayMediaButton
-import com.shilapi.xcertplay.compat.AudioFocusRequestCompat
+import com.shilapi.xcertplay.media.AudioFocusRequestHandle
 import com.shilapi.xcertplay.host.R
 import java.io.Closeable
 
@@ -28,7 +28,7 @@ internal class WheelTestController(context: Context, private val changed: (State
     @Volatile private var generation = 0
     @Volatile private var running = false
     @Volatile private var disposed = false
-    private var request: AudioFocusRequestCompat? = null
+    private var request: AudioFocusRequestHandle? = null
     private var session: MediaSession? = null
     private var bridge: FlymeWheelBridge? = null
     private var requestResult: Int? = null
@@ -50,7 +50,7 @@ internal class WheelTestController(context: Context, private val changed: (State
         note("start generation=$current")
         try {
             val audio = context.getSystemService(AudioManager::class.java)
-            request = AudioFocusRequestCompat(AudioManager.AUDIOFOCUS_GAIN,
+            request = AudioFocusRequestHandle(AudioManager.AUDIOFOCUS_GAIN,
                 AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA)
                     .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build(),
                 AudioManager.OnAudioFocusChangeListener { change ->

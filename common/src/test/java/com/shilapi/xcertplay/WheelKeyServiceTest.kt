@@ -333,7 +333,7 @@ class WheelKeyServiceTest {
 
 
     @Test
-    @Config(sdk = [25, 29])
+    @Config(sdk = [28, 29])
     fun guidanceChangesOnlyNavigationAndStopsNewCapturesAfterGuidance() {
         WheelZoomSettings.setEnabled(service, false)
         service.session = { "phone" }

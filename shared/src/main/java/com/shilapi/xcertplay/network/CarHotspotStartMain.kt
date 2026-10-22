@@ -18,7 +18,7 @@ import kotlin.system.exitProcess
  * Shell-UID entry point that [CarHotspotAdbFallback] starts through the head unit's adb with app_process. An app can no
  * longer start tethering itself ("No field mService" on Android 10, "NoSuchMethodException … startTethering" on 12,
  * #616), while the shell may, and holds the tethering permission it checks. Starts Wi-Fi tethering with the car's
- * saved hotspot configuration, never a new one, and prints only the protocol line. Android 7.0–10 call
+ * saved hotspot configuration, never a new one, and prints only the protocol line. Android 9–10 call
  * IConnectivityManager; Android 11 moved tethering to TetheringManager.
  */
 object CarHotspotStartMain {

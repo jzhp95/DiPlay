@@ -47,7 +47,7 @@ class WifiScanPauseTest {
         for (backend in WirelessHotspotBackend.entries) {
             for (sdk in 24..36) {
                 assertEquals("$backend on API $sdk",
-                    backend == WirelessHotspotBackend.WIFI_P2P && sdk >= 25, WifiScanPause.eligible(backend, sdk))
+                    backend == WirelessHotspotBackend.WIFI_P2P && sdk >= 28, WifiScanPause.eligible(backend, sdk))
             }
         }
     }

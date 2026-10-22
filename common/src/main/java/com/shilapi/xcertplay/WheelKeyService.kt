@@ -320,8 +320,8 @@ class WheelKeyService : AccessibilityService() {
         val stream = navigationStream() ?: return false
         val audio = getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return false
         return try {
-            val minimum = navigationWheelMinimum(stream, android.os.Build.VERSION.SDK_INT) {
-                if (android.os.Build.VERSION.SDK_INT >= 28) audio.getStreamMinVolume(it) else 0
+            val minimum = navigationWheelMinimum(stream) {
+                audio.getStreamMinVolume(it)
             }
             val current = audio.getStreamVolume(stream)
             val maximum = audio.getStreamMaxVolume(stream)

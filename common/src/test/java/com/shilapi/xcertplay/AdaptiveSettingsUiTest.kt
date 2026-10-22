@@ -322,7 +322,7 @@ class AdaptiveSettingsUiTest {
 
     // Android 7.1 and 9 too: the result list once called a PopupWindow method that Android 10 added.
     @Test
-    @Config(sdk = [25, 28, 29])
+    @Config(sdk = [28, 29])
     fun headerSearchBoxListsMatchesAsYouTypeAndOpensTheChosenSetting() {
         val screen = openSettings()
         fun box() = descendants(screen.window.decorView).filterIsInstance<EditText>()
@@ -465,7 +465,7 @@ class AdaptiveSettingsUiTest {
     }
 
     @Test
-    @Config(sdk = [25, 33], shadows = [HotspotSearchProbe::class])
+    @Config(sdk = [28, 33], shadows = [HotspotSearchProbe::class])
     fun hotspotSwitchStaysHiddenOffBydUnitsWhereAndroidLetsNoAppStartTethering() {
         AirPlayPersistence.saveWirelessHotspotMode(context, WirelessHotspotMode.MANUAL)
         HotspotSearchProbe.workers.clear()

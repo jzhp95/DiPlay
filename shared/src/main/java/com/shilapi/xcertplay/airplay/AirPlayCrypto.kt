@@ -44,11 +44,9 @@ object AirPlayCrypto {
         var implementation: String = cipher.provider.name
     }
 
-    // ThreadLocal.withInitial needs API 26.
-    private val platformState = object : ThreadLocal<PlatformChacha?>() {
-        override fun initialValue(): PlatformChacha? =
-            PLATFORM_CHACHA_NAMES.firstNotNullOfOrNull { runCatching { Cipher.getInstance(it) }.getOrNull() }
-                ?.let(::PlatformChacha)
+    private val platformState = ThreadLocal.withInitial<PlatformChacha?> {
+        PLATFORM_CHACHA_NAMES.firstNotNullOfOrNull { runCatching { Cipher.getInstance(it) }.getOrNull() }
+            ?.let(::PlatformChacha)
     }
 
     /** Implementation used by this thread's last successful operation, for diagnostics. */

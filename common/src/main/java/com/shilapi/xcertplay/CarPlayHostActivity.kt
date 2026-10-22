@@ -5195,7 +5195,7 @@ class CarPlayHostActivity : ComponentActivity() {
     }
 
     private fun isMultiWindowActive(): Boolean {
-        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && isInMultiWindowMode
+        return isInMultiWindowMode
     }
 
     private fun statusBarShown(): Boolean? =

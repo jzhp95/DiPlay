@@ -3,7 +3,6 @@ package com.shilapi.xcertplay
 import android.media.AudioManager
 import android.os.Looper
 import android.view.Surface
-import com.shilapi.xcertplay.compat.AudioFocusRequestCompat
 import com.shilapi.xcertplay.media.AndroidMediaSink
 import com.shilapi.xcertplay.media.CarPlayNowPlaying
 import com.shilapi.xcertplay.orchestration.CarPlayController
@@ -21,7 +20,7 @@ import org.robolectric.annotation.LooperMode
 import org.robolectric.util.ReflectionHelpers
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [25, 28, 33], manifest = Config.NONE)
+@Config(sdk = [28, 33], manifest = Config.NONE)
 @LooperMode(LooperMode.Mode.PAUSED)
 class CarPlayMediaFocusForwardingTest {
     private val app get() = RuntimeEnvironment.getApplication()
@@ -203,7 +202,7 @@ class CarPlayMediaFocusForwardingTest {
         CarPlayMediaKeys.onMediaAudioChanged(true)
         shadowOf(Looper.getMainLooper()).idle()
         if (clearInitialGrant) clearInvocations(sink)
-        val request = ReflectionHelpers.getField<AudioFocusRequestCompat>(CarPlayMediaKeys, "focusRequest")
-        return ReflectionHelpers.getField(request, "listener")
+        val request = shadowOf(app.getSystemService(AudioManager::class.java)).lastAudioFocusRequest.audioFocusRequest
+        return ReflectionHelpers.callInstanceMethod(request, "getOnAudioFocusChangeListener")
     }
 }

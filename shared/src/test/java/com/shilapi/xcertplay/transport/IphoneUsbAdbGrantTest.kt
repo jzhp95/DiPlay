@@ -6,8 +6,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class IphoneUsbAdbGrantTest {
-    @Test fun fallbackCoversTheSupportedPreOverlayAndroidVersions() {
-        for (sdk in 25..28) assertTrue("sdk=$sdk", IphoneUsbAdbGrant.supported(sdk))
+    @Test fun fallbackSupportsOnlyAndroid9() {
+        for (sdk in 25..27) assertFalse("sdk=$sdk", IphoneUsbAdbGrant.supported(sdk))
+        assertTrue(IphoneUsbAdbGrant.supported(28))
         assertFalse(IphoneUsbAdbGrant.supported(24))
         assertFalse(IphoneUsbAdbGrant.supported(29))
     }

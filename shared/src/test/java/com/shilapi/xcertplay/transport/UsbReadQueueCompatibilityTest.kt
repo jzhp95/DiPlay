@@ -4,7 +4,6 @@ import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbDeviceConnection
 import android.hardware.usb.UsbEndpoint
 import android.hardware.usb.UsbRequest
-import android.os.Build
 import java.lang.reflect.InvocationTargetException
 import java.nio.ByteBuffer
 import java.util.ArrayDeque
@@ -221,7 +220,6 @@ object UsbQueueReplay {
     var transfer: ByteArray? = null
     var transferOffset = 0
     val completedBytes = mutableListOf<Int>()
-    @Volatile var untimedWaits = 0
     /** Timed waits that time out once each before a completion is returned. */
     var timeouts = 0
     var cancelResult = true
@@ -231,7 +229,7 @@ object UsbQueueReplay {
     fun reset() {
         outcomes.clear(); sizes.clear(); buffers.clear(); request = null; buffer = null
         queueException = null; timeout = false; onQueue = null
-        transfer = null; transferOffset = 0; completedBytes.clear(); untimedWaits = 0
+        transfer = null; transferOffset = 0; completedBytes.clear()
         timeouts = 0; cancelResult = true; emptyCompletion = false; cancels = 0
     }
 }
@@ -240,23 +238,17 @@ object UsbQueueReplay {
 class CompatibilityUsbRequestShadow {
     @RealObject lateinit var request: UsbRequest
     @Implementation fun initialize(connection: UsbDeviceConnection, endpoint: UsbEndpoint) = true
-    @Implementation(minSdk = 26) fun queue(buffer: ByteBuffer): Boolean {
+    @Implementation(minSdk = 28) fun queue(buffer: ByteBuffer): Boolean {
         UsbQueueReplay.sizes.add(buffer.remaining())
         UsbQueueReplay.buffers.add(buffer)
-        if (Build.VERSION.SDK_INT in 26..27) {
-            require(buffer.remaining() <= 16_384) { "number of remaining bytes is out of range [0, 16384]" }
-        }
+
         UsbQueueReplay.queueException?.let { throw it }
         UsbQueueReplay.onQueue?.invoke(request)
         val queued = UsbQueueReplay.outcomes.pollFirst() ?: true
         if (queued) { UsbQueueReplay.request = request; UsbQueueReplay.buffer = buffer }
         return queued
     }
-    /** Android 7.x queue; the buffer is filled from position 0 up to [length]. */
-    @Implementation fun queue(buffer: ByteBuffer, length: Int): Boolean {
-        check(buffer.position() == 0 && buffer.remaining() == length) { "Unexpected Android 7 queue range" }
-        return queue(buffer)
-    }
+
     @Implementation fun cancel(): Boolean {
         UsbQueueReplay.cancels += 1
         return UsbQueueReplay.cancelResult
@@ -266,7 +258,7 @@ class CompatibilityUsbRequestShadow {
 
 @Implements(UsbDeviceConnection::class)
 class CompatibilityUsbConnectionShadow {
-    @Implementation(minSdk = 26) fun requestWait(timeoutMillis: Long): UsbRequest {
+    @Implementation(minSdk = 28) fun requestWait(timeoutMillis: Long): UsbRequest {
         if (UsbQueueReplay.timeout) throw TimeoutException()
         if (UsbQueueReplay.timeouts > 0) {
             UsbQueueReplay.timeouts -= 1
@@ -289,10 +281,6 @@ class CompatibilityUsbConnectionShadow {
         }
         return UsbQueueReplay.request!!
     }
-    /** Android 7.x blocking wait. */
-    @Implementation fun requestWait(): UsbRequest {
-        UsbQueueReplay.untimedWaits += 1
-        return requestWait(Long.MAX_VALUE)
-    }
+
     @Implementation fun close() = Unit
 }

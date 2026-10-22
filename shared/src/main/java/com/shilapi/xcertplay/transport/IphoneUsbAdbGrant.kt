@@ -14,7 +14,7 @@ import kotlin.system.exitProcess
 
 private const val FIRST_APPLICATION_UID = 10_000
 
-/** Grants iPhone USB access when Android 7.1 through 9 has no permission activity to show. */
+/** Grants iPhone USB access when Android 9 has no permission activity to show. */
 internal object IphoneUsbAdbGrant {
     internal const val HEADER = "DIPLAY_USB_GRANT_V1"
     enum class Code { GRANTED, NO_DEVICE, ADB_UNAVAILABLE, UNSUPPORTED, DENIED, ERROR }
@@ -27,9 +27,9 @@ internal object IphoneUsbAdbGrant {
         val permissionGranted: Boolean get() = granted > 0
     }
 
-    /** AOSP 8-9 shell has MANAGE_USB; Android 7.1 needs a root or vendor-authorized shell. */
+    /** Android 9 shell has MANAGE_USB; access still requires prior local ADB approval. */
     fun supported(sdk: Int = Build.VERSION.SDK_INT): Boolean =
-        sdk in Build.VERSION_CODES.N_MR1..Build.VERSION_CODES.P
+        sdk == Build.VERSION_CODES.P
 
     fun grant(context: Context, device: UsbDevice): Result {
         if (!supported()) return Result(Code.UNSUPPORTED)

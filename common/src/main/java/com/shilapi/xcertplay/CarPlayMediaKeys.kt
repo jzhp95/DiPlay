@@ -19,7 +19,7 @@ import android.util.Log
 import android.view.KeyEvent
 import androidx.core.graphics.drawable.toBitmap
 import com.shilapi.xcertplay.airplay.CarPlayMediaButton
-import com.shilapi.xcertplay.compat.AudioFocusRequestCompat
+import com.shilapi.xcertplay.media.AudioFocusRequestHandle
 import com.shilapi.xcertplay.host.R
 import com.shilapi.xcertplay.media.CarPlayNowPlaying
 import com.shilapi.xcertplay.orchestration.CarPlayController
@@ -53,7 +53,7 @@ internal object CarPlayMediaKeys {
     private var artworkOwner: Any? = null
     private var controller: CarPlayController? = null
     private var session: MediaSession? = null
-    private var focusRequest: AudioFocusRequestCompat? = null
+    private var focusRequest: AudioFocusRequestHandle? = null
     private var focusOwner: Any? = null
     private var focusEventRevision = 0L
     private var focusHeld = false
@@ -226,7 +226,7 @@ internal object CarPlayMediaKeys {
             val owner = Any().also { focusOwner = it }
             focusEventRevision = 0L
             val audio = context.getSystemService(AudioManager::class.java)
-            val request = AudioFocusRequestCompat(
+            val request = AudioFocusRequestHandle(
                 AudioManager.AUDIOFOCUS_GAIN,
                 AudioAttributes.Builder()
                     .setUsage(AudioAttributes.USAGE_MEDIA)

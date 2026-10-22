@@ -5,7 +5,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 
-/** Checks Android 7.1 through 9's explicit USB permission activity without opening it. */
+/** Checks Android 9's explicit USB permission activity without opening it. */
 internal object UsbPermissionActivityProbe {
     internal const val COMPONENT = "com.android.systemui/com.android.systemui.usb.UsbPermissionActivity"
 
@@ -22,7 +22,7 @@ internal object UsbPermissionActivityProbe {
     }
 
     internal fun supportsProbe(sdk: Int = Build.VERSION.SDK_INT): Boolean =
-        sdk in Build.VERSION_CODES.N_MR1..Build.VERSION_CODES.P
+        sdk == Build.VERSION_CODES.P
 
     internal fun probe(manager: PackageManager): State = try {
         val component = ComponentName.unflattenFromString(COMPONENT)!!

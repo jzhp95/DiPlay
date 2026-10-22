@@ -22,7 +22,7 @@ import org.robolectric.util.ReflectionHelpers
 
 @RunWith(RobolectricTestRunner::class)
 @Config(
-    sdk = [25, 26, 27, 28],
+    sdk = [28],
     manifest = Config.NONE,
     shadows = [PermissionRequestUsbManagerShadow::class],
 )
