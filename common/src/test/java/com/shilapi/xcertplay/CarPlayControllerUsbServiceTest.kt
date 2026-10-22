@@ -10,7 +10,7 @@ import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
 import android.os.Looper
 import com.shilapi.xcertplay.airplay.*
-import com.shilapi.xcertplay.hud.BydNavigationOutputs
+import com.shilapi.xcertplay.hud.CarPlayNavigationState
 import com.shilapi.xcertplay.orchestration.*
 import com.shilapi.xcertplay.transport.Iap2IdentificationConfig
 import com.shilapi.xcertplay.transport.UsbDeviceId
@@ -35,7 +35,7 @@ class CarPlayControllerUsbServiceTest {
 
     @After fun tearDown() {
         controllers.forEach { it.close(); assertTrue(it.awaitClosed(2_000)) }
-        BydNavigationOutputs.endNow()
+        CarPlayNavigationState.endNow()
     }
 
     @Test fun wirelessLocalCanBeCreatedAndReachMfiWithoutAUsbService() {

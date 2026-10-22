@@ -4,7 +4,7 @@ import android.content.Context
 import android.os.Build
 import android.util.Log
 import com.shilapi.xcertplay.adb.LocalAdb
-import com.shilapi.xcertplay.hud.BydAdbShell
+import com.shilapi.xcertplay.adb.BackgroundAdbShell
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.ScheduledFuture
@@ -106,7 +106,7 @@ private object ProcessWifiScanPause : WifiScanPauseControl {
     private val worker: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor {
         Thread(it, WifiScanPause.TAG).apply { isDaemon = true }
     }
-    private val adb = BydAdbShell(WifiScanPause.TAG)
+    private val adb = BackgroundAdbShell(WifiScanPause.TAG)
     private var session: WifiScanPauseSession? = null
     private var retry: ScheduledFuture<*>? = null
 

@@ -59,7 +59,6 @@ class HomeActivity : ComponentActivity() {
                 }
                 addView(pill(getString(R.string.home_apps)) { showApps(true) }, actionParams())
                 addView(pill("CarPlay") { mapPanel.openCarPlay() }, actionParams())
-                addView(pill(getString(R.string.home_byd_home)) { openBydHome() }, actionParams())
             }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(FlymeAutoStyle.BLOCK_GAP_DP) })
         }
         editButton = pill(getString(R.string.home_edit)) { setEditing(!board.editing) }
@@ -150,12 +149,7 @@ class HomeActivity : ComponentActivity() {
         editButton.setText(if (editing) R.string.home_done else R.string.home_edit)
     }
 
-    private fun openBydHome() {
-        val byd = Intent().setClassName(BYD_HOME_PACKAGE, BYD_HOME_ACTIVITY).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        if (runCatching { startActivity(byd) }.isFailure) {
-            Toast.makeText(this, R.string.home_byd_unavailable, Toast.LENGTH_LONG).show()
-        }
-    }
+
 
     private fun showApps(show: Boolean) {
         if (show) appsAdapter.load()
@@ -229,8 +223,6 @@ class HomeActivity : ComponentActivity() {
     private fun dp(value: Int) = (value * density).toInt()
 
     private companion object {
-        const val BYD_HOME_PACKAGE = "com.android.launcher3"
-        const val BYD_HOME_ACTIVITY = "com.android.launcher3.home.MainActivity"
     }
 }
 

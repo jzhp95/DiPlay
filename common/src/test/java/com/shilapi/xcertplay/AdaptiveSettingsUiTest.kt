@@ -635,7 +635,6 @@ class AdaptiveSettingsUiTest {
 
         assertTrue(texts(screen).any { it.text == screen.getString(R.string.settings_advanced_caution_title) })
         assertTrue(texts(screen).any { it.text == screen.getString(R.string.carplay_map_on_instrument_cluster_experimental) })
-        assertTrue(texts(screen).any { it.text == screen.getString(R.string.advanced_vehicle_data) })
         assertFalse(texts(screen).any { it.text == screen.getString(R.string.automatic_connection) })
         assertFalse(texts(screen).any { it.text == screen.getString(R.string.display_and_performance) })
         assertFalse(texts(screen).any { it.text == screen.getString(R.string.audio_routing) })
@@ -689,10 +688,6 @@ class AdaptiveSettingsUiTest {
         assertTrue(text(R.string.settings_navigation_wheel_volume) in advanced)
         assertFalse(text(R.string.settings_navigation_wheel_volume) in audio)
         assertFalse(text(R.string.settings_navigation_wheel_volume) in vehicle)
-        assertFalse(text(R.string.settings_ambient_title) in advanced)
-        assertFalse(text(R.string.settings_ambient_title) in audio)
-        assertFalse(text(R.string.settings_ambient_title) in vehicle)
-        assertFalse(text(R.string.settings_ambient_title) in display)
         assertTrue(text(R.string.side_panel) in advanced)
         assertFalse(display.any { it.startsWith(text(R.string.settings_app_appearance)) })
         assertFalse(audio.any { it.startsWith(text(R.string.settings_app_appearance)) })

@@ -19,12 +19,10 @@ import com.shilapi.xcertplay.airplay.AudioCodecKind
 import com.shilapi.xcertplay.airplay.AudioFormat
 import com.shilapi.xcertplay.airplay.AudioStreamId
 import com.shilapi.xcertplay.airplay.MediaSink
-import com.shilapi.xcertplay.telecom.PhoneAudioRoute
 import com.shilapi.xcertplay.airplay.MicrophoneConfig
 import com.shilapi.xcertplay.airplay.VideoCodec
 import com.shilapi.xcertplay.airplay.toHexString
 import com.shilapi.xcertplay.compat.AudioFocusRequestCompat
-import com.shilapi.xcertplay.hud.BydBluetoothSuspend
 import java.io.Closeable
 import java.nio.ByteBuffer
 import java.util.concurrent.ConcurrentHashMap
@@ -223,7 +221,6 @@ class AndroidMediaSink(
     // Each downlink publishes its own reference; a mic must match that stream and sample rate.
     private val callEchoReferences = ConcurrentHashMap<AudioStreamId, EchoReference>()
     private val appContext = context?.applicationContext
-    private val ambientSinkToken = AmbientMusicController.openSink(appContext)
     private val audioManager = appContext?.getSystemService(AudioManager::class.java)
     private val audioFocusCoordinator = AudioFocusCoordinator(
         appContext,
@@ -545,8 +542,7 @@ class AndroidMediaSink(
     override fun onMicrophoneStarted(id: AudioStreamId, config: MicrophoneConfig) {
         // This callback runs on the downlink thread; microphone failures must not stop playback.
         try {
-            val speakerphoneCall = config.audioType == "telephony" &&
-                appContext != null && BydBluetoothSuspend.isSuspendedByUs(appContext)
+            val speakerphoneCall = false
             if (config.audioType == "telephony" && !speakerphoneCall) enterCommunicationMode(id)
             val uplink = microphoneUplinks.computeIfAbsent(id) {
                 MicrophoneUplink(config, onAudioDiagnostic,
@@ -637,7 +633,6 @@ class AndroidMediaSink(
     }
 
     fun close() {
-        AmbientMusicController.closeSink(ambientSinkToken)
         synchronized(videoOwnershipLock) {
             videoClosed = true
             videoDecoders.entries.toList().forEach { (type, decoder) -> retire(type, decoder) }
@@ -709,8 +704,7 @@ class AndroidMediaSink(
         existing?.close()
         // A replacement owns a fresh ring: the old worker can still finish a blocking write.
         // The car's phone audio state cancels the echo itself; a second canceller would work against it.
-        val echoReference = if (callEchoCancellation && format.audioType == TELEPHONY_AUDIO_TYPE && format.sampleRate > 0 &&
-            !PhoneAudioRoute.carPlayCallsUseCarAudio()) {
+        val echoReference = if (callEchoCancellation && format.audioType == TELEPHONY_AUDIO_TYPE && format.sampleRate > 0) {
             EchoReference(format.sampleRate).also { callEchoReferences[id] = it }
         } else {
             callEchoReferences.remove(id)
@@ -726,9 +720,7 @@ class AndroidMediaSink(
             navigationStreamType,
             mediaBufferMillis,
             onAudioDiagnostic,
-            ambientSinkToken,
-            speakerphoneCall = format.audioType == "telephony" &&
-                appContext != null && BydBluetoothSuspend.isSuspendedByUs(appContext),
+            speakerphoneCall = false,
             echoReference = echoReference,
             voiceFilter = callVoiceFilter && format.audioType == TELEPHONY_AUDIO_TYPE,
         ).also {
@@ -1747,7 +1739,6 @@ private class AudioRenderer(
     private val navigationStreamType: Int,
     private val mediaBufferMillis: Int,
     private val report: (String) -> Unit,
-    private val ambientSinkToken: Long,
     private val speakerphoneCall: Boolean = false,
     /** Receives the played call audio so the call microphone can cancel its echo. */
     private val echoReference: EchoReference? = null,
@@ -1794,10 +1785,6 @@ private class AudioRenderer(
     private val maxArrivalGapMs = AtomicLong()
     private val frameBytes = if (format.channels >= 2) 4 else 2
     private var totalWrittenFrames = 0L
-    private val ambientMedia = AmbientMusicActivityPolicy.acceptsAudio(format.audioType, format.payloadType)
-    private val ambientEnvelope = AmbientMusicEnvelope()
-    private val ambientBass = AmbientMusicBassAnalyzer(format.sampleRate, pcmChannels)
-    private var ambientRendererToken = 0L
     private var writtenFramesThisWindow = 0L
     private var writeErrorsThisWindow = 0
     private var lastWriteErrorCode: Int? = null
@@ -1863,7 +1850,6 @@ private class AudioRenderer(
     }
 
     override fun close() {
-        AmbientMusicController.closeRenderer(ambientRendererToken)
         running = false
         NavigationPlayback.close(navigationPlaybackToken)
         thread.interrupt()
@@ -2026,11 +2012,7 @@ private class AudioRenderer(
             }
         }
         applyNavigationAttenuation()
-        if (ambientMedia) {
-            ambientRendererToken = AmbientMusicController.openRenderer(ambientSinkToken, ambientEnvelope) {
-                built.playbackHeadPosition to (running && built.playState == AudioTrack.PLAYSTATE_PLAYING)
-            }
-        }
+
         diagnosticStage = "track-attributes"
         trackAttributes = audioTrackAttributesForFocus(built, attributes)
         diagnosticStage = "track-capacity"
@@ -2419,11 +2401,7 @@ private class AudioRenderer(
             }
             if (count < writeLength) partialWritesThisWindow++
             val framesWritten = count / frameBytes
-            if (ambientMedia && AmbientMusicController.wantsPcm(ambientRendererToken)) {
-                ambientEnvelope.append(totalWrittenFrames, framesWritten.toLong(),
-                    AmbientMusicEnvelope.pcmRms(data, offset + written, count),
-                    ambientBass.rms(data, offset + written, count))
-            }
+
             written += count
             totalWrittenFrames += framesWritten
             writtenFramesThisWindow += framesWritten
@@ -2611,7 +2589,6 @@ private class AudioRenderer(
     @Synchronized
     private fun release() {
         NavigationPlayback.close(navigationPlaybackToken)
-        AmbientMusicController.closeRenderer(ambientRendererToken)
         abandonAudioFocus()
         val codec = codec
         this.codec = null

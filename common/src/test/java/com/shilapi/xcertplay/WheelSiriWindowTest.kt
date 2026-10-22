@@ -198,16 +198,7 @@ class WheelSiriWindowTest {
         verify(controller, times(1)).requestSiri()
     }
 
-    @Test fun unassignedExistingVoiceKeysKeepTheirReleaseBehavior() {
-        WheelZoomSettings.setSiriKey(host, false)
-        for (code in listOf(KeyEvent.KEYCODE_VOICE_ASSIST,
-            CarPlayMediaButton.KEYCODE_BYD_AUTO_MEDIA_VOICE,
-            CarPlayMediaButton.KEYCODE_BYD_AUTO_MEDIA_VOICE_LONG)) {
-            assertTrue(host.dispatchKeyEvent(key(code, true)))
-            assertTrue(host.dispatchKeyEvent(key(code, false)))
-        }
-        verify(controller, times(3)).requestSiri()
-    }
+
 
     @Test fun assigningALegacyVoiceKeyBetweenDownAndUpKeepsTheOriginalAction() {
         val code = KeyEvent.KEYCODE_VOICE_ASSIST

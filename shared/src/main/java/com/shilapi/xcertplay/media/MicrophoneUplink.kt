@@ -17,7 +17,6 @@ import java.net.DatagramSocket
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.util.concurrent.atomic.AtomicBoolean
-import com.shilapi.xcertplay.telecom.PhoneAudioRoute
 
 /**
  * Captures one PCM microphone stream and sends it back to the phone as sealed CarPlay RTP.
@@ -79,7 +78,7 @@ internal class MicrophoneUplink(
         val source = when {
             config.audioType == "telephony" -> telephonyMicrophoneSource(
                 speakerphoneCall = speakerphoneCall,
-                carPhoneState = PhoneAudioRoute.carPlayCallsUseCarAudio(),
+                carPhoneState = false,
                 geelyHeadUnit = com.shilapi.xcertplay.network.GeelyHeadUnit.detected,
             )
             // The Geely/Lynk head unit only opens the microphone for the voice-communication
@@ -201,12 +200,7 @@ internal class MicrophoneUplink(
     }
 
     private fun voiceEffects(sessionId: Int): List<AudioEffect> {
-        if (PhoneAudioRoute.carPlayCallsUseCarAudio()) {
-            // In the car's phone audio state its own processing handles echo and noise, and was only measured
-            // with the platform effects off.
-            Log.i(TAG, "microphone effects left to the car's phone audio state")
-            return emptyList()
-        }
+
         var aec: AudioEffect? = null
         if (echoCanceller != null) {
             // VOICE_COMMUNICATION can enable AEC by default. Keep its controller alive and

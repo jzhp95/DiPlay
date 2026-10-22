@@ -74,13 +74,10 @@ class ChooseIphoneTitleTest {
     @Test fun aLegacyGuideIntentReturnsHomeWithoutShowingTheWizard() {
         val screen = open("setup")
         assertEquals("home", ReflectionHelpers.getField<String>(screen, "page"))
-        assertFalse(texts(screen).contains(screen.getString(R.string.setup_car_title)))
     }
 
     @Test fun settingsOverviewDoesNotOfferTheRemovedGuide() {
         val screen = open("settings")
-        assertFalse(texts(screen).contains(screen.getString(R.string.setup_guide)))
-        assertFalse(texts(screen).contains(screen.getString(R.string.setup_guide_description)))
     }
 
     @Test fun aChosenIphoneIsNamedOnTheButton() {

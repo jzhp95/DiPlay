@@ -49,7 +49,6 @@ import com.shilapi.xcertplay.adb.LocalAdb
 import com.shilapi.xcertplay.airplay.CarPlayClusterDisplay
 import com.shilapi.xcertplay.airplay.CarPlayDisplayScale
 import com.shilapi.xcertplay.airplay.ClusterSpeedometerOverlay
-import com.shilapi.xcertplay.airplay.ClusterTurnCardOverlay
 import com.shilapi.xcertplay.reportshare.ReportShareEndpoint
 import com.shilapi.xcertplay.reportshare.ReportShareServer
 import com.shilapi.xcertplay.reportshare.ReportShareQrCode
@@ -138,8 +137,6 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
     private var page = "home"
     private var settingsCategory = SettingsCategory.OVERVIEW
     private var settingsSectionFilter: Set<SettingsSection>? = null
-    private var clusterSafeAreaDialog: Dialog? = null
-    private var clusterContentRequestVersion = 0L
     private var hotspotSettingsUi: CarHotspotSettingsUi? = null
     private var hotspotConnectPreparing = false
     private var hotspotConnectGeneration = 0
@@ -391,7 +388,6 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
 
     override fun onStop() {
         cancelUsbPermissionSetup()
-        clusterSafeAreaDialog?.dismiss()
         startupHotspotCancelled = true
         super.onStop()
         if (!isFinishing && !isChangingConfigurations) CenterMapOverlay.scheduleShow()
@@ -773,7 +769,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         if (startupProblem != null) {
             // Off BYD units the access is allowed on Android's "Modify system settings" screen; ADB plays no part.
             val allowOnSystemScreen = startupProblem == CarHotspotTethering.Result.PERMISSION_REQUIRED &&
-                !CarHotspotSetup.isBydHeadUnit(this) && CarHotspotTethering.appStartSupported()
+                CarHotspotTethering.appStartSupported()
             cards.notice.text = if (allowOnSystemScreen) getString(R.string.settings_write_settings_missing)
                 else hotspotResultText(startupProblem)
             cards.notice.visibility = View.VISIBLE
@@ -1674,12 +1670,9 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         // Cluster video does not require a BYD navigation broadcast receiver.
         filteredSection(content, SettingsSection.CLUSTER_MAP,
             getString(R.string.carplay_map_on_instrument_cluster_experimental), R.drawable.ic_dp_dashboard) { card ->
-            val clusterDisplay = ClusterMapPresentation.findDisplay(this)
-            val diLink4 = false
             val clusterMapEnabled = AirPlayPersistence.loadClusterMapEnabled(this)
             reconnectingToggle(card, getString(R.string.carplay_map_on_instrument_cluster_experimental),
-                if (clusterDisplay != null) getString(R.string.shows_the_iphone_s_cluster_map_on_the_instrument_cluster_c)
-                else getString(R.string.shows_the_iphone_s_cluster_map_virtual_stream_description),
+                getString(R.string.shows_the_iphone_s_cluster_map_virtual_stream_description),
                 clusterMapEnabled) {
                 AirPlayPersistence.saveClusterMapEnabled(this, it)
                 render()
@@ -1687,8 +1680,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             if (clusterMapEnabled) {
                 clusterMusicControls(card)
                 toggle(card, getString(R.string.center_map_card),
-                    if (clusterDisplay != null) getString(R.string.center_map_card_description)
-                    else getString(R.string.center_map_card_virtual_description),
+                    getString(R.string.center_map_card_virtual_description),
                     AirPlayPersistence.loadCenterMapOverlay(this)) {
                     AirPlayPersistence.saveCenterMapOverlay(this, it)
                     if (it && !CenterMapOverlay.permitted(this)) openOverlayPermission()
@@ -1719,107 +1711,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                         card.addView(button(getString(R.string.btn_auto_apply_permissions), false) { autoApplyPermissions() }, matchButton(8, 54))
                     }
                 }
-                if (clusterDisplay != null) {
-                    run {
-                        val sizes = CarPlayClusterDisplay.scalePresets
-                        val contents = CarPlayClusterDisplay.Content.entries
-                        val content = AirPlayPersistence.loadClusterContent(this)
-                        val customCard = CarPlayClusterDisplay.usesCustomTurnCard(content)
-                        val officialCardOnly = content == CarPlayClusterDisplay.Content.TURN_CARD
-                        choice(card, getString(R.string.dashboard_shows), listOf(
-                            getString(R.string.dashboard_content_map),
-                            getString(R.string.dashboard_content_turn_card),
-                            getString(R.string.dashboard_content_map_with_turn_card),
-                            getString(R.string.dashboard_content_map_with_custom_turn_card),
-                        ), contents.indexOf(content).coerceAtLeast(0), reconnects = false) {
-                            val next = contents[it]
-                            val request = ++clusterContentRequestVersion
-                            AirPlayPersistence.saveClusterContent(this, next)
-                            render()
-                            if (content.url != next.url) {
-                                // The iPhone's own contents switch live. DiPlay's card over the map, and the
-                                // DiLink 5.1 layout (always the map), are set up at connection, so they reconnect.
-                                val controller = CarPlayBackgroundSession.snapshot()?.controller
-                                if (customCard || CarPlayClusterDisplay.usesCustomTurnCard(next) ||
-                                    controller == null) {
-                                    markReconnectNeeded()
-                                } else controller.showDashboardContent(next.url) { applied ->
-                                    runOnUiThread {
-                                        if (!applied && request == clusterContentRequestVersion &&
-                                            !isFinishing && !isDestroyed &&
-                                            AirPlayPersistence.loadClusterContent(this) == next &&
-                                            CarPlayBackgroundSession.snapshot()?.controller === controller) {
-                                            markReconnectNeeded()
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        if (customCard) {
-                            card.addView(overlaySliderRow(
-                                getString(R.string.turn_card_overlay_size),
-                                ClusterTurnCardOverlay.sizePercents,
-                                AirPlayPersistence.loadClusterTurnCardOverlaySizePercent(this),
-                            ) { it -> getString(R.string.turn_card_overlay_size_option, it) }
-                                .also { it.onSave = { v -> AirPlayPersistence.saveClusterTurnCardOverlaySizePercent(this, v) } })
-                            card.addView(overlaySliderRow(
-                                getString(R.string.turn_card_overlay_opacity),
-                                ClusterTurnCardOverlay.opacityPercents,
-                                AirPlayPersistence.loadClusterTurnCardOpacityPercent(this),
-                            ) { it -> getString(R.string.turn_card_overlay_opacity_option, it) }
-                                .also { it.onSave = { v -> AirPlayPersistence.saveClusterTurnCardOpacityPercent(this, v) } })
-                            card.addView(overlaySliderRow(
-                                getString(R.string.turn_card_overlay_horizontal),
-                                ClusterTurnCardOverlay.xPercents,
-                                AirPlayPersistence.loadClusterTurnCardOverlayXPercent(this),
-                            ) { it -> overlayOffsetLabel(it, getString(R.string.marker_left), getString(R.string.marker_right), 50) }
-                                .also { it.onSave = { v -> AirPlayPersistence.saveClusterTurnCardOverlayXPercent(this, v) } })
-                            card.addView(overlaySliderRow(
-                                getString(R.string.turn_card_overlay_vertical),
-                                ClusterTurnCardOverlay.yPercents,
-                                AirPlayPersistence.loadClusterTurnCardOverlayYPercent(this),
-                            ) { it -> overlayOffsetLabel(it, getString(R.string.marker_up), getString(R.string.marker_down), 40) }
-                                .also { it.onSave = { v -> AirPlayPersistence.saveClusterTurnCardOverlayYPercent(this, v) } })
-                            card.addView(button(getString(R.string.reset_turn_card_overlay), false) {
-                                AirPlayPersistence.saveClusterTurnCardOverlayXPercent(this, ClusterTurnCardOverlay.DEFAULT_X_PERCENT)
-                                AirPlayPersistence.saveClusterTurnCardOverlayYPercent(this, ClusterTurnCardOverlay.DEFAULT_Y_PERCENT)
-                                render()
-                            }, matchButton(10, 56))
-                            card.addView(label(getString(R.string.turn_card_overlay_note), 14, MUTED))
-                        }
-                        val turnCard = officialCardOnly
-                        if (!diLink4) {
-                            choice(card, getString(if (turnCard) R.string.turn_card_size else R.string.cluster_map_size),
-                                listOf(getString(R.string.cluster_size_standard), getString(R.string.cluster_size_larger), getString(R.string.cluster_size_largest), getString(R.string.cluster_size_smallest)),
-                                sizes.indexOf(AirPlayPersistence.loadClusterMapScalePercent(this)).coerceAtLeast(0)) {
-                                AirPlayPersistence.saveClusterMapScalePercent(this, sizes[it])
-                            }
-                        }
-                        if (!diLink4 || AirPlayPersistence.loadClusterSafeAreaRect(this) == null) {
-                            card.addView(overlaySliderRow(
-                                getString(if (turnCard) R.string.turn_card_horizontal else R.string.car_marker_horizontal),
-                                CarPlayClusterDisplay.markerXPercents,
-                                AirPlayPersistence.loadClusterMarkerXPercent(this),
-                            ) { it -> overlayOffsetLabel(it, getString(R.string.marker_left), getString(R.string.marker_right), 50) }
-                                .also { it.onSave = { v -> AirPlayPersistence.saveClusterMarkerXPercent(this, v) } }
-                                .also { it.onCommit = { markReconnectNeeded() } })
-                            card.addView(overlaySliderRow(
-                                getString(if (turnCard) R.string.turn_card_vertical else R.string.car_marker_vertical),
-                                CarPlayClusterDisplay.markerYPercents,
-                                AirPlayPersistence.loadClusterMarkerYPercent(this),
-                            ) { it -> overlayOffsetLabel(it, getString(R.string.marker_up), getString(R.string.marker_down), 45) }
-                                .also { it.onSave = { v -> AirPlayPersistence.saveClusterMarkerYPercent(this, v) } }
-                                .also { it.onCommit = { markReconnectNeeded() } })
-                            card.addView(button(getString(if (turnCard) R.string.reset_turn_card_to_centre else R.string.reset_car_marker_to_centre), false) {
-                                AirPlayPersistence.saveClusterMarkerXPercent(this, 50)
-                                AirPlayPersistence.saveClusterMarkerYPercent(this, 45)
-                                render()
-                                markReconnectNeeded()
-                            }, matchButton(10, 56))
-                        }
 
-                    }
-                }
             }
         }
         filteredSection(content, SettingsSection.PERMISSIONS_AND_HELP,
@@ -2001,9 +1893,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
 
     private fun openCarClientWifiSettings() {
         val wifi = Intent(Settings.ACTION_WIFI_SETTINGS)
-        if (packageManager.resolveActivity(wifi, 0)?.activityInfo?.packageName == "com.byd.carsettings") {
-            runCatching { startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)) }
-        }
+
         openSystem(wifi)
     }
 
@@ -3299,23 +3189,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         refreshReconnectBar()
         refreshReadiness()
     }
-    private fun authorizeClusterRouting() {
-        val app = applicationContext
-        Thread({
-            val result = runCatching {
-                com.shilapi.xcertplay.adb.LocalAdb(com.shilapi.xcertplay.adb.AdbKeys.load(app)).use {
-                    it.connect(mayAsk = true)
-                }
-            }.getOrNull()
-            runOnUiThread {
-                if (!isFinishing && !isDestroyed) {
-                    toast(if (result == com.shilapi.xcertplay.adb.LocalAdb.Access.READY)
-                        getString(R.string.adb_access_ready) else getString(R.string.adb_not_approved))
-                    if (result == com.shilapi.xcertplay.adb.LocalAdb.Access.READY) ClusterActivityOutput.retry()
-                }
-            }
-        }, "adb-cluster-authorize").start()
-    }
+
 
     private fun reportFileName() = "Apple CarPlay-${SimpleDateFormat("yyyyMMdd-HHmmss-SSS", Locale.US).format(Date())}.txt"
 
@@ -3404,16 +3278,6 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         appendLine(PhoneWakeDiagnostics.report(appContext))
         appendLine("Head-unit board: ${Build.BOARD}; hardware: ${Build.HARDWARE}; build: ${Build.DISPLAY}")
         appendLine()
-        appendLine("--- Current cluster display diagnostics (even when disabled) ---")
-        appendLine(ClusterMapPresentation.diagnosticReport(appContext))
-        appendLine()
-        appendLine("--- ADB cluster activity routing ---")
-        appendLine("adbClusterActivityEnabled=${AirPlayPersistence.loadAdbClusterEnabled(appContext)}")
-        appendLine("clusterActivityMainTask=${ClusterActivityOutput.mainTaskId} surfaceValid=${ClusterActivityOutput.surface?.isValid}")
-        AdbClusterRouter.report(appContext).lineSequence().forEach { line ->
-            DiagnosticRedactor.redact(line)?.let { appendLine(it) }
-        }
-        appendLine()
         appendLine("--- Last display negotiation (timestamps distinguish it from current settings) ---")
         appendLine(DisplayDiagnosticSnapshot.report(appContext))
         appendLine()
@@ -3423,7 +3287,6 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             "connectWhenOpened=${DiPlayPreferences.autoConnect(appContext)}")
         appendLine("Car hotspot control: autoEnable=${CarHotspotSettings.enabled(appContext)} " +
             "writeSettings=${CarHotspotTethering.permitted(appContext)} " +
-            "bydHeadUnit=${runCatching { CarHotspotSetup.isBydHeadUnit(appContext) }.getOrNull()} " +
             "hotspotOn=${runCatching { com.shilapi.xcertplay.network.CarHotspotStatus.isEnabled(appContext) }.getOrNull()}")
         appendLine(WheelKeyService.report(appContext))
         WheelKeyLog.report(WheelKeyService.connected()).forEach { appendLine(it) }

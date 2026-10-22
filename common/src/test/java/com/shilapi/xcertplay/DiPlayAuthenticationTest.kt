@@ -86,7 +86,7 @@ class DiPlayAuthenticationTest {
 
     // Authentication tests do not have a real SOME/IP service. Avoid starting a periodic OEM
     // output worker that can bind again after Robolectric replaces the application context.
-    @Implements(com.shilapi.xcertplay.hud.BydNavigationOutputs::class, isInAndroidSdk = false)
+    @Implements(com.shilapi.xcertplay.hud.CarPlayNavigationState::class, isInAndroidSdk = false)
     class NavigationOutputs {
         @Implementation fun start(context: Context) = Unit
     }

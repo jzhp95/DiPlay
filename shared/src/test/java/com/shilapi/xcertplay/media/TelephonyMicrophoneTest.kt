@@ -12,8 +12,6 @@ import com.shilapi.xcertplay.airplay.AudioStreamId
 import com.shilapi.xcertplay.airplay.AudioFormat
 import com.shilapi.xcertplay.airplay.AudioCodecKind
 import com.shilapi.xcertplay.airplay.MicrophoneConfig
-import com.shilapi.xcertplay.hud.BydOutputSettings
-import com.shilapi.xcertplay.telecom.PhoneAudioRoute
 import java.net.InetAddress
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.CopyOnWriteArrayList
@@ -52,7 +50,6 @@ class TelephonyMicrophoneTest {
     @Before fun setUp() {
         ConfigurableAudioEffect.resetStatus()
         shadowOf(context).grantPermissions(Manifest.permission.RECORD_AUDIO, Manifest.permission.MODIFY_AUDIO_SETTINGS)
-        context.getSharedPreferences("diplay_bt_suspend", 0).edit().clear().commit()
         shadowOf(context.getSystemService(BluetoothManager::class.java).adapter).setState(BluetoothAdapter.STATE_ON)
         manager = context.getSystemService(AudioManager::class.java)
         sink = AndroidMediaSink(context = context)
@@ -99,26 +96,9 @@ class TelephonyMicrophoneTest {
         assertEquals(AudioRecord.STATE_UNINITIALIZED, record.state)
     }
 
-    @Test fun aCallWhileCarBluetoothIsOffUsesTheCabinMicrophone() {
-        context.getSharedPreferences("diplay_bt_suspend", 0).edit().putBoolean("restore_initially_enabled", true).commit()
-        shadowOf(context.getSystemService(BluetoothManager::class.java).adapter).setState(BluetoothAdapter.STATE_OFF)
-        manager.mode = AudioManager.MODE_NORMAL
-        sink.onMicrophoneStarted(telephony, config("telephony"))
-        val record = awaitCapture()
-        assertEquals(AudioManager.MODE_NORMAL, manager.mode)
-        assertEquals(MediaRecorder.AudioSource.MIC, record.audioSource)
-        assertTrue(ShadowAudioEffect.getAudioEffects().isEmpty())
-        sink.onMicrophoneStopped(telephony)
-        assertEquals(AudioManager.MODE_NORMAL, manager.mode)
-    }
 
-    @Test fun anUnverifiedPauseFlagDoesNotSwitchCallAudioRouting() {
-        context.getSharedPreferences("diplay_bt_suspend", 0).edit()
-            .putBoolean("suspended_by_us", true).putBoolean("restore_initially_enabled", true).commit()
-        sink.onMicrophoneStarted(telephony, config("telephony"))
-        assertEquals(MediaRecorder.AudioSource.VOICE_COMMUNICATION, awaitCapture().audioSource)
-        assertEquals(AudioManager.MODE_IN_COMMUNICATION, manager.mode)
-    }
+
+
 
     @Test fun speechRecognitionDoesNotChangeModeOrEnableTelephonyEffects() {
         sink.onMicrophoneStarted(speechRecognition, config("speechrecognition"))

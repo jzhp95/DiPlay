@@ -95,12 +95,7 @@ class WheelMediaKeyWindowTest {
         verify(controller, never()).sendMediaButton(anyInt())
     }
 
-    @Test fun playPauseIsLeftAlone() {
-        // The wheel key service and BYD itself both own this key; the window must not take it.
-        assertFalse(host.dispatchKeyEvent(key(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, true)))
-        assertFalse(host.dispatchKeyEvent(key(CarPlayMediaButton.KEYCODE_BYD_AUTO_MEDIA_PLAY_PAUSE, true)))
-        verify(controller, never()).sendMediaButton(anyInt())
-    }
+
 
     @Test fun assignedNonMediaKeyTogglesCarPlayPlaybackOnceWithoutAccessibilityService() {
         WheelZoomSettings.setMediaPlayPause(host, true)

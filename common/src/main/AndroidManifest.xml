@@ -19,13 +19,12 @@
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
     <!-- Optional: the dashboard map as a card over the home screen. -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
-    <!-- Optional, owner-enabled Usage Access for the verified DiLink 5.1 cluster profile. -->
+    <!-- Optional, owner-enabled Usage Access for launcher map visibility. -->
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />
     <!-- The centre card also follows whichever launcher is the default home. -->
     <queries>
         <intent><action android:name="com.android.settings.WIFI_TETHER_SETTINGS" /></intent>
         <intent><action android:name="android.settings.WIRELESS_SETTINGS" /></intent>
-        <package android:name="com.byd.carsettings" />
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.HOME" />
@@ -125,7 +124,7 @@
             </intent-filter>
         </service>
 
-        <!-- Optional: steering-wheel keys for the dashboard map zoom (docs/BYD_NAVIGATION.md). -->
+        <!-- Optional: user-assigned hardware keys; Flyme wheel ownership remains authoritative. -->
         <service
             android:name="com.shilapi.xcertplay.WheelKeyService"
             android:exported="true"

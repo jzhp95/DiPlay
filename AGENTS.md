@@ -14,6 +14,36 @@ Run the CI command from `.github/workflows/android.yml` before you report a chan
 
 Set `ANDROID_HOME` or `local.properties` if Gradle cannot find the SDK.
 
+## 目标车型与车型修复范围
+
+本项目的目标车型为吉利星瑞 2026 款昆仑，目标车机为其 Flyme Auto（Android 9／API 28）环境。
+
+- 其他车型专属的适配、功能与修复不合并，包括其他吉利车型；不得仅因同属吉利、使用 Flyme Auto 或平台标识相似，就认定适用于目标车型。
+- 由其他车型问题触发的通用协议、网络、音频或生命周期修复，应核对问题机制与执行路径；仅在对目标车型适用时移植通用部分，不引入其他车型专属逻辑。
+- 同一上游提交同时包含通用修复与其他车型专属改动时，必须拆分评估，仅移植目标车型需要的部分；无法确认适用性的车型专属改动不合并。
+- 此准则用于约束后续开发与合并范围，不要求主动删除现有其他车型代码。
+- BYD／DiLink 专属适配已明确要求全部移除；不得恢复其厂商接口、私有按键、HUD／仪表路由、车辆数据及氛围灯实现。通用 CarPlay 协议逻辑须保持独立。
+
+## 目标车机与 Android 兼容性
+
+本项目实际适配的 Flyme Auto 车机运行 Android 9（API 28），开发、修复和上游代码合并均须以该运行环境为兼容性基准。
+
+- 不得默认目标车机运行 Android 10／11 或更高版本；使用高于 API 28 的平台接口时，必须提供版本判断和适用于 Android 9 的实现或明确降级。
+- 网络连接与断线检测、蓝牙、Wi-Fi／热点、USB、音频模式、权限及后台生命周期等行为，必须检查 Android 9 上的执行路径，不能仅凭较新 Android 版本的行为判断兼容性。
+- Android 9（API 28）是本项目的兼容性下限。仅为 Android 9 以下版本（Android 8.1／API 27 及更低版本）提供兼容的上游补丁不合并，也不为这些版本新增兼容逻辑；此规则不要求清理现有兼容代码或修改构建配置。
+- 同时覆盖 Android 8／9 等多个版本的修复，应按其对 Android 9 的实际作用评估；覆盖 Android 9 的稳定性与兼容性修复仍可合并，仅移植目标环境需要的逻辑。
+- 验证涉及平台差异的修改时，应覆盖 API 28 的相关路径；模拟测试与较新系统上的结果不能替代 Android 9 实车验证，未完成实车验证时须如实说明。
+
+## 方控适配准则（Flyme 优先）
+
+所有涉及方向盘控制（方控）的开发、修复、重构和上游代码合并，必须以本项目现有的 Flyme 适配为准。
+
+- 现有适配入口为 `common/src/main/java/com/shilapi/xcertplay/FlymeWheelIntegration.kt`，底层协议与焦点生命周期由 `integrations/flyme-eas/` 管理；相关实现应沿用这套职责划分。
+- Siri／语音、播放／暂停、上一曲／下一曲等方控行为，以及相关设置、按键学习和测试工具，均须与现有 Flyme 适配保持一致。
+- 必须保留现有按键映射、事件去重、活动会话归属、通话期间处理、焦点获取与释放及连接／断开生命周期约束，避免重复响应或向失效会话发送按键。
+- 合并上游涉及方控、媒体按键或语音键的改动时，必须先核对与 Flyme 适配的交互；有冲突时以现有 Flyme 适配为准，按需移植兼容的修复，不得直接覆盖或恢复其他车型的方控实现。
+- 新增方控能力应在现有 Flyme 适配机制内扩展，不得另建绕过该机制的并行按键处理通路；修改后须验证相关 Flyme 方控与会话生命周期行为。
+
 ## Adding or moving a setting
 
 The Settings screen is grouped by driver goal, not by implementation.
@@ -30,8 +60,8 @@ Ask which goal the driver has when they look for the setting. Use the first row 
 | Connection | how the iPhone connects and how DiPlay starts | connection setup, connect on open, start with the car, USB permissions, car hotspot automation, iPhone choice, Android permissions |
 | Display | how CarPlay looks on the head-unit screen | day/night mode, picture, size, resolution, frame rate, dock, system bars, multi-window resolution |
 | Audio | what the driver hears | media and navigation streams, music buffer |
-| Navigation | location and turn-by-turn guidance | location to iPhone, BYD HUD and cluster guidance |
-| Vehicle | how CarPlay fits this car and its driver | driving side, wheel keys (Siri, BYD joystick and map zoom), car button, gestures that conflict with the head unit |
+| Navigation | location and turn-by-turn guidance | location to iPhone, generic CarPlay navigation |
+| Vehicle | how CarPlay fits this car and its driver | driving side, Flyme wheel keys (Siri and media controls), car button, gestures that conflict with the head unit |
 | Diagnostics | troubleshooting evidence | diagnostic reports |
 | Advanced | experimental, firmware-specific or risky behavior | dashboard map, split screen, screen rotation, side panel, HEVC video, audio focus, audio channel mapping, buffered music, vehicle data |
 | Overview | nothing new | see "Overview" below |

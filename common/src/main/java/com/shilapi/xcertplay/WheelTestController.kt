@@ -126,8 +126,8 @@ internal class WheelTestController(context: Context, private val changed: (State
     /** Real key input is observed only while this probe is enabled; volume keeps its normal behavior. */
     fun key(key: KeyEvent, source: String): Boolean {
         if (!running || WheelKeyLog.writesText(key.keyCode)) return false
-        val media = CarPlayMediaButton.forKeyCode(key.keyCode, experimentalDiLink3Keys = true)
-            ?: if (CarPlayMediaButton.opensSiri(key.keyCode) || CarPlayMediaButton.opensSiriWhileCarPlay(key.keyCode)) 6 else null
+        val media = CarPlayMediaButton.forKeyCode(key.keyCode)
+            ?: if (CarPlayMediaButton.opensSiri(key.keyCode)) 6 else null
         if (key.action == KeyEvent.ACTION_DOWN && key.repeatCount == 0) {
             // EAS explicit play/pause also pairs with hardware toggle. Siri has no EAS counterpart.
             if (media != null && media in 1..5 && bridge?.allowHardware(media) == false) {

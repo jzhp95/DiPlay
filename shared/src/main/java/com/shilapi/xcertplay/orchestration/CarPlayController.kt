@@ -36,8 +36,7 @@ import com.shilapi.xcertplay.airplay.AirPlaySessionListener
 import com.shilapi.xcertplay.airplay.PairingStore
 import com.shilapi.xcertplay.airplay.VideoInCar
 import com.shilapi.xcertplay.airplay.VideoPlaybackDelivery
-import com.shilapi.xcertplay.hud.BydBluetoothSuspend
-import com.shilapi.xcertplay.hud.BydNavigationOutputs
+import com.shilapi.xcertplay.hud.CarPlayNavigationState
 import com.shilapi.xcertplay.iap2.session.Iap2Session
 import com.shilapi.xcertplay.mfi.Iap2MfiAuthenticationClient
 import com.shilapi.xcertplay.mfi.MfiAuthenticator
@@ -180,8 +179,6 @@ class CarPlayController(
             "A location provider is required when location reporting is enabled"
         }
         WifiScanPause.restoreIfNeeded(context.applicationContext)
-        BydNavigationOutputs.start(context.applicationContext)
-        BydNavigationOutputs.setClusterStreamControl(::applyClusterUi)
     }
 
     private enum class Phase { IDLE, MFI, WIRELESS, IPHONE, REENUMERATION, DATAPATHS, CONTROL }
@@ -355,8 +352,6 @@ class CarPlayController(
             if (currentCornerMask?.session !== session) currentCornerMask = null
             val replacement = activeSession !== session
             if (replacement) {
-                BydNavigationOutputs.start(appContext)
-                BydNavigationOutputs.carPlaySessionStarted()
                 com.shilapi.xcertplay.glance.CarPlayGlance.setConnected(true)
                 // The gear may have changed since /info.
                 if (videoListener != null) {
@@ -378,8 +373,7 @@ class CarPlayController(
             if (activeSession === session) {
                 activeSession = null
                 synchronized(albumReplayLock) { initialArtworkReplay = null }
-                BydNavigationOutputs.endNow(preserveTurnOverlay = !closed && config.transport == CarPlayTransport.WIRELESS)
-                BydBluetoothSuspend.resume(appContext, this@CarPlayController) { debugLog(it) }
+                CarPlayNavigationState.endNow(preserveTurnOverlay = !closed && config.transport == CarPlayTransport.WIRELESS)
                 com.shilapi.xcertplay.glance.CarPlayGlance.setConnected(false)
                 videoListener?.onVideoSessionEnded()
                 synchronized(playbackStatus) {
@@ -676,15 +670,13 @@ class CarPlayController(
         }
         firstTcpWatchdog?.terminate()
         wiredStartWatchdog?.terminate()
-        BydBluetoothSuspend.resume(appContext, this) { debugLog(it) }
         startupTimer.shutdownNow()
         (hotspot as? ManualHotspotManager)?.close()
         val teardownStarted = System.nanoTime()
         connectionDiagnostic("teardown begin transport=${config.transport}")
         videoGate?.close()
-        BydNavigationOutputs.endNow()
+        CarPlayNavigationState.endNow()
         com.shilapi.xcertplay.glance.CarPlayGlance.setConnected(false)
-        BydNavigationOutputs.clearClusterStreamControl(::applyClusterUi)
         closeReceivers()
         availabilityPollGeneration.incrementAndGet()
         permissionPollGeneration += 1
@@ -823,7 +815,7 @@ class CarPlayController(
 
     // HUD (SOME/IP) and cluster (AMap broadcast) keep separate state so one failing cannot stall the other.
     private fun onRouteFrame(frame: com.shilapi.xcertplay.iap2.wire.Iap2Frame) {
-        BydNavigationOutputs.onFrame(frame)
+        CarPlayNavigationState.onFrame(frame)
         com.shilapi.xcertplay.glance.CarPlayGlance.onFrame(frame)
         synchronized(playbackStatus) {
             val previousPlaying = playbackStatus.playing
@@ -1385,7 +1377,7 @@ class CarPlayController(
             BluetoothRadioCheck.blockerForState(
                 adapterPresent = activeAdapter != null,
                 state = activeAdapter?.state,
-                pausedByDiPlay = BydBluetoothSuspend.isSuspendedByUs(appContext),
+                pausedByDiPlay = false,
             )?.let { throw BluetoothRadioCheck.failure(it) }
             val hotspotInfo = startWirelessHotspot(generation)
             if (isStaleWirelessRun(generation)) {
@@ -1467,12 +1459,10 @@ class CarPlayController(
 
             val adapter = currentBluetoothAdapter()
                 ?: throw BluetoothRadioCheck.failure(BluetoothRadioCheck.NO_ADAPTER)
-            val bluetoothRecoveryComplete = BydBluetoothSuspend.resumeAndWait(appContext, adapter)
             if (adapter.state == BluetoothAdapter.STATE_TURNING_ON) {
                 awaitBluetoothEnabled(adapter, timeoutMillis = 3_000L)
             }
             if (!adapter.isEnabled) throw IOException(BluetoothRadioCheck.RADIO_OFF)
-            if (!bluetoothRecoveryComplete) throw IOException("Bluetooth recovery did not complete before the handshake")
             val device = selectWirelessBluetoothDevice(adapter)
             val hostBluetoothMac = accessoryBluetoothMac(adapter)
             debugLog(
@@ -1943,15 +1933,6 @@ class CarPlayController(
             fail(IOException("Wireless CarPlay handoff timed out waiting for tunnel iAP2"), generation)
         }
     }
-
-    /** The user's grace period before Bluetooth is suspended: 5–30 s, 10 s by default. */
-    private fun btSuspendDelayMs(prefs: android.content.SharedPreferences): Long =
-        when (prefs.getInt("bt_suspend_delay_seconds", 10)) {
-            5 -> 5_000L
-            15 -> 15_000L
-            30 -> 30_000L
-            else -> 10_000L
-        }
 
     private fun closeBluetoothBootstrapTransport() {
         val activeCsm = csm

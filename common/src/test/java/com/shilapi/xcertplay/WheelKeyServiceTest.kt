@@ -7,7 +7,6 @@ import android.os.Looper
 import android.view.KeyEvent
 import android.widget.Button
 import com.shilapi.xcertplay.airplay.CarPlayMediaButton
-import com.shilapi.xcertplay.hud.BydOutputSettings
 import com.shilapi.xcertplay.hud.CarPlayPhoneState
 import com.shilapi.xcertplay.hud.CarPlayCallState
 import com.shilapi.xcertplay.iap2.message.Iap2Messages
@@ -48,7 +47,6 @@ class WheelKeyServiceTest {
 
     @After fun tearDown() {
         service.onDestroy()
-        BydOutputSettings.setCarPlayCallControls(service, false)
         CarPlayPhoneState.end()
         CarPlayBackgroundSession.clear()
     }
@@ -85,24 +83,7 @@ class WheelKeyServiceTest {
     private fun learn(cancelled: () -> Unit = {}): Boolean =
         WheelKeyService.learn(WheelZoomSettings.Role.MODE, cancelled) { _, _ -> learned++ }
 
-    @Test fun anAssignedBydVoiceKeyStillUsesVoiceKeyPairWhenDoublePressIsOff() {
-        val code = CarPlayMediaButton.KEYCODE_BYD_CARPLAY_VOICE
-        service.session = { "active-phone" }
-        BydOutputSettings.setCarPlayCallControls(service, true)
-        WheelZoomSettings.setSiriKey(service, true)
-        WheelZoomSettings.assign(service, WheelZoomSettings.Role.SIRI, WheelKey(code, 0, "?"))
-        WheelZoomSettings.setSiriDoublePress(service, false)
-        val controller = mock(CarPlayController::class.java)
-        `when`(controller.requestSiri()).thenReturn(true)
-        CarPlayBackgroundSession.store(controller, mock(AndroidMediaSink::class.java), 1, 1,
-            this, mock(CarPlaySessionDisplay::class.java)) { it() }
 
-        assertTrue(key(code, true, time = 10_000))
-        assertTrue(key(code, false, time = 10_000))
-
-        verify(controller, times(1)).requestSiri()
-        assertFalse(VoiceKeyPair.shared.allowGenericKey(10_460))
-    }
 
     @Test
     fun theAllowedListKeepsOtherServicesAndRebindsAListedButStoppedService() {
@@ -350,26 +331,7 @@ class WheelKeyServiceTest {
         assertEquals(2, siriRequests)
     }
 
-    @Test fun aHeldSiriCallKeyCannotEndTheCallThatArrivesBeforeItsRelease() {
-        siriSetUp()
-        val controller = mock(CarPlayController::class.java)
-        `when`(controller.activeAirPlaySessionToken()).thenReturn(Any())
-        CarPlayBackgroundSession.store(controller, mock(AndroidMediaSink::class.java), 1, 1,
-            this, mock(CarPlaySessionDisplay::class.java)) { it() }
-        BydOutputSettings.setCarPlayCallControls(service, true)
-        WheelZoomSettings.assign(service, WheelZoomSettings.Role.SIRI, WheelKey(KeyEvent.KEYCODE_ENDCALL, 0, "?"))
-        assertTrue(key(KeyEvent.KEYCODE_ENDCALL, true))
-        assertEquals(1, siriRequests)
-        CarPlayPhoneState.onFrame(Iap2Messages.buildRaw(CarPlayCallState.CALL_STATE_UPDATE) {
-            u8(2, 4); string(4, "new-call")
-        })
-        assertTrue(key(KeyEvent.KEYCODE_ENDCALL, false))
-        verify(controller, never()).endCall()
-        assertTrue(key(KeyEvent.KEYCODE_ENDCALL, true))
-        assertTrue(key(KeyEvent.KEYCODE_ENDCALL, false))
-        verify(controller, times(1)).endCall()
-        assertEquals(1, siriRequests)
-    }
+
     @Test
     @Config(sdk = [25, 29])
     fun guidanceChangesOnlyNavigationAndStopsNewCapturesAfterGuidance() {

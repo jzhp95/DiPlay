@@ -16,14 +16,12 @@ import android.widget.Toast
 import java.util.concurrent.atomic.AtomicBoolean
 import com.shilapi.xcertplay.adb.AdbKeys
 import com.shilapi.xcertplay.adb.LocalAdb
-import com.shilapi.xcertplay.telecom.PhoneAudioRoute
 import com.shilapi.xcertplay.airplay.AirPlayKnobState
 import com.shilapi.xcertplay.airplay.CarPlayMediaButton
 import com.shilapi.xcertplay.glance.CarPlayGlance
 import com.shilapi.xcertplay.host.R
 import com.shilapi.xcertplay.media.NavigationPlayback
-import com.shilapi.xcertplay.hud.BydNavigationOutputs
-import com.shilapi.xcertplay.hud.BydOutputSettings
+import com.shilapi.xcertplay.hud.CarPlayNavigationState
 
 /**
  * Optional: steering-wheel keys zoom CarPlay's dashboard map and work as a CarPlay joystick. BYD's window
@@ -108,7 +106,6 @@ class WheelKeyService : AccessibilityService() {
         lastObservedDoubleSiriEvent = null
         running = this
         NavigationWheelSettings.recordAuthorization(this)
-        CarPlayCallKeys.install(this)
         // Lets the watcher for other apps' calls run whenever this accessibility service does.
         refreshEligibility()
         handler.removeCallbacks(pollEligibility)
@@ -193,20 +190,8 @@ class WheelKeyService : AccessibilityService() {
             return true
         }
         if (navigationKeys.owns(event.keyCode, event.deviceId, event.downTime)) return navigationKey(event)
-        if (CarPlayCallKeys.onKey(this, event.keyCode, down)) return true
         val key = WheelKey.of(event)
-        if (BydOutputSettings.carPlayCallControls(this) &&
-            CarPlayMediaButton.opensSiriWhileCarPlay(event.keyCode) &&
-            !(WheelZoomSettings.siriDoublePress(this) && WheelZoomSettings.isSiriKey(this, key)) &&
-            session() != null) {
-            if (!down) {
-                val shortPressIgnored = WheelZoomSettings.siriLongPressOnly(this) && CarPlayMediaButton.isShortVoiceKey(event.keyCode)
-                val sent = !shortPressIgnored && VoiceKeyPair.shared.allowCarPlayKey(event.eventTime) &&
-                    CarPlayBackgroundSession.snapshot()?.controller?.requestSiri() == true
-                note("CarPlay voice key ${event.keyCode}: Siri sent=$sent")
-            }
-            return true
-        }
+
         refreshEligibility()
         val calling = inCall(this)
         if (calling) clearLearning()
@@ -434,7 +419,6 @@ class WheelKeyService : AccessibilityService() {
             if (on) Toast.makeText(this, "$text\n${getString(R.string.wheel_joystick_hint)}", Toast.LENGTH_LONG).show()
             else Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
         }
-        BydNavigationOutputs.dashboardNote(text)
     }
 
     private fun clearLearning(notify: Boolean = true) {
@@ -480,9 +464,7 @@ class WheelKeyService : AccessibilityService() {
             Toast.makeText(this, if (zoomOn) R.string.wheel_zoom_mode_on else R.string.wheel_zoom_mode_off, Toast.LENGTH_SHORT).show()
         }
         if (zoomOn) {
-            BydNavigationOutputs.dashboardNote("🔍 ${getString(R.string.wheel_zoom_note_zoom)}", ZOOM_NOTE_SOURCE)
         } else {
-            BydNavigationOutputs.dashboardNote("🔊 ${getString(R.string.wheel_zoom_note_volume)}")
         }
     }
 
@@ -601,8 +583,7 @@ class WheelKeyService : AccessibilityService() {
          * watcher for other apps' calls, which runs only while something keeps DiPlay alive.
          */
         internal fun wanted(context: Context): Boolean = WheelZoomSettings.anyEnabled(context) ||
-            BydOutputSettings.carPlayCallControls(context) || NavigationWheelSettings.restoreAllowed(context) ||
-            BydOutputSettings.phoneAudioRouteApps(context)
+            NavigationWheelSettings.restoreAllowed(context)
 
         /**
          * Android takes the service off the allowed list when the app is force-stopped (BYD's system does
@@ -711,7 +692,7 @@ private fun note(message: String) {
 // CarPlay's iAP2 call state can be active even when the head unit leaves Android's mode normal.
 // Native Bluetooth calls also use a call/communication audio mode.
 internal fun inCall(context: Context): Boolean =
-    BydNavigationOutputs.carPlayCall() != null ||
+    com.shilapi.xcertplay.hud.CarPlayPhoneState.current() != null ||
         (context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager)?.mode.let { it != null && it != AudioManager.MODE_NORMAL }
 
 /** Use the input-device ID for a held press; saved assignments still use the stable device name. */
@@ -968,7 +949,6 @@ object WheelZoomSettings {
     private const val KEY_SIRI_DOUBLE_PRESS_INTERVAL = "siri_double_press_interval"
     private const val KEY_SIRI_TRIGGER_DELAY = "siri_trigger_delay"
     private const val KEY_SIRI_LONG_ONLY = "siri_long_press_only"
-    private const val BYD_KEYS = "simulate-keys"
     const val TIMED_MODE_MILLIS = 5_000L
     const val JOYSTICK_IDLE_MILLIS = 15_000L
     val SIRI_DOUBLE_PRESS_INTERVALS = listOf(300, 400, 500, 600, 800, 1_000)
@@ -981,13 +961,13 @@ object WheelZoomSettings {
      * previous, next and play/pause. The Siri key has no default: DiPlay's screen already takes BYD's voice key.
      */
     enum class Role(val defaultKey: WheelKey?) {
-        MODE(WheelKey(305, 300, BYD_KEYS)),
-        ZOOM_IN(WheelKey(291, 115, BYD_KEYS)),
-        ZOOM_OUT(WheelKey(292, 114, BYD_KEYS)),
-        JOYSTICK(WheelKey(289, 89, BYD_KEYS)),
-        PREVIOUS(WheelKey(88, 268, BYD_KEYS)),
-        NEXT(WheelKey(87, 270, BYD_KEYS)),
-        SELECT(WheelKey(353, 505, BYD_KEYS)),
+        MODE(null),
+        ZOOM_IN(null),
+        ZOOM_OUT(null),
+        JOYSTICK(null),
+        PREVIOUS(null),
+        NEXT(null),
+        SELECT(null),
         SIRI(null),
         MEDIA_PLAY_PAUSE(null),
     }

@@ -77,17 +77,7 @@ class CarPlayCallState(private val clock: () -> Long = System::currentTimeMillis
         private const val HELD = 5
         private const val DISCONNECTING = 6
 
-        /** BYD's call card takes at most 60 bytes of UTF-16LE, like BYD's own CarPlay app sends. */
-        const val MAX_NAME_BYTES = 60
 
-        fun nameBytes(name: String): ByteArray {
-            var end = name.length
-            while (name.substring(0, end).toByteArray(Charsets.UTF_16LE).size > MAX_NAME_BYTES) {
-                end--
-                if (end > 0 && Character.isLowSurrogate(name[end])) end--
-            }
-            return name.substring(0, end).toByteArray(Charsets.UTF_16LE)
-        }
     }
 }
 

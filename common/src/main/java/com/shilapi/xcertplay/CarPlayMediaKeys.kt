@@ -21,7 +21,6 @@ import androidx.core.graphics.drawable.toBitmap
 import com.shilapi.xcertplay.airplay.CarPlayMediaButton
 import com.shilapi.xcertplay.compat.AudioFocusRequestCompat
 import com.shilapi.xcertplay.host.R
-import com.shilapi.xcertplay.hud.BydOutputSettings
 import com.shilapi.xcertplay.media.CarPlayNowPlaying
 import com.shilapi.xcertplay.orchestration.CarPlayController
 import java.util.concurrent.Executors
@@ -47,14 +46,11 @@ internal object CarPlayMediaKeys {
             Thread(task, "diplay-now-playing-artwork").apply { isDaemon = true }
         },
         main = Executor { mainHandler.post(it) },
-        decode = ::decodeAmbientArtwork,
+        decode = ::decodeCoverArtwork,
         publish = ::onArtworkDecoded,
         discard = { it.bitmap.recycle() },
     )
     private var artworkOwner: Any? = null
-    private val ambientColorCache = LinkedHashMap<Int, Int?>()
-    private var initialAlbumRecovery = InitialAlbumRecovery()
-    private var initialAlbumRetry: Runnable? = null
     private var controller: CarPlayController? = null
     private var session: MediaSession? = null
     private var focusRequest: AudioFocusRequestCompat? = null
@@ -82,9 +78,7 @@ internal object CarPlayMediaKeys {
         DetailedDebugLog.record("media", "attach controller=${System.identityHashCode(next)}")
         FlymeWheelIntegration.attach(context, next)
         GeelyWheelKeys.start(context)
-        com.shilapi.xcertplay.media.AmbientMusicController.claimPlaybackOwner(next)
         next.playbackListener = { playing ->
-            com.shilapi.xcertplay.media.AmbientMusicController.phonePlaybackChanged(next, playing)
             onIphonePlaying(next, playing)
         }
         next.nowPlayingListener = { _ -> onNowPlayingChanged(next) }
@@ -100,7 +94,6 @@ internal object CarPlayMediaKeys {
         if (expected == null || controller !== expected) return
         DetailedDebugLog.record("media", "detach controller=${System.identityHashCode(expected)}")
         FlymeWheelIntegration.detach(expected)
-        com.shilapi.xcertplay.media.AmbientMusicController.releasePlaybackOwner(expected)
         expected.playbackListener = null
         expected.nowPlayingListener = null
         expected.artworkListener = null
@@ -140,15 +133,11 @@ internal object CarPlayMediaKeys {
                 if (albumTrackChanged(nowPlaying, update)) {
                     val previousId = nowPlaying.artworkTransferId
                     if (previousId != null) {
-                        ambientColorCache.remove(previousId)
                         artworkCache.remove(previousId)
                     }
                     if (previousId == update.artworkTransferId) {
                         artworkOwner = artworkQueue.newSession()
-                        initialAlbumRecovery = InitialAlbumRecovery()
                     }
-                    com.shilapi.xcertplay.media.AmbientMusicController.albumColorChanged(expected,
-                        update.artworkTransferId?.let { ambientColorCache[it] })
                     artwork = nextArtwork(update.artworkTransferId, artworkCache, artwork)
                 }
                 elapsedUpdatedAt = playbackPositionUpdatedAt(
@@ -158,7 +147,6 @@ internal object CarPlayMediaKeys {
                 if (metadataChanged) DetailedDebugLog.record("iphone", "metadata changed artworkPresent=${artwork != null}")
                 nowPlaying = update
                 if (metadataChanged) ClusterMusicState.publish(update, update.artworkTransferId?.let { artworkCache[it] })
-                updateInitialAlbumRecovery(expected)
                 // The iPhone repeats NowPlayingUpdate about twice a second for the position alone.
                 // Republishing the metadata each time sent a copy of the artwork through system_server
                 // to every media listener, and on a DiLink 5.0 Tang that exhausted memory within
@@ -176,7 +164,7 @@ internal object CarPlayMediaKeys {
     }
 
     @Synchronized
-    private fun onArtworkDecoded(expected: Any, id: Int, result: AmbientArtwork?) {
+    private fun onArtworkDecoded(expected: Any, id: Int, result: DecodedArtwork?) {
         val decoded = result?.bitmap
         if (artworkOwner !== expected) {
             decoded?.recycle()
@@ -184,88 +172,13 @@ internal object CarPlayMediaKeys {
         }
         artworkCache.remove(id)
         artworkCache[id] = decoded
-        ambientColorCache.remove(id)
-        ambientColorCache[id] = result?.color
-        while (ambientColorCache.size > MAX_CACHED_ARTWORK) ambientColorCache.remove(ambientColorCache.keys.first())
         while (artworkCache.size > MAX_CACHED_ARTWORK) artworkCache.remove(artworkCache.keys.first())
         if (nowPlaying.artworkTransferId == id) {
             artwork = decoded
             controller?.let(FlymeWheelIntegration::update)
             ClusterMusicState.publish(nowPlaying, artwork)
-            controller?.let { com.shilapi.xcertplay.media.AmbientMusicController.albumColorChanged(it, result?.color) }
-            controller?.let(::updateInitialAlbumRecovery)
             session?.setMetadata(androidMetadata(nowPlaying, shownArtworkLocked()))
         }
-    }
-
-    private fun hasCurrentAlbumColor(): Boolean =
-        nowPlaying.artworkTransferId?.let { ambientColorCache.containsKey(it) } == true
-
-    private fun albumRecoveryEnabled(): Boolean {
-        val settings = appContext?.let(com.shilapi.xcertplay.media.AmbientMusicSettings::load) ?: return false
-        return settings.enabled && settings.colorSource == com.shilapi.xcertplay.media.AmbientColorSource.ALBUM
-    }
-
-    private fun logAlbumRecoveryEvents(recovery: InitialAlbumRecovery) {
-        recovery.takeEvents().forEach { Log.i(TAG, "album recovery=$it") }
-        if (!recovery.timerPending) {
-            initialAlbumRetry?.let(mainHandler::removeCallbacks)
-            initialAlbumRetry = null
-        }
-    }
-
-    private fun updateInitialAlbumRecovery(expected: CarPlayController) {
-        val recovery = initialAlbumRecovery
-        val schedule = recovery.observe(nowPlaying, hasCurrentAlbumColor(), ::albumRecoveryEnabled)
-        logAlbumRecoveryEvents(recovery)
-        if (!schedule) return
-        initialAlbumRetry?.let(mainHandler::removeCallbacks)
-        initialAlbumRetry = null
-        val token = recovery.pendingToken
-        Log.i(TAG, "album recovery=scheduled reference=${nowPlaying.artworkTransferId}")
-        val retry = Runnable {
-            synchronized(this) {
-                if (controller !== expected || initialAlbumRecovery !== recovery) return@Runnable
-                val begin = recovery.beginRequest(token, nowPlaying, hasCurrentAlbumColor(), ::albumRecoveryEnabled)
-                logAlbumRecoveryEvents(recovery)
-                if (!begin) return@Runnable
-                artworkQueue.execute(Runnable { expected.refreshInitialNowPlaying(
-                    stillNeeded = {
-                        synchronized(this) {
-                            val needed = controller === expected && initialAlbumRecovery === recovery &&
-                                recovery.stillNeeded(token, nowPlaying, hasCurrentAlbumColor(), ::albumRecoveryEnabled)
-                            if (initialAlbumRecovery === recovery) logAlbumRecoveryEvents(recovery)
-                            needed
-                        }
-                    },
-                    beforeSend = {
-                        synchronized(this) {
-                            val claimed = controller === expected && initialAlbumRecovery === recovery &&
-                                recovery.claimSend(token, nowPlaying, hasCurrentAlbumColor(), ::albumRecoveryEnabled)
-                            if (initialAlbumRecovery === recovery) logAlbumRecoveryEvents(recovery)
-                            if (claimed) Log.i(TAG, "album recovery=requested reference=${nowPlaying.artworkTransferId}")
-                            claimed
-                        }
-                    },
-                    onFinished = { result ->
-                        synchronized(this) {
-                            if (controller === expected && initialAlbumRecovery === recovery) {
-                                recovery.finished(token)
-                                val state = when (result) {
-                                    CarPlayController.InitialAlbumRefreshResult.SENT -> "sent"
-                                    CarPlayController.InitialAlbumRefreshResult.FAILED -> "failed"
-                                    else -> "skipped reason=${result.name.lowercase()}"
-                                }
-                                Log.i(TAG, "album recovery=$state")
-                                logAlbumRecoveryEvents(recovery)
-                            }
-                        }
-                    },
-                ) })
-            }
-        }
-        initialAlbumRetry = retry
-        mainHandler.postDelayed(retry, 2000)
     }
 
     // Another car app (its own Spotify, the radio) took audio focus and with it the steering-wheel
@@ -381,12 +294,7 @@ internal object CarPlayMediaKeys {
     private fun releaseLocked() {
         DetailedDebugLog.record("focus", "release requested held=$focusHeld sessionPresent=${session != null} requestPresent=${focusRequest != null}")
         focusOwner = null
-        controller?.let(com.shilapi.xcertplay.media.AmbientMusicController::releasePlaybackOwner)
         artworkOwner = null
-        initialAlbumRetry?.let(mainHandler::removeCallbacks)
-        initialAlbumRetry = null
-        initialAlbumRecovery = InitialAlbumRecovery()
-        ambientColorCache.clear()
         artworkQueue.clear()
         session?.let {
             it.isActive = false
@@ -460,7 +368,6 @@ internal object CarPlayMediaKeys {
     }
 
     private val callback = CarPlayMediaCallback(
-        experimentalDiLink3Keys = { appContext?.let(BydOutputSettings::carPlayCallControls) == true },
         send = ::send,
     )
 
@@ -505,19 +412,11 @@ internal object CarPlayMediaKeys {
         else -> current
     }
 
-    private data class AmbientArtwork(val bitmap: Bitmap, val color: Int?)
+    private data class DecodedArtwork(val bitmap: Bitmap)
 
-    private fun decodeAmbientArtwork(bytes: ByteArray): AmbientArtwork? {
-        val bitmap = decodeArtwork(bytes) ?: return null
-        // Runs once per decoded cover on the existing bounded artwork worker (576 pixels).
-        val small = Bitmap.createScaledBitmap(bitmap, 24, 24, true)
-        val pixels = IntArray(24 * 24)
-        val color = try {
-            small.getPixels(pixels, 0, 24, 0, 0, 24, 24)
-            com.shilapi.xcertplay.media.AmbientAlbumPalette.albumColor(pixels)
-        } finally { if (small !== bitmap) small.recycle() }
-        return AmbientArtwork(bitmap, color)
-    }
+    private fun decodeCoverArtwork(bytes: ByteArray): DecodedArtwork? =
+        decodeArtwork(bytes)?.let(::DecodedArtwork)
+
 
     private fun decodeArtwork(bytes: ByteArray): Bitmap? {
         if (bytes.isEmpty()) return null
@@ -570,7 +469,6 @@ internal object CarPlayMediaKeys {
  * media controllers (not hardware keys) call [onPlay] and [onPause] with an explicit intent.
  */
 internal class CarPlayMediaCallback(
-    private val experimentalDiLink3Keys: () -> Boolean = { false },
     private val send: (index: Int, source: String) -> Unit,
 ) : MediaSession.Callback() {
     override fun onMediaButtonEvent(mediaButtonIntent: Intent): Boolean {
@@ -579,7 +477,7 @@ internal class CarPlayMediaCallback(
         if (!WheelKeyLog.writesText(event.keyCode)) {
             DetailedDebugLog.record("media-input", "key=${event.keyCode} action=${event.action} repeats=${event.repeatCount} scan=${event.scanCode} device=${event.deviceId}")
         }
-        val index = CarPlayMediaButton.forKeyCode(event.keyCode, experimentalDiLink3Keys())
+        val index = CarPlayMediaButton.forKeyCode(event.keyCode)
             ?: return super.onMediaButtonEvent(mediaButtonIntent)
         if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
             send(index, KeyEvent.keyCodeToString(event.keyCode))
