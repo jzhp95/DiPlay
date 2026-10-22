@@ -1,6 +1,6 @@
 # 星瑞昆仑 Flyme Auto 分支安装与连接
 
-本分支面向吉利星瑞 2026 款昆仑的 Flyme Auto 车机。主应用最低要求 Android 9（API 28）；Android 8.1 及以下不支持安装。需要更高 API 的地图示例保持其独立下限。
+本分支面向吉利星瑞 2026 款昆仑的 Flyme Auto 车机。主应用最低要求 Android 9（API 28）；Android 8.1 及以下不支持安装。本分支仅提供 mobile 主应用，不再提供 Automotive、Home 或地图示例 APK。
 
 1. 停车后使用本分支构建的 APK 安装到车机，构建入口见 [BUILD.md](BUILD.md)。上游发布包不代表本分支的车型、界面与方控适配。
 2. 有线连接时，通过 USB 连接 iPhone 并授权本应用访问设备；Android9 的 USB 权限页面检测与已授权本地 ADB 兜底仍保留。

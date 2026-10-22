@@ -8,7 +8,7 @@ import org.junit.Test
 /** Default resources are Chinese so services and third-party launchers never fall back to English. */
 class SettingsTranslationsTest {
     @Test fun onlyDefaultChineseResourceTablesRemain() {
-        for (module in listOf(File("."), File("../shared"), File("../samples/home"), File("../samples/maphost"))) {
+        for (module in listOf(File("."), File("../shared"))) {
             val res = File(module, "src/main/res")
             val locales = res.listFiles()?.filter { it.name.matches(Regex("values-[a-z]{2}(?:-.*)?")) }.orEmpty()
             assertEquals("$module retains a selectable resource locale", emptyList<File>(), locales)

@@ -9,11 +9,8 @@
 | Gradle 模組 | 用途 | Debug APK |
 | --- | --- | --- |
 | `:mobile` | 車機使用的主要 DiPlay 應用程式 | `mobile/build/outputs/apk/debug/mobile-debug.apk` |
-| `:home` | 選用的 DiPlay Home 啟動器 | `samples/home/build/outputs/apk/debug/home-debug.apk` |
-| `:maphost` | 接收 DiPlay 地圖的範例應用程式 | `samples/maphost/build/outputs/apk/debug/maphost-debug.apk` |
-| `:automotive` | 從 xcertplay 繼承的獨立 Android Automotive 應用程式 | `automotive/build/outputs/apk/debug/automotive-debug.apk` |
 
-`:common` 與 `:shared` 是共用函式庫。要安裝主程式，請選 **mobile**；如果裝到「DiPlay map host」，表示選錯模組或 APK。單獨執行 `assembleDebug` 可能建置多個應用程式。
+本分支僅建置 `mobile` 主應用，依賴 `common`、`shared` 與 `flyme-eas` 共用模組；獨立 Automotive、Home 與地圖範例已移除。
 
 ## 準備環境
 
@@ -61,7 +58,7 @@ sdk.dir=C:/Users/YOUR_NAME/AppData/Local/Android/Sdk
 依 `AGENTS.md` 與 Android workflow 執行所有單元測試、lint 與 debug 建置。Windows：
 
 ```powershell
-.\gradlew.bat :shared:testDebugUnitTest :common:testDebugUnitTest :home:testDebugUnitTest :mobile:lintDebug :home:lintDebug :maphost:lintDebug :mobile:assembleDebug :home:assembleDebug :maphost:assembleDebug --stacktrace
+.\gradlew.bat :flyme-eas:testDebugUnitTest :shared:testDebugUnitTest :common:testDebugUnitTest :mobile:lintDebug :mobile:assembleDebug --stacktrace
 ```
 
 Linux／macOS 將 `.\gradlew.bat` 換成 `./gradlew`。確認結果為 `BUILD SUCCESSFUL`。CI 另執行 `python3 scripts/check_public_tree.py`，避免認證容器或私密金鑰進入公開原始碼。
@@ -119,7 +116,7 @@ DIPLAY_AUTH_ASSETS_DIR=/absolute/path/to/runtime-assets ./gradlew :mobile:assemb
 將 keystore 與密碼留在 Git 之外。Windows 執行：
 
 ```powershell
-.\gradlew.bat :shared:testDebugUnitTest :common:testDebugUnitTest :mobile:lintRelease :mobile:assembleRelease
+.\gradlew.bat :flyme-eas:testDebugUnitTest :shared:testDebugUnitTest :common:testDebugUnitTest :mobile:lintRelease :mobile:assembleRelease
 ```
 
 Linux／macOS 使用 `./gradlew`。輸出為 `mobile/build/outputs/apk/release/mobile-release.apk`，包含你提供的配件身分，接收者可從 APK 擷取。APK 不含 Android 簽章私密金鑰。公開版本採用的實驗性身分及授權見[第三方聲明](THIRD_PARTY_NOTICES.md)。

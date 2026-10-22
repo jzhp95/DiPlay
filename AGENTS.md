@@ -7,9 +7,9 @@ Instructions for coding agents that work on DiPlay.
 Run the CI command from `.github/workflows/android.yml` before you report a change as done:
 
 ```sh
-./gradlew :shared:testDebugUnitTest :common:testDebugUnitTest :home:testDebugUnitTest \
-  :mobile:lintDebug :home:lintDebug :maphost:lintDebug \
-  :mobile:assembleDebug :home:assembleDebug :maphost:assembleDebug
+./gradlew :flyme-eas:testDebugUnitTest :shared:testDebugUnitTest :common:testDebugUnitTest \
+  :mobile:lintDebug \
+  :mobile:assembleDebug
 ```
 
 Set `ANDROID_HOME` or `local.properties` if Gradle cannot find the SDK.
@@ -17,6 +17,8 @@ Set `ANDROID_HOME` or `local.properties` if Gradle cannot find the SDK.
 ## 目标车型与车型修复范围
 
 本项目的目标车型为吉利星瑞 2026 款昆仑，目标车机为其 Flyme Auto（Android 9／API 28）环境。
+
+仅保留 `mobile` 应用及其共享模块；已明确删除 `automotive`、`home`、`maphost` 独立应用，禁止在构建和 CI 中重新引入。主应用内的通用地图与导航能力不因此删除。
 
 - 其他车型专属的适配、功能与修复不合并，包括其他吉利车型；不得仅因同属吉利、使用 Flyme Auto 或平台标识相似，就认定适用于目标车型。
 - 由其他车型问题触发的通用协议、网络、音频或生命周期修复，应核对问题机制与执行路径；仅在对目标车型适用时移植通用部分，不引入其他车型专属逻辑。

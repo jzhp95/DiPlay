@@ -68,7 +68,7 @@ Requirements:
 - the driver turns on **Share the live map with other launchers** in DiPlay (off by default);
 - CarPlay connected with **CarPlay map on instrument cluster** on, for the map itself.
 
-A complete working example is the sample app in [`samples/maphost`](../samples/maphost/src/main/java/com/diplay/maphost/MainActivity.kt).
+The standalone map-host sample has been removed from this branch; the service protocol below remains available on supported systems.
 
 ### Protocol
 
@@ -147,36 +147,6 @@ The map is 8:3. If your view has another shape, DiPlay fills it and crops the ed
 - Once the driver turns sharing on, any app on the head unit could ask for the map. DiPlay logs which package asked (log tag `DiPlay-MapEmbed`).
 - If DiPlay restarts, your `ServiceConnection` is disconnected and reconnected; attach again then.
 - The protocol is new. Handle `ERROR` and a missing or older DiPlay gracefully.
-
-## DiPlay Home (sample launcher)
-
-[`samples/home`](../samples/home/src/main/java/com/diplay/home/HomeActivity.kt) is a small launcher built on the public APIs above. It shows:
-
-- the embedded live map, with a clock above it and buttons for Apps, CarPlay and BYD home below;
-- a column of any Android widgets, including **CarPlay navigation**;
-- a full app list.
-
-It runs without system privileges. BYD's home stays installed, and the **BYD home** button opens it.
-
-- **Widgets.** A launcher needs the owner's consent to bind widgets. BYD head units have no consent screen, so allow it once over ADB:
-
-  ```bash
-  adb shell appwidget grantbind --package com.diplay.home --user 0
-  ```
-
-- **Making it the home screen.** Pick it as the default home app, or over ADB:
-
-  ```bash
-  adb shell cmd package set-home-activity com.diplay.home/.HomeActivity
-  ```
-
-- **Going back to BYD's home:**
-
-  ```bash
-  adb shell cmd package set-home-activity com.android.launcher3/.home.MainActivity
-  ```
-
-  BYD's map-mode button also returns to BYD's home, because BYD's own home list contains only BYD launchers.
 
 ## Troubleshooting
 

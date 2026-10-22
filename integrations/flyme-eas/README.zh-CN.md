@@ -156,8 +156,8 @@ Windows 脚本与 shell 脚本采用同样的构建、签名和校验步骤；�
 
 ```sh
 ./gradlew :flyme-eas:testDebugUnitTest :shared:testDebugUnitTest :common:testDebugUnitTest \
-  :home:testDebugUnitTest :mobile:lintDebug :home:lintDebug :maphost:lintDebug \
-  :mobile:assembleDebug :home:assembleDebug :maphost:assembleDebug
+  :mobile:lintDebug \
+  :mobile:assembleDebug
 ./gradlew -PflymeSystem=true :mobile:processDebugMainManifest :mobile:assembleDebug
 ```
 

@@ -1,0 +1,54 @@
+{
+  "baseline_commit": "c8e35986",
+  "full_validation_exit": 1,
+  "remaining_projects": [
+    "common",
+    "flyme-eas",
+    "mobile",
+    "shared"
+  ],
+  "modules": {
+    "flyme-eas": {
+      "tests": 10,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "shared": {
+      "tests": 1157,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 1
+    },
+    "common": {
+      "tests": 1279,
+      "failures": 99,
+      "errors": 0,
+      "skipped": 0
+    }
+  },
+  "new_failures": [],
+  "mobile_lint": {
+    "Error": 0,
+    "Warning": 3
+  },
+  "deleted_directories": {
+    "automotive": true,
+    "samples/home": true,
+    "samples/maphost": true
+  },
+  "apk_markers": {
+    "FlymeSampleStyle": false,
+    "Lcom/shilapi/xcertplay/FlymeWheelIntegration;": true,
+    "Lcom/shilapi/xcertplay/MapEmbedService;": true,
+    "Lcom/shilapi/xcertplay/CenterMapOverlay;": true
+  },
+  "resource_policy_test": {
+    "tests": "1",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0"
+  },
+  "review": "独立只读代码复核无问题",
+  "real_vehicle_verified": false
+}
