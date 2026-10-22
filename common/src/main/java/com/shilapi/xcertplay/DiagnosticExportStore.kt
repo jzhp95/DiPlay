@@ -26,16 +26,6 @@ internal object DiagnosticExportStore {
         val savedPath: String? = null,
     )
 
-    /**
-     * Saves to the visible Downloads/DiPlay folder whenever the head unit allows it, so the
-     * report can be reached from a file manager or USB. Order:
-     *  1. Android 10+: MediaStore Downloads (no permission needed).
-     *  2. Direct file in public Downloads/DiPlay: Android 11+ allows it without permission;
-     *     Android 9 needs WRITE_EXTERNAL_STORAGE. Some DiLink builds lack a working
-     *     MediaStore Downloads provider, so this also covers Android 11+ when step 1 fails.
-     *  3. App-specific external storage (Android/data/<package>, hidden on many head units).
-     *  4. Internal app storage, shared through the report viewer.
-     */
     fun saveWithoutPicker(context: Context, fileName: String, report: String): SavedReport {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             try {

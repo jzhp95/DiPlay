@@ -186,13 +186,6 @@ class CarPlayVpnService : VpnService() {
         super.onDestroy()
     }
 
-    /**
-     * Linux rejects bind() to a link-local IPv6 address without a scope id (EINVAL). Android 8+
-     * IoBridge.bind looks the scope up itself, but Android 7.x binds natively in
-     * PlainSocketImpl.socketBind and never derives one, so the unscoped wired listener failed with
-     * "Invalid argument". Scope it to the tunnel that owns the address on every version; when no
-     * interface owns it, keep the unscoped address and the platform's own behavior.
-     */
     private fun scopedToTunnel(address: Inet6Address, listener: AirPlaySessionListener): InetAddress {
         if (address.scopeId != 0) return address
         var interfaces = emptyList<TunnelCandidate>()
@@ -410,10 +403,6 @@ class CarPlayVpnService : VpnService() {
         /** Returns the VPN consent intent, or null when consent is already granted. */
         fun prepare(context: Context): Intent? = VpnService.prepare(context)
 
-        /**
-         * Android 7.1 reported only "Invalid argument" when establish failed (#557); name the
-         * exception chain and the frame that threw, so the rejected VPN setting can be identified.
-         */
         internal fun attachFailure(error: Throwable): String {
             val chain = generateSequence(error) { it.cause }.take(4).joinToString(" <- ") { failure ->
                 "${failure.javaClass.simpleName}: ${failure.message ?: "no message"}"

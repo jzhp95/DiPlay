@@ -1,0 +1,515 @@
+{
+  "deleted_docs": [
+    "docs/DILINK4_CLUSTER.md",
+    "docs/TANG21_APPEARANCE.md",
+    "docs/TANG21_VIDEO_RECOVERY.md",
+    "docs/PLATFORM21_CLUSTER.md",
+    "docs/CLUSTER_MUSIC_CARD.md",
+    "docs/FLYME_ONLY_VEHICLE_FEATURES.zh-CN.md",
+    "docs/SMOOTH_WIRELESS.md",
+    "docs/ISSUE-AUDIT-2026-10-03.md",
+    "docs/PR158-INTEGRATION-2026-10-03.md",
+    "docs/PR3_REVIEW.md",
+    "docs/SAFETY-REVIEW-2026-10-03.md",
+    "docs/HOTSPOT_JOIN_VALIDATION.md",
+    "docs/LOCAL_HOTSPOT_TEST.md",
+    "docs/UPSTREAM-README.md",
+    "docs/UPSTREAM-README.zh-CN.md",
+    "docs/integrations/main-0.2.21-merge.md",
+    "docs/RELEASE-NOTES-0.2.9.md",
+    "docs/RELEASE-NOTES-0.2.20.md",
+    "docs/RELEASE-NOTES-0.2.14.md",
+    "docs/RELEASE-NOTES-0.2.10.md",
+    "docs/RELEASE-NOTES-0.2.11.md",
+    "docs/RELEASE-NOTES-0.2.15.md",
+    "docs/RELEASE-NOTES-0.2.12.md",
+    "docs/RELEASE-NOTES-0.2.16.md",
+    "docs/RELEASE-NOTES-NEXT.md",
+    "docs/RELEASE-NOTES-0.2.17.md",
+    "docs/RELEASE-NOTES-0.2.13.md",
+    "docs/RELEASE-NOTES-0.2.18.md",
+    "docs/RELEASE-NOTES-0.2.19.md"
+  ],
+  "comment_only_files": [
+    {
+      "path": "common/build.gradle.kts",
+      "removed_comment_groups": 1,
+      "noncomment_fingerprint": "7fd0cd5de22735913f08d29879177366078cc7beab41209e518dfd3367e0380a"
+    },
+    {
+      "path": "common/src/main/java/com/shilapi/xcertplay/CarPlayHostActivity.kt",
+      "removed_comment_groups": 5,
+      "noncomment_fingerprint": "8661308ccb7c1bd500b6b78e9b63648ff6940e44ae07e04822ba21d8096403cf"
+    },
+    {
+      "path": "common/src/main/java/com/shilapi/xcertplay/CarPlayMediaKeys.kt",
+      "removed_comment_groups": 1,
+      "noncomment_fingerprint": "8b19523c7819eb1bfebdc4fe1b9fb8eaa65db24638ef6082e97923bcbb72a0e1"
+    },
+    {
+      "path": "common/src/main/java/com/shilapi/xcertplay/CarPlayVideoActivity.kt",
+      "removed_comment_groups": 1,
+      "noncomment_fingerprint": "a018db9dfa7593978a43ad839efa0353eedf87067f70a630bd763591b66e6aa6"
+    },
+    {
+      "path": "common/src/main/java/com/shilapi/xcertplay/CarPlayViewAreas.kt",
+      "removed_comment_groups": 2,
+      "noncomment_fingerprint": "4ea7863c976b98ddc656bfd05f9182870398909f6556c74279f318909ed615ff"
+    },
+    {
+      "path": "common/src/main/java/com/shilapi/xcertplay/DiPlayActivity.kt",
+      "removed_comment_groups": 2,
+      "noncomment_fingerprint": "6c586de96bc994f9cf6a898f6cb6501394528df0e4932af99c2463f14d948c4b"
+    },
+    {
+      "path": "common/src/main/java/com/shilapi/xcertplay/DiPlaySessionService.kt",
+      "removed_comment_groups": 1,
+      "noncomment_fingerprint": "17c9afe534695425d1f521f6a65142bb68500cd1ffda3504b756dbb07065f3a5"
+    },
+    {
+      "path": "common/src/main/java/com/shilapi/xcertplay/DiagnosticExportStore.kt",
+      "removed_comment_groups": 1,
+      "noncomment_fingerprint": "1e2a6056f433b4d234281373bfec8b15e9abcffd0f3f9c1bea949e30b5c3cde4"
+    },
+    {
+      "path": "common/src/main/java/com/shilapi/xcertplay/HomeScreenMonitor.kt",
+      "removed_comment_groups": 2,
+      "noncomment_fingerprint": "88edef2266f4f5b8a491783bfd57ceb1c2f91173a5344dad43be5b6ceed0a820"
+    },
+    {
+      "path": "common/src/main/java/com/shilapi/xcertplay/NavigationWidget.kt",
+      "removed_comment_groups": 2,
+      "noncomment_fingerprint": "f01ab739c8647d0b1d17ee1e1fb34a9a9fd192141ef0d60916e782bd28744d60"
+    },
+    {
+      "path": "common/src/main/java/com/shilapi/xcertplay/OwnScreenStart.kt",
+      "removed_comment_groups": 1,
+      "noncomment_fingerprint": "383577e883a96e62dc1da0f34d545fb35d0cdf5f7d8e378008485855f7654700"
+    },
+    {
+      "path": "common/src/main/java/com/shilapi/xcertplay/PhoneBluetoothReceiver.kt",
+      "removed_comment_groups": 1,
+      "noncomment_fingerprint": "22481a1f03e6edde390308b09d5ce8cafe232bdb7093fa4f4c9c19766ac9c445"
+    },
+    {
+      "path": "common/src/main/java/com/shilapi/xcertplay/UsbAutoConfirmService.kt",
+      "removed_comment_groups": 2,
+      "noncomment_fingerprint": "d1413df66a6a50503b71f0f200618936bf97f15bdee7f834d1747bfa027bfb0c"
+    },
+    {
+      "path": "common/src/main/java/com/shilapi/xcertplay/WheelKeyService.kt",
+      "removed_comment_groups": 7,
+      "noncomment_fingerprint": "0637fdc376beb4d8416f7123e7f0f8f1e153d8f6407943c5be465fe8198ee4b7"
+    },
+    {
+      "path": "common/src/test/java/com/shilapi/xcertplay/AdaptiveSettingsUiTest.kt",
+      "removed_comment_groups": 1,
+      "noncomment_fingerprint": "4c3f7544e7ce2059c9611ec0cb8330bfdc5df06549388c65f0da99c4c373dd42"
+    },
+    {
+      "path": "common/src/test/java/com/shilapi/xcertplay/CarPlayStageTextTest.kt",
+      "removed_comment_groups": 1,
+      "noncomment_fingerprint": "e86e5d0a1e62933bde5fb6dc59bd1916a82cd414026ace7c171af65d5aa23eb6"
+    },
+    {
+      "path": "common/src/test/java/com/shilapi/xcertplay/CarPlayViewAreasTest.kt",
+      "removed_comment_groups": 1,
+      "noncomment_fingerprint": "193cf493830f2a2208b9f45c1a5ae4370bba5361886039953432365069d302f3"
+    },
+    {
+      "path": "common/src/test/java/com/shilapi/xcertplay/HomeHotspotAccessTest.kt",
+      "removed_comment_groups": 1,
+      "noncomment_fingerprint": "96ef9a1cdc0d0856eea58e5646939f91d6f9e7d0ffe5a1f0a1ee6cbdf093cb95"
+    },
+    {
+      "path": "common/src/test/java/com/shilapi/xcertplay/SiriLongPressSwitchTest.kt",
+      "removed_comment_groups": 1,
+      "noncomment_fingerprint": "2c5fdd58c3eb4232ff993f0d269f75f00360a2d1ebffe3aefe7c1399333bbbab"
+    },
+    {
+      "path": "common/src/test/java/com/shilapi/xcertplay/UsbAutoConfirmServiceTest.kt",
+      "removed_comment_groups": 1,
+      "noncomment_fingerprint": "f69b8bc8ee59cdaabe6d40b617e8671f64b493ebd6466b5142db19b7b3f46bed"
+    },
+    {
+      "path": "common/src/test/java/com/shilapi/xcertplay/WheelMediaKeyWindowTest.kt",
+      "removed_comment_groups": 1,
+      "noncomment_fingerprint": "09484bebec8517d5806288281896eb708da8f01696210b099cfb287b74cdf519"
+    },
+    {
+      "path": "common/src/test/java/com/shilapi/xcertplay/WifiP2pLegacyGroupManagerTest.kt",
+      "removed_comment_groups": 1,
+      "noncomment_fingerprint": "75c3631907eabf064fc88234a353e65d50d084fde1228fd57f17b9c1af391588"
+    },
+    {
+      "path": "common/src/test/java/com/shilapi/xcertplay/WirelessPermissionRefusalTest.kt",
+      "removed_comment_groups": 1,
+      "noncomment_fingerprint": "f4fd97504a41cbbe4dd8fdfcf3b782c7663699519321ac904f1e9a1a9c854f87"
+    },
+    {
+      "path": "shared/src/main/java/com/shilapi/xcertplay/adb/LocalAdb.kt",
+      "removed_comment_groups": 1,
+      "noncomment_fingerprint": "8fa9dbb6c04ec2a32aacacb40ab61aef057d5a2478587e4c55762404e5830b6b"
+    },
+    {
+      "path": "shared/src/main/java/com/shilapi/xcertplay/airplay/CarPlayClusterDisplay.kt",
+      "removed_comment_groups": 1,
+      "noncomment_fingerprint": "bf67e7a65ec0f37b95db66e674920b2793b07e46e843126d1b0d477f24225997"
+    },
+    {
+      "path": "shared/src/main/java/com/shilapi/xcertplay/airplay/CarPlayMediaButton.kt",
+      "removed_comment_groups": 3,
+      "noncomment_fingerprint": "e39df1004210d89d8959407cc4c9c3993e22d3d7e87be3fd62f4d71e1c2ff90e"
+    },
+    {
+      "path": "shared/src/main/java/com/shilapi/xcertplay/glance/CarPlayGlance.kt",
+      "removed_comment_groups": 1,
+      "noncomment_fingerprint": "958c828f053dda07d7f7616942c9651ea4e4901e4c960ecddffa0d8517b05933"
+    },
+    {
+      "path": "shared/src/main/java/com/shilapi/xcertplay/media/AndroidMediaSink.kt",
+      "removed_comment_groups": 4,
+      "noncomment_fingerprint": "135e18536a4fb84f1302faac2eb536793cc6c1207c75adf89282dcbd247ec34a"
+    },
+    {
+      "path": "shared/src/main/java/com/shilapi/xcertplay/media/MicrophoneUplink.kt",
+      "removed_comment_groups": 2,
+      "noncomment_fingerprint": "3142473621632448a059489a4f12aabd75475fb580510486d750f6436b52b8ee"
+    },
+    {
+      "path": "shared/src/main/java/com/shilapi/xcertplay/media/VoiceFilter.kt",
+      "removed_comment_groups": 1,
+      "noncomment_fingerprint": "d67a7a600191be44fd06f8090b1547eb40a214aaeb7c15ae3de9fb41c9c453e9"
+    },
+    {
+      "path": "shared/src/main/java/com/shilapi/xcertplay/network/CarHotspotSettings.kt",
+      "removed_comment_groups": 1,
+      "noncomment_fingerprint": "eeda8c40f1074c018ca24065589b989a9bbbfae6d8a41b2dc4d9855e435bbbe1"
+    },
+    {
+      "path": "shared/src/main/java/com/shilapi/xcertplay/network/CarHotspotStatus.kt",
+      "removed_comment_groups": 1,
+      "noncomment_fingerprint": "b8b9bcaa3db55bcf4cf158aefe6723aaeb03ea9e61f2260beb841daefd2aac86"
+    },
+    {
+      "path": "shared/src/main/java/com/shilapi/xcertplay/network/CarPlayVpnService.kt",
+      "removed_comment_groups": 2,
+      "noncomment_fingerprint": "378a2299ef2786e2a7cb409db8ff61761748488c323011d38c6b0caa07c0f608"
+    },
+    {
+      "path": "shared/src/main/java/com/shilapi/xcertplay/network/LocalOnlyHotspotManager.kt",
+      "removed_comment_groups": 8,
+      "noncomment_fingerprint": "d40e44c069433b13ea9b8f452f7b0c67b005cde1a0c0acd29068ed319ad9ade0"
+    },
+    {
+      "path": "shared/src/main/java/com/shilapi/xcertplay/network/LocalOnlyHotspotRadioInfo.kt",
+      "removed_comment_groups": 1,
+      "noncomment_fingerprint": "571d1e758fe293399031e1a7491e91b732c83dda62cbf0c022411fa770c1c225"
+    },
+    {
+      "path": "shared/src/main/java/com/shilapi/xcertplay/network/P2pStartupRecovery.kt",
+      "removed_comment_groups": 2,
+      "noncomment_fingerprint": "47ed8f5aabc52735c006ee4f0dd135ba0d6d1b263c7f4afdec014d2d36755efc"
+    },
+    {
+      "path": "shared/src/main/java/com/shilapi/xcertplay/network/WifiScanPause.kt",
+      "removed_comment_groups": 1,
+      "noncomment_fingerprint": "3c513442b4255b76ca6d57ec9df74cad0b12776ee9cbc75688d5f9a0ecc46042"
+    },
+    {
+      "path": "shared/src/main/java/com/shilapi/xcertplay/network/WifiScanPauseMain.kt",
+      "removed_comment_groups": 1,
+      "noncomment_fingerprint": "66e7a3d2e90e51fa0f5991479b460521b86b4d0f83ce2e46d8a036b78bae61ed"
+    },
+    {
+      "path": "shared/src/main/java/com/shilapi/xcertplay/transport/BluetoothRfcommDuplexStream.kt",
+      "removed_comment_groups": 1,
+      "noncomment_fingerprint": "de92e1f569fc507b368f2511bf3cabce6feb8e751c7a4555e8569ddb4e08f192"
+    },
+    {
+      "path": "shared/src/main/java/com/shilapi/xcertplay/transport/Iap2VehicleStatus.kt",
+      "removed_comment_groups": 1,
+      "noncomment_fingerprint": "722924490ec058917fb5ed3db1ec318d37f9306b1bd9f4336763544df793d534"
+    },
+    {
+      "path": "shared/src/main/java/com/shilapi/xcertplay/transport/IphoneUsbHost.kt",
+      "removed_comment_groups": 1,
+      "noncomment_fingerprint": "1a0f20b9299f29d33e29e8846e248e427e59180a183c453e8253575240c6be21"
+    },
+    {
+      "path": "shared/src/main/java/com/shilapi/xcertplay/transport/NcmUsbBridge.kt",
+      "removed_comment_groups": 1,
+      "noncomment_fingerprint": "e6bc9044e7acd1eb422bd7a43d490477b5cb7f82ccb051c439c712077587c647"
+    },
+    {
+      "path": "shared/src/test/java/com/shilapi/xcertplay/media/CallEarpieceFallbackTest.kt",
+      "removed_comment_groups": 1,
+      "noncomment_fingerprint": "048f52a359f5e72960643570cca838e323469187224f0d817d8ef14b9916fb86"
+    },
+    {
+      "path": "shared/src/test/java/com/shilapi/xcertplay/media/NavigationAudioGainTest.kt",
+      "removed_comment_groups": 1,
+      "noncomment_fingerprint": "ee34adfa14c023d8c7bf4eca8aef24e7371b491e0ac3fa001ac02280a45e7251"
+    },
+    {
+      "path": "shared/src/test/java/com/shilapi/xcertplay/network/CarHotspotOffReportTest.kt",
+      "removed_comment_groups": 1,
+      "noncomment_fingerprint": "0298c10caaaff023a2df72f3ebecc72d91ca62538c2f4d327b3c6d53e7181cab"
+    },
+    {
+      "path": "shared/src/test/java/com/shilapi/xcertplay/network/CarPlayVpnListenerScopeTest.kt",
+      "removed_comment_groups": 1,
+      "noncomment_fingerprint": "fd07193e946c092a5797d916ba4d36ac34ef527d820bb46bbe46a16979499fbf"
+    },
+    {
+      "path": "shared/src/test/java/com/shilapi/xcertplay/network/P2pStartupRecoveryTest.kt",
+      "removed_comment_groups": 1,
+      "noncomment_fingerprint": "c6ac94946f7783dcd525f04cec1fc12f5b7cbf1dfd4913edf825db654bd9d438"
+    },
+    {
+      "path": "shared/src/test/java/com/shilapi/xcertplay/network/PlatformTetheringStartTest.kt",
+      "removed_comment_groups": 1,
+      "noncomment_fingerprint": "0eb9f67e93e638b684015ad32125417b7052ba08485628ceadbeacdfaa826c0b"
+    },
+    {
+      "path": "shared/src/test/java/com/shilapi/xcertplay/transport/BluetoothRfcommDuplexStreamTest.kt",
+      "removed_comment_groups": 1,
+      "noncomment_fingerprint": "647fd7673f38ff5449cab0037308f975ac062f090460f758768a6e03f3adaea1"
+    }
+  ],
+  "final_comment_only_proof": [
+    {
+      "path": "common/build.gradle.kts",
+      "sha256": "7fd0cd5de22735913f08d29879177366078cc7beab41209e518dfd3367e0380a"
+    },
+    {
+      "path": "common/src/main/java/com/shilapi/xcertplay/CarPlayHostActivity.kt",
+      "sha256": "8661308ccb7c1bd500b6b78e9b63648ff6940e44ae07e04822ba21d8096403cf"
+    },
+    {
+      "path": "common/src/main/java/com/shilapi/xcertplay/CarPlayMediaKeys.kt",
+      "sha256": "8b19523c7819eb1bfebdc4fe1b9fb8eaa65db24638ef6082e97923bcbb72a0e1"
+    },
+    {
+      "path": "common/src/main/java/com/shilapi/xcertplay/CarPlayVideoActivity.kt",
+      "sha256": "a018db9dfa7593978a43ad839efa0353eedf87067f70a630bd763591b66e6aa6"
+    },
+    {
+      "path": "common/src/main/java/com/shilapi/xcertplay/CarPlayVideoSurface.kt",
+      "sha256": "bb71b7853858b6429760ee71b0a77eba18c39383e0ca437b84eaab5de2e94d4c"
+    },
+    {
+      "path": "common/src/main/java/com/shilapi/xcertplay/CarPlayViewAreas.kt",
+      "sha256": "4ea7863c976b98ddc656bfd05f9182870398909f6556c74279f318909ed615ff"
+    },
+    {
+      "path": "common/src/main/java/com/shilapi/xcertplay/DiPlayActivity.kt",
+      "sha256": "6c586de96bc994f9cf6a898f6cb6501394528df0e4932af99c2463f14d948c4b"
+    },
+    {
+      "path": "common/src/main/java/com/shilapi/xcertplay/DiPlaySessionService.kt",
+      "sha256": "17c9afe534695425d1f521f6a65142bb68500cd1ffda3504b756dbb07065f3a5"
+    },
+    {
+      "path": "common/src/main/java/com/shilapi/xcertplay/DiagnosticExportStore.kt",
+      "sha256": "1e2a6056f433b4d234281373bfec8b15e9abcffd0f3f9c1bea949e30b5c3cde4"
+    },
+    {
+      "path": "common/src/main/java/com/shilapi/xcertplay/HomeScreenMonitor.kt",
+      "sha256": "88edef2266f4f5b8a491783bfd57ceb1c2f91173a5344dad43be5b6ceed0a820"
+    },
+    {
+      "path": "common/src/main/java/com/shilapi/xcertplay/NavigationWidget.kt",
+      "sha256": "f01ab739c8647d0b1d17ee1e1fb34a9a9fd192141ef0d60916e782bd28744d60"
+    },
+    {
+      "path": "common/src/main/java/com/shilapi/xcertplay/OwnScreenStart.kt",
+      "sha256": "383577e883a96e62dc1da0f34d545fb35d0cdf5f7d8e378008485855f7654700"
+    },
+    {
+      "path": "common/src/main/java/com/shilapi/xcertplay/PhoneBluetoothReceiver.kt",
+      "sha256": "22481a1f03e6edde390308b09d5ce8cafe232bdb7093fa4f4c9c19766ac9c445"
+    },
+    {
+      "path": "common/src/main/java/com/shilapi/xcertplay/UsbAutoConfirmService.kt",
+      "sha256": "d1413df66a6a50503b71f0f200618936bf97f15bdee7f834d1747bfa027bfb0c"
+    },
+    {
+      "path": "common/src/main/java/com/shilapi/xcertplay/WheelKeyService.kt",
+      "sha256": "0637fdc376beb4d8416f7123e7f0f8f1e153d8f6407943c5be465fe8198ee4b7"
+    },
+    {
+      "path": "common/src/test/java/com/shilapi/xcertplay/AdaptiveSettingsUiTest.kt",
+      "sha256": "4c3f7544e7ce2059c9611ec0cb8330bfdc5df06549388c65f0da99c4c373dd42"
+    },
+    {
+      "path": "common/src/test/java/com/shilapi/xcertplay/CarPlayStageTextTest.kt",
+      "sha256": "e86e5d0a1e62933bde5fb6dc59bd1916a82cd414026ace7c171af65d5aa23eb6"
+    },
+    {
+      "path": "common/src/test/java/com/shilapi/xcertplay/CarPlayViewAreasTest.kt",
+      "sha256": "193cf493830f2a2208b9f45c1a5ae4370bba5361886039953432365069d302f3"
+    },
+    {
+      "path": "common/src/test/java/com/shilapi/xcertplay/HomeHotspotAccessTest.kt",
+      "sha256": "96ef9a1cdc0d0856eea58e5646939f91d6f9e7d0ffe5a1f0a1ee6cbdf093cb95"
+    },
+    {
+      "path": "common/src/test/java/com/shilapi/xcertplay/SiriLongPressSwitchTest.kt",
+      "sha256": "2c5fdd58c3eb4232ff993f0d269f75f00360a2d1ebffe3aefe7c1399333bbbab"
+    },
+    {
+      "path": "common/src/test/java/com/shilapi/xcertplay/UsbAutoConfirmServiceTest.kt",
+      "sha256": "f69b8bc8ee59cdaabe6d40b617e8671f64b493ebd6466b5142db19b7b3f46bed"
+    },
+    {
+      "path": "common/src/test/java/com/shilapi/xcertplay/WheelMediaKeyWindowTest.kt",
+      "sha256": "09484bebec8517d5806288281896eb708da8f01696210b099cfb287b74cdf519"
+    },
+    {
+      "path": "common/src/test/java/com/shilapi/xcertplay/WifiP2pLegacyGroupManagerTest.kt",
+      "sha256": "75c3631907eabf064fc88234a353e65d50d084fde1228fd57f17b9c1af391588"
+    },
+    {
+      "path": "common/src/test/java/com/shilapi/xcertplay/WirelessPermissionRefusalTest.kt",
+      "sha256": "f4fd97504a41cbbe4dd8fdfcf3b782c7663699519321ac904f1e9a1a9c854f87"
+    },
+    {
+      "path": "shared/src/main/java/com/shilapi/xcertplay/adb/LocalAdb.kt",
+      "sha256": "8fa9dbb6c04ec2a32aacacb40ab61aef057d5a2478587e4c55762404e5830b6b"
+    },
+    {
+      "path": "shared/src/main/java/com/shilapi/xcertplay/airplay/CarPlayClusterDisplay.kt",
+      "sha256": "bf67e7a65ec0f37b95db66e674920b2793b07e46e843126d1b0d477f24225997"
+    },
+    {
+      "path": "shared/src/main/java/com/shilapi/xcertplay/airplay/CarPlayMediaButton.kt",
+      "sha256": "e39df1004210d89d8959407cc4c9c3993e22d3d7e87be3fd62f4d71e1c2ff90e"
+    },
+    {
+      "path": "shared/src/main/java/com/shilapi/xcertplay/glance/CarPlayGlance.kt",
+      "sha256": "958c828f053dda07d7f7616942c9651ea4e4901e4c960ecddffa0d8517b05933"
+    },
+    {
+      "path": "shared/src/main/java/com/shilapi/xcertplay/media/AndroidMediaSink.kt",
+      "sha256": "135e18536a4fb84f1302faac2eb536793cc6c1207c75adf89282dcbd247ec34a"
+    },
+    {
+      "path": "shared/src/main/java/com/shilapi/xcertplay/media/MicrophoneUplink.kt",
+      "sha256": "3142473621632448a059489a4f12aabd75475fb580510486d750f6436b52b8ee"
+    },
+    {
+      "path": "shared/src/main/java/com/shilapi/xcertplay/media/VoiceFilter.kt",
+      "sha256": "d67a7a600191be44fd06f8090b1547eb40a214aaeb7c15ae3de9fb41c9c453e9"
+    },
+    {
+      "path": "shared/src/main/java/com/shilapi/xcertplay/network/CarHotspotSettings.kt",
+      "sha256": "eeda8c40f1074c018ca24065589b989a9bbbfae6d8a41b2dc4d9855e435bbbe1"
+    },
+    {
+      "path": "shared/src/main/java/com/shilapi/xcertplay/network/CarHotspotStatus.kt",
+      "sha256": "b8b9bcaa3db55bcf4cf158aefe6723aaeb03ea9e61f2260beb841daefd2aac86"
+    },
+    {
+      "path": "shared/src/main/java/com/shilapi/xcertplay/network/CarPlayVpnService.kt",
+      "sha256": "378a2299ef2786e2a7cb409db8ff61761748488c323011d38c6b0caa07c0f608"
+    },
+    {
+      "path": "shared/src/main/java/com/shilapi/xcertplay/network/LocalOnlyHotspotManager.kt",
+      "sha256": "d40e44c069433b13ea9b8f452f7b0c67b005cde1a0c0acd29068ed319ad9ade0"
+    },
+    {
+      "path": "shared/src/main/java/com/shilapi/xcertplay/network/LocalOnlyHotspotRadioInfo.kt",
+      "sha256": "571d1e758fe293399031e1a7491e91b732c83dda62cbf0c022411fa770c1c225"
+    },
+    {
+      "path": "shared/src/main/java/com/shilapi/xcertplay/network/P2pStartupRecovery.kt",
+      "sha256": "47ed8f5aabc52735c006ee4f0dd135ba0d6d1b263c7f4afdec014d2d36755efc"
+    },
+    {
+      "path": "shared/src/main/java/com/shilapi/xcertplay/network/WifiScanPause.kt",
+      "sha256": "3c513442b4255b76ca6d57ec9df74cad0b12776ee9cbc75688d5f9a0ecc46042"
+    },
+    {
+      "path": "shared/src/main/java/com/shilapi/xcertplay/network/WifiScanPauseMain.kt",
+      "sha256": "66e7a3d2e90e51fa0f5991479b460521b86b4d0f83ce2e46d8a036b78bae61ed"
+    },
+    {
+      "path": "shared/src/main/java/com/shilapi/xcertplay/transport/BluetoothRfcommDuplexStream.kt",
+      "sha256": "de92e1f569fc507b368f2511bf3cabce6feb8e751c7a4555e8569ddb4e08f192"
+    },
+    {
+      "path": "shared/src/main/java/com/shilapi/xcertplay/transport/Iap2VehicleStatus.kt",
+      "sha256": "722924490ec058917fb5ed3db1ec318d37f9306b1bd9f4336763544df793d534"
+    },
+    {
+      "path": "shared/src/main/java/com/shilapi/xcertplay/transport/IphoneUsbHost.kt",
+      "sha256": "1a0f20b9299f29d33e29e8846e248e427e59180a183c453e8253575240c6be21"
+    },
+    {
+      "path": "shared/src/main/java/com/shilapi/xcertplay/transport/NcmUsbBridge.kt",
+      "sha256": "e6bc9044e7acd1eb422bd7a43d490477b5cb7f82ccb051c439c712077587c647"
+    },
+    {
+      "path": "shared/src/test/java/com/shilapi/xcertplay/media/CallEarpieceFallbackTest.kt",
+      "sha256": "048f52a359f5e72960643570cca838e323469187224f0d817d8ef14b9916fb86"
+    },
+    {
+      "path": "shared/src/test/java/com/shilapi/xcertplay/media/NavigationAudioGainTest.kt",
+      "sha256": "ee34adfa14c023d8c7bf4eca8aef24e7371b491e0ac3fa001ac02280a45e7251"
+    },
+    {
+      "path": "shared/src/test/java/com/shilapi/xcertplay/network/CarHotspotOffReportTest.kt",
+      "sha256": "0298c10caaaff023a2df72f3ebecc72d91ca62538c2f4d327b3c6d53e7181cab"
+    },
+    {
+      "path": "shared/src/test/java/com/shilapi/xcertplay/network/CarPlayVpnListenerScopeTest.kt",
+      "sha256": "fd07193e946c092a5797d916ba4d36ac34ef527d820bb46bbe46a16979499fbf"
+    },
+    {
+      "path": "shared/src/test/java/com/shilapi/xcertplay/network/P2pStartupRecoveryTest.kt",
+      "sha256": "c6ac94946f7783dcd525f04cec1fc12f5b7cbf1dfd4913edf825db654bd9d438"
+    },
+    {
+      "path": "shared/src/test/java/com/shilapi/xcertplay/network/PlatformTetheringStartTest.kt",
+      "sha256": "0eb9f67e93e638b684015ad32125417b7052ba08485628ceadbeacdfaa826c0b"
+    },
+    {
+      "path": "shared/src/test/java/com/shilapi/xcertplay/transport/BluetoothRfcommDuplexStreamTest.kt",
+      "sha256": "647fd7673f38ff5449cab0037308f975ac062f090460f758768a6e03f3adaea1"
+    }
+  ],
+  "baseline_commit": "feb84c8b",
+  "full_validation_exit": 1,
+  "modules": {
+    "flyme-eas": {
+      "tests": 10,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "shared": {
+      "tests": 1157,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 1
+    },
+    "common": {
+      "tests": 1279,
+      "failures": 99,
+      "errors": 0,
+      "skipped": 0
+    }
+  },
+  "new_failures": [],
+  "lint": {
+    "Error": 0,
+    "Warning": 3
+  },
+  "markdown_checks": {
+    "broken_local_links": [],
+    "unbalanced_fences": []
+  },
+  "review": "独立词法复核确认无执行代码变化；三处文档遗漏已修正，复核无问题",
+  "real_vehicle_verified": false
+}

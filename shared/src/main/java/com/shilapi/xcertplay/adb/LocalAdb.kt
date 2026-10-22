@@ -11,16 +11,6 @@ import java.net.SocketTimeoutException
 import java.security.KeyPair
 import java.util.concurrent.atomic.AtomicBoolean
 
-/**
- * A shell on the head unit's own adbd ("ADB over network", 127.0.0.1:5555), for the few commands an
- * ordinary app may not run, such as switching the BYD cluster's navigation mode. Speaks the plain
- * ADB protocol (AOSP adb/protocol.txt); the TLS variant used by Android 11+ wireless debugging is
- * not supported.
- *
- * adbd trusts a key once the driver approves it in the car's "Allow debugging?" dialog. Only
- * [connect] with `mayAsk = true` offers the key for approval. Background use never does, so the
- * dialog cannot appear while driving.
- */
 class LocalAdb(
     private val key: KeyPair,
     private val host: String = "127.0.0.1",

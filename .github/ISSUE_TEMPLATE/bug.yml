@@ -14,7 +14,7 @@ body:
     validations: {required: true}
   - type: input
     id: car
-    attributes: {label: Car and head-unit model, placeholder: 'Car model/year, head unit, DiLink/Android version and exact firmware'}
+    attributes: {label: Car and head-unit model, placeholder: 'Car model/year, head unit, Flyme Auto/Android version and exact firmware'}
     validations: {required: true}
   - type: input
     id: phone
@@ -36,4 +36,4 @@ body:
     id: diagnostics
     attributes:
       label: Diagnostic report or recording
-      description: 'Reproduce on the latest official release, then Settings → Diagnostics → Save diagnostic report. Android 10+ normally saves to Downloads/DiPlay; Android 7.1–9 uses a document picker. If saving is unavailable, use View report or Share in the confirmation. Review the text before attaching it and never include your hotspot password. Include the approximate failure time. For installation failures, attach the installer error and Android/API version; an in-app report may not be available.'
+      description: 'Reproduce on the current Flyme Auto branch build, then Settings → Diagnostics → Save diagnostic report. Android 10+ normally saves to Downloads/DiPlay; Android 9 requests storage access for public Downloads; the confirmation shows any fallback location. If saving is unavailable, use View report or Share in the confirmation. Review the text before attaching it and never include your hotspot password. Include the approximate failure time. For installation failures, attach the installer error and Android/API version; an in-app report may not be available.'

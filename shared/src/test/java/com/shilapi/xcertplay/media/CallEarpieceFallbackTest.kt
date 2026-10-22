@@ -23,10 +23,6 @@ import org.robolectric.annotation.Config
 import org.robolectric.shadows.AudioDeviceInfoBuilder
 import org.robolectric.shadows.ShadowAudioRecord
 
-/**
- * A Podofo SM4250 head unit (#782) routed a CarPlay call to its earpiece, so the call was silent. A call routed
- * there moves to the loudspeaker without the driver turning on **Calls on the loudspeaker**.
- */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [30], manifest = Config.NONE)
 class CallEarpieceFallbackTest {

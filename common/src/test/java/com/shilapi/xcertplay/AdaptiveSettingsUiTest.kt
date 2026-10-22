@@ -320,7 +320,6 @@ class AdaptiveSettingsUiTest {
         assertTrue(texts(screen).any { it.text.startsWith(screen.getString(R.string.frame_rate) + " · ") })
     }
 
-    // Android 7.1 and 9 too: the result list once called a PopupWindow method that Android 10 added.
     @Test
     @Config(sdk = [28, 29])
     fun headerSearchBoxListsMatchesAsYouTypeAndOpensTheChosenSetting() {

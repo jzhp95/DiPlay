@@ -71,8 +71,6 @@ class WheelMediaKeyWindowTest {
     }
 
     @Test fun oneTapSendsOnePress() {
-        // BYD sends a tap as an instant down/up pair, and a hold as repeats. Either way CarPlay must
-        // see one press, and the release must not reach BYD's own player as an unpaired key.
         assertTrue(host.dispatchKeyEvent(key(KeyEvent.KEYCODE_MEDIA_NEXT, true)))
         assertTrue(host.dispatchKeyEvent(key(KeyEvent.KEYCODE_MEDIA_NEXT, true, repeat = 1)))
         assertTrue(host.dispatchKeyEvent(key(KeyEvent.KEYCODE_MEDIA_NEXT, false)))

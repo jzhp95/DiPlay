@@ -765,7 +765,6 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                 com.shilapi.xcertplay.network.CarHotspotStatus.isEnabled(this) != true
         }
         if (startupProblem != null) {
-            // Off BYD units the access is allowed on Android's "Modify system settings" screen; ADB plays no part.
             val allowOnSystemScreen = startupProblem == CarHotspotTethering.Result.PERMISSION_REQUIRED &&
                 CarHotspotTethering.appStartSupported()
             cards.notice.text = if (allowOnSystemScreen) getString(R.string.settings_write_settings_missing)
@@ -1665,7 +1664,6 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                 AirPlayPersistence.loadLocationReportingEnabled(this), save = ::onLocationReportingChanged)
             card.addView(label(getString(R.string.location_reporting_reconnects), 14, MUTED))
         }
-        // Cluster video does not require a BYD navigation broadcast receiver.
         filteredSection(content, SettingsSection.CLUSTER_MAP,
             getString(R.string.carplay_map_on_instrument_cluster_experimental), R.drawable.ic_dp_dashboard) { card ->
             val clusterMapEnabled = AirPlayPersistence.loadClusterMapEnabled(this)

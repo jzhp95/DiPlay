@@ -145,10 +145,6 @@ internal object CarPlayMediaKeys {
                 if (metadataChanged) DetailedDebugLog.record("iphone", "metadata changed artworkPresent=${artwork != null}")
                 nowPlaying = update
                 if (metadataChanged) ClusterMusicState.publish(update, update.artworkTransferId?.let { artworkCache[it] })
-                // The iPhone repeats NowPlayingUpdate about twice a second for the position alone.
-                // Republishing the metadata each time sent a copy of the artwork through system_server
-                // to every media listener, and on a DiLink 5.0 Tang that exhausted memory within
-                // minutes. The position goes in the playback state.
                 if (metadataChanged) session?.setMetadata(androidMetadata(update, shownArtworkLocked()))
                 publishPlaybackStateLocked()
             }

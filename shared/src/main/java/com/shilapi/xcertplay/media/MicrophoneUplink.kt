@@ -305,9 +305,6 @@ internal class MicrophoneUplink(
                 }
                 if (count == 0) {
                     stats.flush(routeType = routeInfo)
-                    // A recorder that starts with no input device routed returns 0 bytes at once, for
-                    // as long as it runs: a Leapmotor T03 (Android 7.1) did this for minutes of Siri and
-                    // call capture (#566). Restart it, and pause between empty reads instead of spinning.
                     val now = System.nanoTime()
                     if (running.get() && noAudioRestarts < MAX_NO_AUDIO_RESTARTS &&
                         now - lastAudioNs >= noAudioRestartMillis * 1_000_000L
@@ -512,13 +509,6 @@ internal class MicrophoneUplink(
     }
 }
 
-/**
- * The recorder source for a CarPlay call. While DiPlay holds the car's phone audio state the car's call
- * processing is on for every source, but VOICE_COMMUNICATION then clips (about a fifth of the samples on a
- * Han) and the plain microphone source is muted. VOICE_RECOGNITION, which is also what the stock CarPlay
- * service ends up with, gives a normal level with no clipping, and the car still suppresses the far end's
- * echo on it. Geely/Lynk head units record silence on VOICE_RECOGNITION, so they keep the old choice.
- */
 internal fun telephonyMicrophoneSource(speakerphoneCall: Boolean, carPhoneState: Boolean, geelyHeadUnit: Boolean): Int = when {
     carPhoneState && !geelyHeadUnit -> MediaRecorder.AudioSource.VOICE_RECOGNITION
     speakerphoneCall -> MediaRecorder.AudioSource.MIC

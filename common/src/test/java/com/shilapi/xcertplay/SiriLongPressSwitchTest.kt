@@ -22,7 +22,6 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.util.ReflectionHelpers
 
-/** Siri on long press only acts on BYD's voice keys, so Settings offers it where those keys exist. */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [29], qualifiers = "en-w1000dp-h700dp-land")
 class SiriLongPressSwitchTest {

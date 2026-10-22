@@ -78,11 +78,6 @@ class NcmUsbBridge internal constructor(
             this.sequence.also { this.sequence = (this.sequence + 1) and 0xffff }
         }
         val block = Ntb16Codec.build(frame, sequence)
-        // bulkTransfer() pins `block` in a JNI critical section until it returns (see the read
-        // path above). While the phone still NAKs this pipe, every frame waited out the full
-        // timeout, and each USBMUX write of the iAP2 handshake finished only when one expired:
-        // ~2 s per step on Android 8.1–14 (#634, #335, #301). Until the phone takes its first
-        // frame, a frame that cannot go out at once is dropped, as it was after the full timeout.
         val transferred = connection.bulkTransfer(
             outEndpoint,
             block,

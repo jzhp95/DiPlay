@@ -75,7 +75,6 @@ class WirelessPermissionRefusalTest {
     private fun stage(activity: CarPlayHostActivity): String =
         ReflectionHelpers.getField<TextView>(activity, "stageStatusView").text.toString()
 
-    // Android 7.1 to 11 ask for Location only.
     @Config(sdk = [29])
     @Test fun refusedLocationIsNamedInsteadOfWaitingForTheIphone() {
         val activity = open()

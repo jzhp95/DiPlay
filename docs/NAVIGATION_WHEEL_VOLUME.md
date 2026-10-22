@@ -1,19 +1,9 @@
-# Navigation guidance volume keys
+# 导航播报音量按键
 
 Author: 寒叙 (@Hanxu4131)
 
-This change adapts the navigation wheel-volume approach used successfully on a 2023 BYD Tang DM-i Champion Edition with the platform/controller-21 head unit. On that tested vehicle, the navigation audio used legacy stream 14: while guidance was speaking, the wheel changed navigation volume; after guidance it returned to media volume. These observations apply to the local builds on that vehicle. The new upstream integration has not yet been tested in a car and makes no claim of compatibility with all BYD vehicles or other head units.
+导航播报期间的音量按键逻辑使用当前播放状态、音频流及系统允许的音量范围。不得因其他车型的历史参数而给目标车机强制设置固定音频流。
 
-Enable **Wheel volume during navigation guidance (experimental)** under Advanced, select a supported navigation audio stream, and explicitly allow the existing wheel key accessibility service through Android settings or the existing ADB authorization button. The switch defaults to off. Automatic/usage routing, a legacy-track fallback, ambiguous simultaneous navigation routes and stream 3 are passed through because a separate navigation volume stream cannot be identified safely. Changing the selected audio route requires the existing reconnect flow.
+本分支的厂商方控接入仅使用 Flyme Auto EAS。通用 Android 按键处理继续遵守现有会话归属和去重约束。导航音频通道由用户在当前设置中选择；已删除的初始化向导不再写入默认通道。
 
-NavigationPlayback reports PCM actually written after playback starts, including queued audio and a 900 ms quiet tail from the proven local tracker. It is scoped to renderer tokens and cleared on close/release. Phone and assistant playback, Android call modes, and missing CarPlay sessions disable new navigation captures. The wheel key service remains the only accessibility consumer: call controls, learning, zoom and joystick retain their existing priority. A consumed DOWN keeps its repeats/UP paired, even if guidance ends or the switch changes mid-press; a passed DOWN is never captured halfway through a press.
-
-The adjustment preserves the tested AudioManager getStreamVolume/getStreamMaxVolume/setStreamVolume(…, FLAG_SHOW_UI) path. For stream 14 only, the minimum is zero because the tested ROM rejects that stream in the public getStreamMinVolume validator. Other configured streams use their public minimum on Android 9 and later, or zero on Android 8 and earlier where the public minimum API is unavailable. Navigation volume is read back before capturing the initial press. Unsupported APIs, failed writes or mismatches pass that initial key back to the head unit. Successful navigation captures never change media volume. At volume limits a confirmed unchanged navigation value is consumed.
-
-The service uses upstream's existing bounded restore worker and accessibility-list lock. Navigation restoration is allowed only after service connection or successful explicit ADB authorization has recorded consent, and it uses `mayAsk = false` so it cannot prompt for fresh ADB access. It retains unrelated accessibility components, shares the existing four-second grace period, and makes one restore attempt per trigger rather than polling or forcing another service off. No new accessibility service or manifest permission is added.
-
-The local broadcast NavigationVolumeBridge is intentionally omitted: it observes all media-volume changes and cannot tell wheel input from other software or physical volume controls. This patch requires the authorized key filter rather than restoring media values after an unidentified change. Therefore if Android does not deliver these wheel codes to the service, the head unit keeps its original behavior and this feature does not work on that head unit.
-
-## Validation
-
-Pure tests cover press pairing, repeated input, failed initial adjustment, stream bounds/private minimum, renderer ownership, fallback/ambiguous routing, expiry and phone/assistant priority. The previous upstream port passed common 674 tests and shared 821 tests (one existing skip). Validation against current upstream is recorded in the PR update. In-car acceptance remains required for this upstream version: stream 14 on the tested Tang setup; media unchanged during spoken guidance; media wheel behavior outside guidance/with the switch off; zoom/joystick/call priority; service loss/update/force-stop recovery without altering other accessibility services.
+修改后需在目标车辆分别验证导航播报、音乐、通话及会话断开时的按键表现。

@@ -102,7 +102,6 @@ class HomeHotspotAccessTest {
         val shown = texts(home)
         assertTrue(shown.toString(), home.getString(R.string.settings_write_settings_missing) in shown)
         assertTrue(shown.toString(), home.getString(R.string.settings_write_settings_allow) in shown)
-        // The ADB reminder belongs to BYD units; Home has no car-hotspot shortcut.
         assertFalse(shown.toString(), home.getString(R.string.hotspot_control_missing) in shown)
         assertFalse(shown.toString(), home.getString(R.string.open_car_hotspot_settings) in shown)
 

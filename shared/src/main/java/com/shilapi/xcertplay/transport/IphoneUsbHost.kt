@@ -536,13 +536,6 @@ class Iap2UsbSession internal constructor(
         if (closed) throw IphoneUsbException.DeviceUnavailable("USBMUX session is closed")
     }
 
-    /**
-     * Cancels a read that timed out and takes it back from Android. A read that completes between
-     * the timeout and the cancel can no longer be cancelled: it is already on its way back. That
-     * race ended the whole session every few minutes on a Telechips and a DiLink 5.1 head unit
-     * (#610, #301). The read is drained either way, and any bytes it carries are returned so the
-     * USBMUX stream stays intact.
-     */
     private fun drainTimedOutRead(request: UsbRequest, buffer: ByteBuffer): ByteArray? {
         val cancelled = request.cancel()
         val completed = try {

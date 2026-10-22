@@ -1,12 +1,6 @@
 # CarPlay on your launcher's home screen
 
-DiPlay can put CarPlay information on a launcher's home screen in three ways:
-
-| | What it shows | Works with | Needs |
-|---|---|---|---|
-| [Navigation widget](#1-navigation-widget) | Next turn arrow, distance, road, arrival, song | Any launcher that hosts standard Android widgets | Nothing extra |
-| [Map card](#2-map-card) | The live CarPlay map, as a card on the home screen | Any launcher, including BYD home and map home | Two permissions (see below) |
-| [Embedded map](#3-embedded-live-map-for-launcher-developers) | The live CarPlay map inside the launcher's own layout | Launchers that add support for it | Launcher code, Android 11+ |
+DiPlay provides a navigation widget, a floating map card and a map-embedding service. The latter requires Android 11 and is unavailable on the target Android 9 head unit.
 
 The live map is CarPlay's instrument-cluster map: the map the iPhone draws for the dashboard. The map card and the embedded map need **CarPlay map on instrument cluster** turned on in DiPlay. Without it, the iPhone does not send that map.
 
@@ -23,14 +17,9 @@ Add **CarPlay navigation** from your launcher's widget list (it is a 4×2 widget
 
 Tap the widget to open CarPlay, or DiPlay when CarPlay is not connected. The widget updates at most once a second.
 
-BYD's own home (Launcher3) accepts only the widgets on its built-in list, so the widget cannot be added there. Use the map card on BYD home.
-
 ## 2. Map card
 
-While DiPlay is in the background, a card with the live map shows on the home screen:
-
-- on BYD home, BYD map home and MyCar;
-- on whichever launcher is set as the default home, for example a third-party car launcher.
+When enabled, the floating map card follows the foreground home screen and the app's permission settings.
 
 Use the card:
 
@@ -147,14 +136,3 @@ The map is 8:3. If your view has another shape, DiPlay fills it and crops the ed
 - Once the driver turns sharing on, any app on the head unit could ask for the map. DiPlay logs which package asked (log tag `DiPlay-MapEmbed`).
 - If DiPlay restarts, your `ServiceConnection` is disconnected and reconnected; attach again then.
 - The protocol is new. Handle `ERROR` and a missing or older DiPlay gracefully.
-
-## Troubleshooting
-
-| Problem | Check |
-|---|---|
-| No card | Card switch on; "Draw over other apps" allowed; CarPlay connected; dashboard map on; you are on a home screen. |
-| Card shows over every app | Usage Access is not allowed for DiPlay. |
-| Card on BYD home but not on another launcher | Make that launcher the default home; DiPlay reads the default home when the card starts. |
-| Embedded map says `disabled` | Turn on "Share the live map with other launchers" in DiPlay. |
-| Embedded map stays on "waiting" | CarPlay is not connected, or "CarPlay map on instrument cluster" is off. |
-| Widget says "CarPlay is not connected" while CarPlay works | Open DiPlay once after installing it; the widget follows the running session. |

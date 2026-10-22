@@ -47,28 +47,12 @@ Network loss or a change to either selected address restarts the wireless sessio
 Closing the backend unregisters its callback without disconnecting Wi-Fi. Saved
 automatic car-hotspot startup applies only to car-hotspot mode.
 
-Related work: [PR #22](https://github.com/shihabal3amri/DiPlay/pull/22) also implements
-external Wi-Fi within an Android 7 port. This feature uses the current architecture
-without importing that port or its system network modifications.
-
 ## Validation
 
 Tests cover station selection, redacted network information, manual configuration,
 address scope and family selection, callback cleanup, settings persistence, dual-family
 publication/listening, port fallback, mode transitions and bootstrap encoding. Existing
 P2P and hotspot tests run alongside them.
-
-The contributor reports a successful clean install of the final implementation on a
-2022 BYD Han DM-i with DiLink 4.0 / Android 10 (API 29), firmware
-21.1.21.2401160.1: the previous test app was uninstalled, the standalone test APK was
-installed and configured normally, and Same LAN entered CarPlay with no issues noticed
-during use. This validates that setup; it does not establish compatibility with every
-receiver, iOS version or router. Open and WPA2/WPA3 mixed networks have not been
-separately validated on hardware.
-For a device check, confirm that both devices keep the existing Wi-Fi connection,
-CarPlay starts, and the iPhone can use online services. For failures, save one diagnostic
-report with the attempt time and the iPhone’s actual Wi-Fi connection. An absence of
-Bonjour control-service events alone does not prove that CarPlay discovery failed.
 
 ## Builds
 

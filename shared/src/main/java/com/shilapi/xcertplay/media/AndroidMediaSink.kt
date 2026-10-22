@@ -591,12 +591,6 @@ class AndroidMediaSink(
         }
     }
 
-    /**
-     * A head unit built on a phone chip plays communication audio on an earpiece, which nobody hears in a car: the
-     * Podofo SM4250 in #782 routed a whole call there (`routeType=1`), and the navigation prompts during it. BYD
-     * head units route calls to the loudspeaker (`routeType=2`) and never get here. Once a call's track is routed
-     * to the earpiece, the call moves to the loudspeaker as **Calls on the loudspeaker** would, once per call.
-     */
     private fun moveCallToLoudspeaker(id: AudioStreamId) {
         val manager = audioManager ?: return
         val line = synchronized(audioModeLock) {
@@ -833,8 +827,7 @@ internal fun nextOperatingRate(requested: Int, used: DecoderAttempt?): Int =
 
 /**
  * Qualcomm's vendor parameters that make its decoders output each frame as soon as it is decoded, in
- * decode order: without them c2.qti.avc.decoder released a frame only after about two more had been
- * queued (docs/SMOOTH_WIRELESS.md). Empty for other decoders. CarPlay's screen stream has no B-frames,
+ * decode order. Empty for other decoders. CarPlay's screen stream has no B-frames,
  * so decode order is display order.
  */
 internal fun vendorLowLatencyKeys(codecName: String): List<String> =
@@ -2062,11 +2055,6 @@ private class AudioRenderer(
         navigationAttenuationDb = NavigationAudioGain.clamp(db)
     }
 
-    /**
-     * Worker-thread only. The guidance is scaled in [attenuateNavigation] as it is written, not with
-     * AudioTrack.setVolume: on a BYD DiLink 3.0 the track accepted every setVolume and the guidance on
-     * stream 14 stayed as loud (#719). Each change is reported once, when it reaches this stream.
-     */
     private fun applyNavigationAttenuation() {
         if (mappedChannel != AudioChannel.NAVIGATION) return
         val requestedDb = navigationAttenuationDb
@@ -2088,9 +2076,6 @@ private class AudioRenderer(
         streamOverride: Int,
     ): AudioAttributes {
         if (streamOverride in AudioManager.STREAM_SYSTEM..AudioManager.STREAM_ACCESSIBILITY) {
-            // Android accepts only its defined legacy stream IDs here. BYD audio policy can
-            // map these standard streams to vehicle outputs; arbitrary channel numbers are
-            // not valid AudioAttributes legacy stream types.
             try {
                 return AudioAttributes.Builder().setLegacyStreamType(streamOverride).build()
             } catch (error: Exception) {
@@ -2256,13 +2241,6 @@ private class AudioRenderer(
     private fun feedCodec(payload: ByteArray, presentationTimeUs: Long) {
         val codec = codec ?: run { decoderUnavailablePackets++; return }
         diagnosticStage = "decoder-input"
-        // While a blocking track write holds this thread, decoded output fills up and the decoder
-        // stops taking input. Dropping the packet after one 10 ms wait cut ~21 ms of music every
-        // 10-20 s on DiLink 3.0 (#381); drain the output and wait again instead. One drain and
-        // retry is enough for that, and the pump always makes it. Waiting the video's 500 ms
-        // for every packet let a slowed decoder fall ever further behind instead: with the
-        // CarPlay screen in the background, the queue grew to 190 packets and the track
-        // underran every few seconds (#649).
         val index = DecoderInputPump.acquire(
             running = { running }, drain = { drainCodec(codec) },
             dequeue = { codec.dequeueInputBuffer(INPUT_TIMEOUT_US) },

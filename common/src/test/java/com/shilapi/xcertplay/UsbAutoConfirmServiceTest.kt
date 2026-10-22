@@ -72,7 +72,6 @@ class UsbAutoConfirmServiceTest {
     }
 
     @Test fun promptMustNameDiPlayInEveryAndroidWording() {
-        // Android 7.1 and 10+ wording, in English and Chinese (#409, #521).
         assertTrue(UsbAutoConfirmService.isTargetPrompt("Allow the app Apple CarPlay to access the USB device?", "Apple CarPlay"))
         assertTrue(UsbAutoConfirmService.isTargetPrompt("允许应用“Apple CarPlay”访问该USB设备吗？", "Apple CarPlay"))
         assertTrue(UsbAutoConfirmService.isTargetPrompt("Allow Apple CarPlay to access iPhone?", "Apple CarPlay"))

@@ -14,7 +14,6 @@ import org.junit.Assert.assertNull
 import org.junit.Assume.assumeTrue
 import org.junit.Test
 
-/** Android 7.x cannot bind an unscoped link-local listener; the owning tunnel supplies the scope. */
 class CarPlayVpnListenerScopeTest {
     private val wired = InetAddress.getByName("fe80::2") as Inet6Address
 

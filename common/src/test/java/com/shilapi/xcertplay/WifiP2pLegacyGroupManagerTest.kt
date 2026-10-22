@@ -83,7 +83,6 @@ class WifiP2pLegacyGroupManagerTest {
     }
 
     @Test fun aChipWithoutFiveGhzIsAskedForTwoGhzFirst() {
-        // #582: an i.MX8 head unit (Android 8.1) reported no 5 GHz band and no station, and was asked for 36.
         val wifi = context.getSystemService(WifiManager::class.java)
         shadowOf(wifi).setIs5GHzBandSupported(false)
         shadowOf(wifi.connectionInfo).setSupplicantState(SupplicantState.DISCONNECTED)

@@ -48,7 +48,6 @@ class CarPlayStageTextTest {
     }
 
     private fun stagesFollowTheConnection() {
-        // A wired Android 7.1 failure (#557) is a retry, not a stage that never ends.
         assertStage(R.string.connection_interrupted_retrying, CarPlayStatus.Failed("Invalid argument"))
         assertStage(R.string.iphone_usb_mode_rejected,
             CarPlayStatus.Failed("CarPlay configuration request transferred -1 of 1 bytes"))

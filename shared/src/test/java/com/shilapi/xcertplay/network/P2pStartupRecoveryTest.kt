@@ -423,7 +423,6 @@ class P2pStartupRecoveryTest {
     }
 
     @Test fun autoSkipsFiveGhzOnAChipWithoutIt() {
-        // #582: an i.MX8 head unit (Android 8.1, fiveGhzSupported=false, no station) was asked for 5180 first.
         assertEquals(listOf(
             P2pCreationRequest(P2pCreationMode.FIXED_2_GHZ, 2437),
             P2pCreationRequest(P2pCreationMode.FIXED_2_GHZ, 2412),

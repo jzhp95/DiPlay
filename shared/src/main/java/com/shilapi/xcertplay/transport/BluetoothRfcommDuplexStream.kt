@@ -91,11 +91,6 @@ class BluetoothRfcommDuplexStream internal constructor(
         }
     }
 
-    /**
-     * Android's socket flush polls the TIOCOUTQ ioctl. A Ford SYNC+ (i.MX8, Android 8.1) refuses
-     * that ioctl with EACCES although the write itself succeeded (#582). The bytes are already
-     * queued, so this socket stops flushing instead of failing the link.
-     */
     private fun flushOutput() {
         try {
             output.flush()

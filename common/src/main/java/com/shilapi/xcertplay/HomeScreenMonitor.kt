@@ -11,12 +11,6 @@ import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
 
-/**
- * Whether a home screen is in front (BYD's normal home, map home or MyCar, or whichever
- * launcher is the default home, such as a third-party car launcher), from the newest resumed
- * activity in the owner's Usage Access events or Accessibility events.
- * Overlays and panels are not activities, so they leave the answer as it is.
- */
 internal class HomeScreenMonitor(context: Context, private val onChange: (Boolean) -> Unit) {
     private val context = context.applicationContext
     private val main = Handler(Looper.getMainLooper())
@@ -107,7 +101,6 @@ internal class HomeScreenMonitor(context: Context, private val onChange: (Boolea
             foregroundListener?.invoke(pkg)
         }
 
-        // BYD's home list (Launcher3 HomeHelper): MyCar, the normal home, and the map home.
         val HOME_PACKAGES = setOf("com.android.launcher3")
 
         // Known third-party car launchers

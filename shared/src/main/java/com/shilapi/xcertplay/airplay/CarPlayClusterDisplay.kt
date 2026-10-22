@@ -28,13 +28,6 @@ object CarPlayClusterDisplay {
     fun usesOfficialTurnCard(content: Content): Boolean =
         content == Content.TURN_CARD || content == Content.INSTRUMENTS
 
-    /**
-     * Where the car marker goes, as percent of the panel (left, top, right, bottom). Measured on a
-     * DiLink 5.0 cluster with a calibration grid. In "Full screen navi" BYD draws a status row,
-     * turn/ADAS icons, the ADAS lane view (from x 68 %), speed and power readouts and a bottom band
-     * over the map; "Small screen navi" crops the panel to a centre window of about x 31–68 %,
-     * y 16–89 %. This centre area is clear in both modes, so no per-mode setting is needed.
-     */
     val SAFE_AREA_PERCENT = AirPlayInsets(top = 16, bottom = 25, left = 35, right = 36)
 
     /** Balanced margins for virtual full-screen/16:9 streams (e.g. desktop cards/widgets). */

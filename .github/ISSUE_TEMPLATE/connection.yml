@@ -7,18 +7,18 @@ body:
       value: |
         We need diagnostic logs from the affected device to investigate connection problems. Reports without logs will be closed pending logs; you are welcome to reopen the issue after providing them. If GitHub does not offer a Reopen button, add the logs in a comment and ask a maintainer to reopen it.
 
-        While parked, reproduce the problem on the [latest official release](https://github.com/shihabal3amri/DiPlay/releases), then open **Settings → Diagnostics → Save diagnostic report**. Capture the first connection attempt through the failure.
+        While parked, reproduce the problem on the current Flyme Auto branch build, then open **Settings → Diagnostics → Save diagnostic report**. Capture the first connection attempt through the failure.
 
-        Android 10+ normally saves to **Downloads/DiPlay**. Android 7.1–9 uses a document picker. If saving is unavailable, use **View report** or **Share** in the confirmation. You can copy the full report into a `.txt` file on another device. If DiPlay crashes, reopen it and export the report; include Android crash logs if available.
+        Android 10+ normally saves to **Downloads/DiPlay**. Android 9 requests storage access for public Downloads; the confirmation shows any fallback location. If saving is unavailable, use **View report** or **Share** in the confirmation. You can copy the full report into a `.txt` file on another device. If DiPlay crashes, reopen it and export the report; include Android crash logs if available.
 
-        Reports are public. Review the file and remove personal information and credentials, including hotspot passwords, before uploading. Screenshots or videos may help, but do not replace diagnostic logs. [Detailed export instructions](https://github.com/shihabal3amri/DiPlay/blob/main/docs/INSTALL.md#connection-recovery-and-reports).
+        Reports are public. Review the file and remove personal information and credentials, including hotspot passwords, before uploading. Screenshots or videos may help, but do not replace diagnostic logs. See docs/INSTALL.md in this repository for export instructions.
   - type: input
     id: version
     attributes: {label: DiPlay version, placeholder: 'Exact version from Settings → About'}
     validations: {required: true}
   - type: input
     id: car
-    attributes: {label: Car and head-unit model, placeholder: 'Car model/year, head unit, DiLink/Android version and exact firmware'}
+    attributes: {label: Car and head-unit model, placeholder: 'Car model/year, head unit, Flyme Auto/Android version and exact firmware'}
     validations: {required: true}
   - type: input
     id: phone

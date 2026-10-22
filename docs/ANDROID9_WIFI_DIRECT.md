@@ -29,7 +29,3 @@ Android 9 source references:
 - [WifiP2pManager](https://android.googlesource.com/platform/frameworks/base/+/android-9.0.0_r1/wifi/java/android/net/wifi/p2p/WifiP2pManager.java)
 - [WifiP2pServiceImpl](https://android.googlesource.com/platform/frameworks/opt/net/wifi/+/android-9.0.0_r1/service/java/com/android/server/wifi/p2p/WifiP2pServiceImpl.java)
 - [SupplicantP2pIfaceHal](https://android.googlesource.com/platform/frameworks/opt/net/wifi/+/android-9.0.0_r1/service/java/com/android/server/wifi/p2p/SupplicantP2pIfaceHal.java)
-
-The author's Redmi K20 Pro/iPhone test supports basic bring-up; automated tests exercise default
-retry, close, late callbacks, foreign replacement and failed cleanup. BYD Android 9 cancellation
-and cleanup acceptance has not been run by this review.

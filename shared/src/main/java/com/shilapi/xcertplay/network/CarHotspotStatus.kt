@@ -15,11 +15,6 @@ object CarHotspotStatus {
     private const val EXTRA_WIFI_AP_STATE = "wifi_state"
     private const val EXTRA_WIFI_AP_MODE = "wifi_ap_mode"
 
-    /**
-     * True/false from the Wi-Fi AP state, or null when the firmware hides it (then callers must
-     * not block the connection). Interface flags are not used: BYD keeps wlan1 up with an address
-     * while tethering is off.
-     */
     fun isEnabled(context: Context): Boolean? {
         val app = context.applicationContext
         CarHotspotController.vendorEnabled(app)?.let { return it }

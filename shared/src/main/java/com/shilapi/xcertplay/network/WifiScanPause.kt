@@ -15,23 +15,6 @@ fun restoreWifiScanAfterInterruptedSession(context: Context) {
     WifiScanPause.restoreIfNeeded(context)
 }
 
-/**
- * Pauses the head unit's automatic Wi-Fi network search while a Wi-Fi Direct CarPlay session runs.
- *
- * Wi-Fi Direct needs the car's Wi-Fi client switched on. While that client is not joined to a
- * network, BYD firmware searches every band every 10 s (seen on DiLink 3, 4 and 5). The single radio
- * leaves the CarPlay channel for each search, and the iPhone's audio packets sent meanwhile are lost,
- * so music and voice stutter on a 10 s rhythm. The built-in car hotspot runs with the client off and
- * is not affected, and Same LAN needs the search, so only Wi-Fi Direct sessions pause it.
- *
- * Android offers apps no way to do this. Through the approved local adb shell, [WifiScanPauseMain]
- * runs as the shell user and turns off the framework's automatic joining, which stops these scans:
- * `enableWifiConnectivityManager` on Android 9-10 and `allowAutojoinGlobal` on Android 11+. One
- * process-wide worker owns controller leases and restores the search only after the last lease
- * ends. A durable marker precedes every disable; failed restores retry and recover when the app
- * next opens, and the framework resets the setting itself when the car restarts. Nothing happens
- * without adb approval, and this never asks for it.
- */
 internal class WifiScanPause(
     context: Context,
     private val log: (String) -> Unit,

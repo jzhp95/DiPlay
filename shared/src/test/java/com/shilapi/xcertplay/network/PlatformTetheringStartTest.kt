@@ -81,7 +81,6 @@ class PlatformTetheringStartTest {
 
     @Test
     fun theAppTetheringCallIsOfferedFromAndroid8To10() {
-        // Android 7 refuses it from every app (MANAGE_USERS); Android 8.0 is the first that accepts it.
         assertFalse(PlatformTetheringStart.supported(24))
         assertFalse(PlatformTetheringStart.supported(25))
         assertFalse(PlatformTetheringStart.supported(26))

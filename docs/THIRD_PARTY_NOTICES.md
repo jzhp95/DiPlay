@@ -2,9 +2,9 @@
 
 ## Receiver
 
-DiPlay is a modified version of [xcertplay by shilapi](https://github.com/shilapi/xcertplay). The upstream receiver is licensed under GNU GPL version 3; the full text is in `LICENSE` and the original README is retained in `docs/UPSTREAM-README.md`.
+DiPlay is a modified version of [xcertplay by shilapi](https://github.com/shilapi/xcertplay). The upstream receiver is licensed under GNU GPL version 3; the full text is in `LICENSE`.
 
-Upstream credits [LIVI](https://github.com/f-io/LIVI) and [Showcase](https://github.com/amineross/showcase) for protocol research. Existing source comments and attribution are preserved.
+Upstream credits [LIVI](https://github.com/f-io/LIVI) and [Showcase](https://github.com/amineross/showcase) for protocol research. Applicable source attribution and license notices are retained.
 
 ## Home and settings UI
 
@@ -42,14 +42,8 @@ Concentus uses the Opus BSD-style license. The full copyright notices, redistrib
 
 ## Experimental authentication data
 
-The public preview APK includes an accessory certificate/key pair recovered from public Carlinkit C2Air Allwinner V821 firmware during the owner's local investigation. These data are not newly generated Apple-issued credentials for DiPlay and are not relicensed as project source code. They are bundled in the preview APK to reproduce the offline experiment; continued acceptance and suitability for general distribution are unresolved. The source archive does not contain the private key, and the separate Android APK-signing key is never distributed.
+Runtime authentication assets are provisioned locally according to [BUILD.md](BUILD.md). They are not generated Apple-issued credentials and are not relicensed as project source code. The public source tree does not contain the private key or Android APK-signing key. Only explicitly supplied runtime assets are staged into a car-test build.
 
 ## Download website
 
 The static site layout, CSS and generator adapt DiAuto (AGPL-3.0). The AGPL license text is included with the source.
-
-## BYD HUD maneuver icons
-
-Required Notice: Copyright AndyShaman (https://github.com/AndyShaman/BYDMate)
-
-The maneuver PNGs under `shared/src/main/assets/byd-hud-icons` were imported from BYDMate. Its PolyForm Noncommercial 1.0.0 terms and required notice are included alongside the assets. These files are separate from the project code license; upstream describes them as donor assets and their original provenance is not independently established. The validated DiLink5.1 windshield path uses factory turn codes rather than these images.

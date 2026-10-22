@@ -14,7 +14,7 @@
 
 项目规则见 [AGENTS.md](AGENTS.md)，构建说明见 [docs/BUILD.md](docs/BUILD.md)。本机可通过 `:mobile:assembleDebug` 构建主应用，Flyme 专用构建配置见 `integrations/flyme-eas/mobile.gradle.kts`。认证资产与签名须按构建说明配置，勿提交密钥。
 
-历史发布说明和车型测试记录保留在 `docs/`，它们记录上游或过去版本的状态，不代表本分支当前支持范围。单元测试、模拟截图和构建成功不能替代 Android 9 实车验证。
+当前安装、兼容范围和测试入口见 `docs/`；逐次清理的验证证据保留在 `docs/validation/`。单元测试、模拟截图和构建成功不能替代 Android 9 实车验证。
 
 ## 来源与许可
 

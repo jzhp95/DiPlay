@@ -151,7 +151,6 @@ class BluetoothRfcommDuplexStreamTest {
         val input = BlockingInput()
         val written = ByteArrayOutputStream()
         var flushes = 0
-        // Ford SYNC+ (#582): LocalSocket's flush polls TIOCOUTQ and SELinux refuses the ioctl.
         val socket = FakeSocket(input, object : OutputStream() {
             override fun write(value: Int) = written.write(value)
             override fun flush() {
