@@ -18,7 +18,7 @@ class NavigationWheelKeyPolicyTest {
     @Test fun onlyStandardVolumeKeysHaveAStep() {
         assertEquals(listOf(24), (0..400).filter { NavigationWheelKeyPolicy.volumeStep(it) == 1 })
         assertEquals(listOf(25), (0..400).filter { NavigationWheelKeyPolicy.volumeStep(it) == -1 })
-        assertNull(NavigationWheelKeyPolicy.volumeStep(GeelyWheelKeyCodes.KEY_VOICE_ASSIST))
+        assertNull(NavigationWheelKeyPolicy.volumeStep(com.shilapi.xcertplay.airplay.CarPlayMediaButton.KEYCODE_FLYME_VOICE_ASSIST))
     }
 
     @Test fun handlesConfirmedDirectionsAndEachRepeatOnce() {

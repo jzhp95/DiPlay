@@ -77,7 +77,6 @@ internal object CarPlayMediaKeys {
         controller = next
         DetailedDebugLog.record("media", "attach controller=${System.identityHashCode(next)}")
         FlymeWheelIntegration.attach(context, next)
-        GeelyWheelKeys.start(context)
         next.playbackListener = { playing ->
             onIphonePlaying(next, playing)
         }
@@ -98,7 +97,6 @@ internal object CarPlayMediaKeys {
         expected.nowPlayingListener = null
         expected.artworkListener = null
         controller = null
-        GeelyWheelKeys.stop()
         releaseLocked()
     }
 
@@ -339,7 +337,7 @@ internal object CarPlayMediaKeys {
 
     private fun send(index: Int, source: String) {
         // Suppress competing hardware paths; explicit MediaController transport commands still work.
-        if ((source == "geely-wheel" || source.startsWith("KEYCODE_")) &&
+        if (source.startsWith("KEYCODE_") &&
             !FlymeWheelIntegration.allowHardware(index)) {
             DetailedDebugLog.record("wheel", "suppressed source=$source media=$index reason=flyme-owner-or-duplicate")
             return
@@ -356,10 +354,10 @@ internal object CarPlayMediaKeys {
         WheelKeyLog.note("media key $source -> CarPlay $index sent=$sent")
     }
 
-    /** A steering-wheel media key captured outside the Android key stream (Geely/Lynk). */
-    internal fun onExternalMediaKey(index: Int, source: String = "geely-wheel") = send(index, source)
+    /** A media key forwarded by the Flyme EAS adapter. */
+    internal fun onExternalMediaKey(index: Int, source: String) = send(index, source)
 
-    /** The steering-wheel microphone key captured outside the Android key stream (Geely/Lynk). */
+    /** A Siri request forwarded by the Flyme EAS adapter. */
     internal fun onExternalSiriKey(): Boolean {
         val active = synchronized(this) { controller }
         val sent = runCatching { active?.requestSiri() == true }.getOrDefault(false)

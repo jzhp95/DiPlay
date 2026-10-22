@@ -16,18 +16,13 @@ This public preview is an independent receiver, not an Apple-certified CarPlay a
 
 See [BYD navigation](BYD_NAVIGATION.md) for the exact verified firmware and lifecycle limits. Earlier car-hotspot builds started CarPlay on the development car using scoped IPv6. Current access-point endpoints prefer usable IPv4 and retain scoped IPv6 fallback. The phone must join the configured car hotspot. Neither result guarantees support on every firmware.
 
-## Geely / Lynk & Co steering-wheel keys
+## Flyme Auto steering-wheel keys
 
-On the Geely/Lynk & Co head unit (`geely_fx11`, model `CS11_A4`, DesaySV, Android 11) the steering wheel does not produce standard `KEYCODE_MEDIA_*` events, so the media session and the accessibility path never see it. DiPlay detects this head unit and subscribes to the wheel's vendor key codes on the car's own input service (`com.geely.inputservice`), then forwards play/pause and skip to the active CarPlay session, and the microphone key's long press to Siri. The subscription exists only while a CarPlay session is active, and on every other head unit nothing is bound and behaviour is unchanged.
-
-Two limits come from the car, not from DiPlay:
-
-- The microphone key's long press is answered by the car's HiCar app, which registers for the same code. Disable it over ADB (`adb shell pm disable-user --user 0 com.geely.hicar`; `pm enable` undoes it) if Siri should answer instead. DiPlay never changes that itself, and a system update may need the command again. A short press stays the car's own voice assistant, which cannot be intercepted from an app.
-- This firmware opens the microphone only for the voice-communication audio source, so DiPlay uses it for Siri on this head unit. Voice-recognition input elsewhere is unchanged.
-
-When the car's own music app is playing as well, the wheel reaches both it and CarPlay: the head unit routes the key to its current audio source before any app sees it.
-
-Tested on the car named above; other Geely/Lynk firmware is untested.
+This branch targets the 2026 Geely Preface Kunlun with Flyme Auto / Android 9.
+The sole vendor steering-wheel integration is Flyme Auto EAS (`integrations/flyme-eas`).
+The separate Geely/Lynk input-service binding and its private key subscriptions have been removed.
+Standard Android media events retain the existing EAS ownership and deduplication rules.
+This removal does not change the separate microphone audio-source policy.
 
 ## Android 9 Wi-Fi Direct and experimental features
 

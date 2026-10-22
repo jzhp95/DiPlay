@@ -93,7 +93,7 @@ class WheelKeyLogTest {
             KeyEvent.KEYCODE_MEDIA_PLAY, KeyEvent.KEYCODE_MEDIA_PAUSE, KeyEvent.KEYCODE_VOICE_ASSIST,
             KeyEvent.KEYCODE_SEARCH, KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_MENU,
             KeyEvent.KEYCODE_F1, KeyEvent.KEYCODE_F12, KeyEvent.KEYCODE_BUTTON_1,
-            289, 291, 292, 304, 305, 307, 308, 313, 327, 328, 331, 353, GeelyWheelKeyCodes.KEY_VOICE_ASSIST)
+            289, 291, 292, 304, 305, 307, 308, 313, 327, 328, 331, 353, com.shilapi.xcertplay.airplay.CarPlayMediaButton.KEYCODE_FLYME_VOICE_ASSIST)
         for (code in wheel) assertFalse("key $code", WheelKeyLog.writesText(code))
         for (role in WheelZoomSettings.Role.entries) {
             role.defaultKey?.let { assertFalse("$role", WheelKeyLog.writesText(it.code)) }

@@ -27,10 +27,10 @@ class MediaKeyReportTest {
     }
 
     @Test fun aMediaKeyWithoutASessionIsReportedAsNotSent() {
-        CarPlayMediaKeys.onExternalMediaKey(CarPlayMediaButton.NEXT)
+        CarPlayMediaKeys.onExternalMediaKey(CarPlayMediaButton.NEXT, "flyme-eas")
         val report = WheelKeyLog.report(bound = false)
         assertTrue(report.toString(), report.any {
-            it.startsWith("Wheel keys: ") && it.endsWith("media key geely-wheel -> CarPlay ${CarPlayMediaButton.NEXT} sent=false")
+            it.startsWith("Wheel keys: ") && it.endsWith("media key flyme-eas -> CarPlay ${CarPlayMediaButton.NEXT} sent=false")
         })
     }
 }

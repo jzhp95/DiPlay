@@ -38,6 +38,8 @@ Set `ANDROID_HOME` or `local.properties` if Gradle cannot find the SDK.
 
 所有涉及方向盘控制（方控）的开发、修复、重构和上游代码合并，必须以本项目现有的 Flyme 适配为准。
 
+其他吉利／领克车型的方控服务绑定、私有按键订阅及 AIDL 已明确要求删除；仅保留现有 Flyme Auto EAS 厂商方控接入，不得恢复 `com.geely.inputservice` 的并行通路。通用 Android 媒体事件与诊断继续遵守 EAS 的归属及去重约束。
+
 - 现有适配入口为 `common/src/main/java/com/shilapi/xcertplay/FlymeWheelIntegration.kt`，底层协议与焦点生命周期由 `integrations/flyme-eas/` 管理；相关实现应沿用这套职责划分。
 - Siri／语音、播放／暂停、上一曲／下一曲等方控行为，以及相关设置、按键学习和测试工具，均须与现有 Flyme 适配保持一致。
 - 必须保留现有按键映射、事件去重、活动会话归属、通话期间处理、焦点获取与释放及连接／断开生命周期约束，避免重复响应或向失效会话发送按键。
