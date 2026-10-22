@@ -1,0 +1,77 @@
+{
+  "baseline_commit": "3a16f8a5",
+  "before": {
+    "tests": 4,
+    "failures": 2,
+    "errors": 0,
+    "messages": [
+      "java.lang.AssertionError: Back action and lower navigation/content must share the page start edge (full) expected:<32> but was:<48>",
+      "java.lang.AssertionError: Back action and lower navigation/content must share the page start edge (full-rtl) expected:<1368> but was:<1352>"
+    ]
+  },
+  "focused": [
+    {
+      "name": "com.shilapi.xcertplay.SettingsLayoutPolicyTest",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "com.shilapi.xcertplay.FlymeSystemLayoutTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "com.shilapi.xcertplay.SettingsHeaderAlignmentTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  ],
+  "full_validation_exit": 1,
+  "modules": {
+    "flyme-eas": {
+      "tests": 10,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "shared": {
+      "tests": 1157,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 1
+    },
+    "common": {
+      "tests": 1283,
+      "failures": 99,
+      "errors": 0,
+      "skipped": 0
+    }
+  },
+  "new_failures": [],
+  "alignment_full_suite": {
+    "tests": 4,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "lint": {
+    "Error": 0,
+    "Warning": 3
+  },
+  "screenshots": {
+    "docs/screenshots/settings-header-alignment/before-full-large-font.png": "ffcc02aab5e7bf806db1dc79a90a45badfa26a99b6e49383c7eb416b0a196113",
+    "docs/screenshots/settings-header-alignment/before-full-rtl-large-font.png": "79c845823e98600777da3a6a68c8e96a9240743f32cca31be424873c78a17366",
+    "docs/screenshots/settings-header-alignment/compact-large-font.png": "6ecfc8851dc4d7029ade394e0ba73d36c023e611373994bed197e0b2c965fba9",
+    "docs/screenshots/settings-header-alignment/compact-rtl-large-font.png": "47dfe02db08251a0214ec743b50455042cb9fc9a81f9ea99fd19e1f89592e160",
+    "docs/screenshots/settings-header-alignment/full-large-font.png": "c4e9520676bec27b048c4cdbba651338da4d9fdfe2ee9a43ae53dedd9f0995bf",
+    "docs/screenshots/settings-header-alignment/full-rtl-large-font.png": "b87dcd197f96c265553d9f2fe21b0a0014feb19db57410099e7ebdc759c38d49"
+  },
+  "review": "独立只读复核无问题",
+  "real_vehicle_verified": false
+}

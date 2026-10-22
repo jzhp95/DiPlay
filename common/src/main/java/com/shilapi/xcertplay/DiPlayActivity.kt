@@ -807,7 +807,6 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
     }
 
     private fun settingsRail(): LinearLayout = column().apply {
-        setPadding(dp(FlymeAutoStyle.CONTROL_GAP_DP), 0, dp(FlymeAutoStyle.CONTROL_GAP_DP), 0)
         SettingsCategory.entries.forEach { category ->
             addView(settingsRailDestination(category), LinearLayout.LayoutParams(-1, -2).apply {
                 bottomMargin = if (category == SettingsCategory.entries.last()) 0 else dp(8)
