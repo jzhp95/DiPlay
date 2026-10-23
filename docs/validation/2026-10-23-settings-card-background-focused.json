@@ -1,0 +1,23 @@
+[
+  {
+    "name": "com.shilapi.xcertplay.SettingsLayoutPolicyTest",
+    "tests": "6",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0"
+  },
+  {
+    "name": "com.shilapi.xcertplay.FlymeSystemLayoutTest",
+    "tests": "5",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0"
+  },
+  {
+    "name": "com.shilapi.xcertplay.SettingsHeaderAlignmentTest",
+    "tests": "4",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0"
+  }
+]

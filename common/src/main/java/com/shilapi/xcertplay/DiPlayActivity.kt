@@ -3412,7 +3412,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
 
     private fun section(parent: LinearLayout, title: String, icon: Int? = null, build: (LinearLayout) -> Unit) {
         searchIndexSink?.add(title)
-        val card = if (page == "settings" && settingsCategory != SettingsCategory.OVERVIEW) column().apply {
+        val card = if (page == "settings" && settingsCategory != SettingsCategory.OVERVIEW) card().apply {
             val inset = dp(FlymeAutoStyle.CARD_PADDING_DP)
             setPadding(inset, dp(FlymeAutoStyle.CONTROL_GAP_DP), inset, dp(FlymeAutoStyle.CONTROL_GAP_DP))
         } else card()

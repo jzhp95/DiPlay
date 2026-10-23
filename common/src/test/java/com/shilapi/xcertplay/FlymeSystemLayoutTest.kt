@@ -4,6 +4,7 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.Canvas
+import android.graphics.drawable.GradientDrawable
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
@@ -26,7 +27,7 @@ import org.robolectric.util.ReflectionHelpers
 @Config(sdk = [29], qualifiers = "zh-rCN-w1400dp-h900dp-land-mdpi")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class FlymeSystemLayoutTest {
-    @Test fun categoryUsesDirectGroupsAndUnboxedIndependentNavigation() {
+    @Test @Config(sdk = [28]) fun categoryKeepsCardsAndIndependentNavigation() {
         RuntimeEnvironment.setFontScale(1.5f)
         InterfaceSize.save(RuntimeEnvironment.getApplication(), 100)
         val owner = Robolectric.buildActivity(DiPlayActivity::class.java,
@@ -43,7 +44,7 @@ class FlymeSystemLayoutTest {
                 it !is Button && it.text.toString() == activity.getString(R.string.connection_setup)
             }
             val group = heading.parent.parent as LinearLayout
-            assertNull("Settings categories use open form groups rather than a card around every section", group.background)
+            assertNotNull("Settings sections must retain their card backgrounds", group.background)
             val railScroll = ReflectionHelpers.getField<ScrollView>(activity, "settingsRailScroll")
             val rail = (railScroll.getChildAt(0) as ViewGroup).getChildAt(0) as ViewGroup
             assertNull("Navigation is placed directly on the page background", rail.background)
@@ -59,6 +60,40 @@ class FlymeSystemLayoutTest {
             File(out, "connection-full-large-font.png").outputStream().use { image.compress(Bitmap.CompressFormat.PNG, 100, it) }
             image.recycle()
         } finally { owner.pause().stop().destroy() }
+    }
+
+    @Test @Config(sdk = [28])
+    fun everySettingsCategoryKeepsDayAndNightCardSurfaces() {
+        for (night in listOf(false, true)) {
+            RuntimeEnvironment.setQualifiers("zh-rCN-w1400dp-h900dp-land-${if (night) "night" else "notnight"}-mdpi")
+            val owner = Robolectric.buildActivity(DiPlayActivity::class.java,
+                Intent(RuntimeEnvironment.getApplication(), DiPlayActivity::class.java)
+                    .putExtra("page", "settings")).setup()
+            val activity = owner.get()
+            try {
+                val expected = if (night) DiPlayPalette.DARK else DiPlayPalette.LIGHT
+                for ((category, sections) in SettingsInformationArchitecture.sectionsByCategory) {
+                    if (sections.isEmpty()) continue
+                    ReflectionHelpers.setField(activity, "settingsCategory", category)
+                    val content = LinearLayout(activity)
+                    ReflectionHelpers.callInstanceMethod<Unit>(activity, "renderSections",
+                        ReflectionHelpers.ClassParameter(LinearLayout::class.java, content),
+                        ReflectionHelpers.ClassParameter(Set::class.java, sections))
+                    assertTrue("No sections rendered for $category", content.childCount > 0)
+                    for (index in 0 until content.childCount) {
+                        val background = content.getChildAt(index).background
+                        assertTrue("$category/$night section $index lost its card background",
+                            background is GradientDrawable)
+                        background as GradientDrawable
+                        assertEquals("$category/$night card uses the current appearance",
+                            expected.surface, background.color!!.defaultColor)
+                        assertTrue("$category/$night card retains rounded corners", background.cornerRadius > 0f)
+                    }
+                }
+            } finally {
+                owner.pause().stop().destroy()
+            }
+        }
     }
 
     @Test fun auxiliaryButtonsTreatLegacyFixedHeightAsAMinimum() {
@@ -95,7 +130,7 @@ class FlymeSystemLayoutTest {
         assertTrue("Bottom actions fit inside the viewport", actionBounds.top >= scroll.scrollY)
     }
 
-    @Test fun pageScreenshotMatrixWithLargeFonts() {
+    @Test @Config(sdk = [28]) fun pageScreenshotMatrixWithLargeFonts() {
         val info = RuntimeEnvironment.getApplication().applicationInfo
         info.flags = info.flags or android.content.pm.ApplicationInfo.FLAG_SUPPORTS_RTL
         val profiles = listOf(
