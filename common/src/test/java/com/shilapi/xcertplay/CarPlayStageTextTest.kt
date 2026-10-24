@@ -30,6 +30,7 @@ class CarPlayStageTextTest {
         CarPlayBackgroundSession.clear()
         activity = Robolectric.buildActivity(CarPlayHostActivity::class.java).get()
         ReflectionHelpers.setField(activity, "stageStatusView", TextView(activity))
+        ReflectionHelpers.setField(activity, "connectionStageView", TextView(activity))
     }
 
     @After fun tearDown() {
@@ -69,5 +70,43 @@ class CarPlayStageTextTest {
         reporter(status)
         val shown = ReflectionHelpers.getField<TextView>(activity, "stageStatusView").text.toString()
         assertEquals(status.toString(), activity.getString(expected), shown)
+    }
+
+    @Test fun actualStatusReporterPublishesSpecificPhaseAndRejectsAnOldController() {
+        val generation = ReflectionHelpers.getField<Int>(activity, "restartGeneration")
+        fun reporter(value: Int) = ReflectionHelpers.callInstanceMethod<(CarPlayStatus) -> Unit>(
+            activity, "createStatusReporter", ClassParameter.from(Int::class.javaPrimitiveType, value))
+        reporter(generation)(CarPlayStatus.OpeningDataPaths)
+        val caption = ReflectionHelpers.getField<TextView>(activity, "connectionStageView")
+        assertEquals(activity.getString(R.string.connection_stage_current,
+            activity.getString(R.string.opening_usb_data_paths)), caption.text.toString())
+        reporter(generation - 1)(CarPlayStatus.MfiReady)
+        assertEquals(activity.getString(R.string.connection_stage_current,
+            activity.getString(R.string.opening_usb_data_paths)), caption.text.toString())
+    }
+    @Test fun protocolProgressUpdatesTheRealCaptionButAnOldControllerCannotOverwriteIt() {
+        val generation = ReflectionHelpers.getField<Int>(activity, "restartGeneration")
+        fun listener(value: Int) = ReflectionHelpers.callInstanceMethod<com.shilapi.xcertplay.airplay.AirPlaySessionListener>(
+            activity, "createSessionListener", ClassParameter.from(Int::class.javaPrimitiveType, value))
+        val active = listener(generation)
+        active.onDebugLog("iap2 authentication accepted")
+        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+        val caption = ReflectionHelpers.getField<TextView>(activity, "connectionStageView")
+        val authenticated = activity.getString(R.string.connection_stage_current,
+            activity.getString(R.string.connection_stage_authenticated))
+        assertEquals(authenticated, caption.text.toString())
+        active.onDebugLog("airplay rx SETUP / cseq=5 body=100")
+        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+        val media = activity.getString(R.string.connection_stage_current,
+            activity.getString(R.string.connection_stage_media))
+        assertEquals("real protocol metadata is redacted from logs but its fixed phase must still display",
+            media, caption.text.toString())
+        listener(generation - 1).onDebugLog("airplay rx RECORD / cseq=1 body=0")
+        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+        assertEquals(media, caption.text.toString())
+        ReflectionHelpers.getField<AtomicBoolean>(activity, "shuttingDown").set(true)
+        active.onDebugLog("airplay rx RECORD / cseq=6 body=0")
+        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+        assertEquals(media, caption.text.toString())
     }
 }

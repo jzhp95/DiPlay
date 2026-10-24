@@ -880,4 +880,20 @@
     <string name="home_hotspot">热点</string>
     <string name="settings_native_hfp_calls">保留原车蓝牙电话（实验性）</string>
     <string name="settings_native_hfp_calls_description">默认开启。保留原车电话和接听键，原车响铃时避免重复 CarPlay 铃声。请保持原车蓝牙连接；音乐、导航和通话回退仍可使用 CarPlay。实际通话路由由车机和 iPhone 决定。下次连接 CarPlay 时生效。</string>
+    <string name="connection_stage_current">当前阶段：%1$s</string>
+    <string name="connection_stage_device_ready">认证设备已就绪</string>
+    <string name="connection_stage_network">准备连接网络</string>
+    <string name="connection_stage_network_ready">连接网络已就绪</string>
+    <string name="connection_stage_identifying">与 iPhone 握手</string>
+    <string name="connection_stage_authenticating">进行 MFi 认证</string>
+    <string name="connection_stage_authenticated">MFi 认证已通过</string>
+    <string name="connection_stage_configuring">配置 CarPlay 会话</string>
+    <string name="connection_stage_sending_network">发送网络连接信息</string>
+    <string name="connection_stage_joining_network">等待 iPhone 加入网络</string>
+    <string name="connection_stage_waiting_session">等待 iPhone 发起 CarPlay 连接</string>
+    <string name="connection_stage_airplay_network">建立 CarPlay 网络通道</string>
+    <string name="connection_stage_pairing">验证 CarPlay 配对</string>
+    <string name="connection_stage_media">协商音视频通道</string>
+    <string name="connection_stage_waiting_picture">等待 CarPlay 画面</string>
+    <string name="connection_stage_failed">连接失败</string>
 </resources>

@@ -444,6 +444,8 @@ class CarPlayHostActivity : ComponentActivity() {
     private var statusView: TextView? = null
     private var statusScrollView: ScrollView? = null
     private var stageStatusView: TextView? = null
+    private var connectionStageView: TextView? = null
+    private val connectionStageProgress = ConnectionStageProgress()
     private var resolutionValueView: TextView? = null
     private var resolutionPreviewView: TextView? = null
     private var hotspotStatusView: TextView? = null
@@ -1478,6 +1480,7 @@ class CarPlayHostActivity : ComponentActivity() {
         refreshConfiguration(newConfig, ThemeModeDiagnostics.Source.CALLBACK)
         applyFullscreenMode()
         stageStatusView?.maxWidth = (resources.displayMetrics.widthPixels * 0.78f).toInt()
+        connectionStageView?.maxWidth = stageStatusView?.maxWidth ?: resources.displayMetrics.widthPixels
         connectionHelpView?.maxWidth = (resources.displayMetrics.widthPixels * 0.78f).toInt()
         scrollLogsToBottom()
         videoView?.post {
@@ -1587,6 +1590,14 @@ class CarPlayHostActivity : ComponentActivity() {
             gravity = Gravity.CENTER
         }
         panel.addView(stage)
+        val currentStage = TextView(this).apply {
+            text = currentConnectionStageText()
+            gravity = Gravity.CENTER
+            setPadding(0, dp(FlymeAutoStyle.CONTROL_GAP_DP), 0, 0)
+            accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+            FlymeAutoStyle.text(this, FlymeAutoStyle.TextRole.SECONDARY)
+        }
+        panel.addView(currentStage)
         val instructions = TextView(this).apply {
             text = if (wirelessEnabled) getString(R.string.keep_your_iphone_nearby_with_bluetooth_and_wi_fi_on_allow)
                 else getString(R.string.use_a_usb_data_cable_and_unlock_your_iphone_allow_trust_an)
@@ -1637,6 +1648,7 @@ class CarPlayHostActivity : ComponentActivity() {
             viewport.setBackgroundColor(colors.background)
             title.setTextColor(colors.text)
             stage.setTextColor(colors.text)
+            currentStage.setTextColor(colors.secondary)
             instructions.setTextColor(colors.secondary)
             help.setTextColor(colors.secondary)
             gestureHint.setTextColor(colors.secondary)
@@ -1678,6 +1690,7 @@ class CarPlayHostActivity : ComponentActivity() {
             title.textSize = size(28f, 34f)
             title.setPadding(0, spacing(8f, 18f), 0, spacing(6f, 14f))
             stage.textSize = size(20f, 24f)
+            currentStage.textSize = size(16f, 18f)
             instructions.textSize = size(16f, 18f)
             instructions.setPadding(0, spacing(8f, 14f), 0, spacing(12f, 24f))
             help.textSize = size(16f, 18f)
@@ -1730,6 +1743,7 @@ class CarPlayHostActivity : ComponentActivity() {
         gestureOverlay = gestureLayer
         settingsGestureHint = gestureHint
         stageStatusView = stage
+        connectionStageView = currentStage
         connectionInstructionsView = instructions
         connectionHelpView = help
         connectionPanel = viewport
@@ -4879,6 +4893,16 @@ class CarPlayHostActivity : ComponentActivity() {
                     while (colorMainLines.size > 80) colorMainLines.removeFirst()
                 }
                 DetailedDebugLog.record("protocol", "generation=$controllerGeneration $message")
+                // AirPlay metadata lines contain body=length and are intentionally dropped by the
+                // log redactor. Extract only a fixed phase label; never display the original line.
+                ConnectionStageProtocol.textId(message)?.let { phase ->
+                    runOnUiThread {
+                        if (controllerGeneration == restartGeneration && !shuttingDown.get() &&
+                            !isDestroyed && !startupRetryStopped && connectionStageProgress.protocol(phase)) {
+                            connectionStageView?.text = currentConnectionStageText()
+                        }
+                    }
+                }
                 if (DiagnosticRedactor.redact(message) == null) return
                 if (message.startsWith(CarPlayController.CONNECTION_DIAGNOSTIC_PREFIX + " ")) {
                     // Retain old-controller teardown evidence without accepting its UI/session state.
@@ -4905,6 +4929,8 @@ class CarPlayHostActivity : ComponentActivity() {
     ): (CarPlayStatus) -> Unit = report@{ status ->
         DetailedDebugLog.record("connection-stage", "generation=$controllerGeneration current=$restartGeneration stage=${status.javaClass.simpleName} menuOpen=$menuOpen")
         if (controllerGeneration != restartGeneration) return@report
+        connectionStageProgress.status(status)
+        connectionStageView?.text = currentConnectionStageText()
         if (status is CarPlayStatus.RunningControl || status is CarPlayStatus.RunningWireless) {
             controlRunningCount++
             lossSinceControlRunning = false
@@ -6168,6 +6194,9 @@ class CarPlayHostActivity : ComponentActivity() {
         stageStatusView?.text = friendlyStage(message, englishMessage)
         updateDebugOverlays()
     }
+
+    private fun currentConnectionStageText() = getString(
+        R.string.connection_stage_current, getString(connectionStageProgress.textId))
 
     private fun updateDebugOverlays() {
         statusScrollView?.visibility = View.GONE
