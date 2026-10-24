@@ -217,6 +217,7 @@ class AndroidMediaSink(
     private val vendorLowLatencyDecoder: Boolean = false,
     /** Opt-in MTK ACodec low-latency/no-reorder modes, with per-session automatic fallback. */
     private val mtkDecoderTuningEnabled: Boolean = false,
+    private val videoColorOverride: VideoColorOverride = VideoColorOverride(),
 ) : MediaSink {
     // Each downlink publishes its own reference; a mic must match that stream and sample rate.
     private val callEchoReferences = ConcurrentHashMap<AudioStreamId, EchoReference>()
@@ -275,6 +276,8 @@ class AndroidMediaSink(
     private val mirrorLock = Any()
     private val mirrorSurfaces = HashMap<Pair<Int, String>, Surface>()
     private val mirrorDecoders = HashMap<Pair<Int, String>, VideoDecoder>()
+    private data class MirrorOptions(val color: VideoColorOverride, val diagnostic: ((String) -> Unit)?)
+    private val mirrorOptions = HashMap<Pair<Int, String>, MirrorOptions>()
     private val lastVideoConfig = ConcurrentHashMap<Int, Pair<VideoCodec, ByteArray>>()
     private val recoveryExecutor = Executors.newSingleThreadExecutor { task ->
         Thread(task, "carplay-video-recovery").apply { isDaemon = true }
@@ -331,6 +334,7 @@ class AndroidMediaSink(
             synchronized(mirrorLock) {
                 mirrorSurfaces.entries.filter { it.value === surface }.map { it.key }.forEach { id ->
                     mirrorSurfaces.remove(id)
+                    mirrorOptions.remove(id)
                     mirrorDecoders[id]?.let { retire(id.first, it) }
                 }
             }
@@ -428,7 +432,8 @@ class AndroidMediaSink(
      * Also decodes stream [type] onto [surface] with its own decoder, one per [key], which
      * starts at the next keyframe it asks for; null stops it. The stream's own surface is not affected.
      */
-    fun setMirrorSurface(type: Int, key: String, surface: Surface?) {
+    fun setMirrorSurface(type: Int, key: String, surface: Surface?,
+        color: VideoColorOverride = VideoColorOverride(), diagnostic: ((String) -> Unit)? = null) {
         synchronized(videoOwnershipLock) {
             if (videoClosed) return
             val id = type to key
@@ -436,12 +441,31 @@ class AndroidMediaSink(
                 mirrorDecoders[id]?.let { retire(type, it) }
                 if (surface == null) {
                     mirrorSurfaces.remove(id)
+                    mirrorOptions.remove(id)
                     return
                 }
                 mirrorSurfaces[id] = surface
+                mirrorOptions[id] = MirrorOptions(color, diagnostic)
             }
             lastVideoConfig[type]?.let { (codec, data) -> mirrorDecoders(type).forEach { it.configure(codec, data) } }
         }
+    }
+
+    /** Stops only the named mirror and waits for its own worker, even while the main sink stays open. */
+    fun detachMirrorAndAwait(type: Int, key: String, timeoutMillis: Long): Boolean {
+        val label = " stream=$type mirror=$key"
+        val retiring = synchronized(videoOwnershipLock) {
+            synchronized(mirrorLock) {
+                val id = type to key
+                mirrorSurfaces.remove(id)
+                mirrorOptions.remove(id)
+                mirrorDecoders[id]?.let { retire(type, it) }
+                closingVideoDecoders.filter { it.hasStatsLabel(label) }
+            }
+        }
+        val deadline = if (timeoutMillis == Long.MAX_VALUE) Long.MAX_VALUE
+            else System.nanoTime() + timeoutMillis.coerceAtLeast(0) * 1_000_000L
+        return retiring.map { it.awaitExitUntil(deadline) }.all { it }
     }
 
     private fun mirrorDecoders(type: Int): List<VideoDecoder> = synchronized(videoOwnershipLock) {
@@ -449,7 +473,11 @@ class AndroidMediaSink(
         synchronized(mirrorLock) {
             if (mirrorSurfaces.isEmpty()) return emptyList()
             mirrorSurfaces.filterKeys { it.first == type }.map { (id, surface) ->
-                mirrorDecoders.getOrPut(id) { newVideoDecoder(type, surface, " stream=$type mirror=${id.second}") }
+                mirrorDecoders.getOrPut(id) {
+                    val options = mirrorOptions[id]
+                    newVideoDecoder(type, surface, " stream=$type mirror=${id.second}",
+                        colorOverride = options?.color ?: VideoColorOverride(), diagnostic = options?.diagnostic)
+                }
             }
         }
     }
@@ -634,6 +662,7 @@ class AndroidMediaSink(
                 mirrorDecoders.entries.toList().forEach { (id, decoder) -> retire(id.first, decoder) }
                 mirrorDecoders.clear()
                 mirrorSurfaces.clear()
+                mirrorOptions.clear()
             }
         }
         synchronized(screenStateLock) {
@@ -670,14 +699,19 @@ class AndroidMediaSink(
         }
     }
 
-    private fun newVideoDecoder(type: Int, surface: Surface?, statsLabel: String? = null, startImmediately: Boolean = true) = VideoDecoder(
+    private fun newVideoDecoder(type: Int, surface: Surface?, statsLabel: String? = null, startImmediately: Boolean = true,
+        colorOverride: VideoColorOverride = videoColorOverride, diagnostic: ((String) -> Unit)? = null) = VideoDecoder(
         type,
         surface,
         videoWidth,
         videoHeight,
         preferSoftwareHevcDecoder,
         requestKeyFrame = { requestVideoRecovery(type) },
-        report = { videoDiagnosticHandlers[type]?.invoke(it) },
+        report = { message ->
+            if (diagnostic != null) runCatching { diagnostic(message) }
+            else videoDiagnosticHandlers[type]?.invoke(message)
+        },
+        colorOverride = colorOverride,
         statsLabel = statsLabel,
         onExit = ::onVideoDecoderExit,
         // Only the main screen goes to the host's SurfaceView; mirrors and the cluster keep their path.
@@ -867,7 +901,8 @@ private class VideoDecoder(
     private val preferSoftwareHevcDecoder: Boolean,
     private val requestKeyFrame: () -> Unit,
     private val report: (String) -> Unit,
-    statsLabel: String? = null,
+    private val colorOverride: VideoColorOverride = VideoColorOverride(),
+    private val statsLabel: String? = null,
     pacingDelayNanos: Long = 0L,
     /** Called on the worker as its last step, after it has released its codec. */
     private val onExit: (VideoDecoder) -> Unit = {},
@@ -992,6 +1027,8 @@ private class VideoDecoder(
 
     /** True once the worker has exited, so its codec is released. */
     val exited: Boolean get() = !thread.isAlive
+
+    fun hasStatsLabel(label: String): Boolean = statsLabel == label
 
     /**
      * After [close], waits until [deadlineNanos] for the worker to release its codec and exit. An
@@ -1261,6 +1298,7 @@ private class VideoDecoder(
         mtkMode: MtkDecoderMode,
     ): MediaFormat =
         MediaFormat.createVideoFormat(mime, width, height).apply {
+            colorOverride.applyTo(this)
             if (attempt.tuned) {
                 setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, MAX_INPUT_SIZE)
                 setInteger(MediaFormat.KEY_PRIORITY, 0)

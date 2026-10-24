@@ -1,0 +1,325 @@
+{
+  "width": 640,
+  "height": 360,
+  "fps": 10,
+  "patch_rgb": [
+    [
+      0,
+      0,
+      0
+    ],
+    [
+      4,
+      4,
+      4
+    ],
+    [
+      8,
+      8,
+      8
+    ],
+    [
+      12,
+      12,
+      12
+    ],
+    [
+      16,
+      16,
+      16
+    ],
+    [
+      20,
+      20,
+      20
+    ],
+    [
+      24,
+      24,
+      24
+    ],
+    [
+      32,
+      32,
+      32
+    ],
+    [
+      192,
+      192,
+      192
+    ],
+    [
+      208,
+      208,
+      208
+    ],
+    [
+      224,
+      224,
+      224
+    ],
+    [
+      232,
+      232,
+      232
+    ],
+    [
+      240,
+      240,
+      240
+    ],
+    [
+      248,
+      248,
+      248
+    ],
+    [
+      252,
+      252,
+      252
+    ],
+    [
+      255,
+      255,
+      255
+    ],
+    [
+      255,
+      0,
+      0
+    ],
+    [
+      0,
+      255,
+      0
+    ],
+    [
+      0,
+      0,
+      255
+    ],
+    [
+      0,
+      255,
+      255
+    ],
+    [
+      255,
+      0,
+      255
+    ],
+    [
+      255,
+      255,
+      0
+    ],
+    [
+      128,
+      128,
+      128
+    ],
+    [
+      255,
+      255,
+      255
+    ]
+  ],
+  "fixtures": [
+    {
+      "asset": "h264_full",
+      "command": [
+        "ffmpeg",
+        "-v",
+        "error",
+        "-y",
+        "-loop",
+        "1",
+        "-framerate",
+        "10",
+        "-i",
+        "<generated-reference.ppm>",
+        "-t",
+        "1",
+        "-vf",
+        "scale=in_range=pc:out_range=pc:out_color_matrix=bt709,format=yuv420p",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "fast",
+        "-crf",
+        "10",
+        "-g",
+        "10",
+        "-bf",
+        "0",
+        "-color_range",
+        "pc",
+        "-colorspace",
+        "bt709",
+        "-color_primaries",
+        "bt709",
+        "-color_trc",
+        "bt709",
+        "-x264-params",
+        "colorprim=bt709:transfer=bt709:colormatrix=bt709:fullrange=on",
+        "-movflags",
+        "+faststart",
+        "h264_full.mp4"
+      ],
+      "codec": "h264",
+      "color_range": "pc",
+      "color_space": "bt709",
+      "color_transfer": "bt709",
+      "color_primaries": "bt709",
+      "sha256": "3b59886625744dc200c928818ca882e94402be69e385ee71f929a56279b73d76"
+    },
+    {
+      "asset": "h264_limited",
+      "command": [
+        "ffmpeg",
+        "-v",
+        "error",
+        "-y",
+        "-loop",
+        "1",
+        "-framerate",
+        "10",
+        "-i",
+        "<generated-reference.ppm>",
+        "-t",
+        "1",
+        "-vf",
+        "scale=in_range=pc:out_range=tv:out_color_matrix=bt709,format=yuv420p",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "fast",
+        "-crf",
+        "10",
+        "-g",
+        "10",
+        "-bf",
+        "0",
+        "-color_range",
+        "tv",
+        "-colorspace",
+        "bt709",
+        "-color_primaries",
+        "bt709",
+        "-color_trc",
+        "bt709",
+        "-x264-params",
+        "colorprim=bt709:transfer=bt709:colormatrix=bt709:fullrange=off",
+        "-movflags",
+        "+faststart",
+        "h264_limited.mp4"
+      ],
+      "codec": "h264",
+      "color_range": "tv",
+      "color_space": "bt709",
+      "color_transfer": "bt709",
+      "color_primaries": "bt709",
+      "sha256": "33aa4ca58c7e4fc74606b3756c2e33f1a3ed8fd2d0b5959f3a9197f9f92c0dea"
+    },
+    {
+      "asset": "hevc_full",
+      "command": [
+        "ffmpeg",
+        "-v",
+        "error",
+        "-y",
+        "-loop",
+        "1",
+        "-framerate",
+        "10",
+        "-i",
+        "<generated-reference.ppm>",
+        "-t",
+        "1",
+        "-vf",
+        "scale=in_range=pc:out_range=pc:out_color_matrix=bt709,format=yuv420p",
+        "-c:v",
+        "libx265",
+        "-preset",
+        "fast",
+        "-crf",
+        "10",
+        "-g",
+        "10",
+        "-bf",
+        "0",
+        "-color_range",
+        "pc",
+        "-colorspace",
+        "bt709",
+        "-color_primaries",
+        "bt709",
+        "-color_trc",
+        "bt709",
+        "-x265-params",
+        "log-level=error:pools=1:frame-threads=1:range=full:colorprim=bt709:transfer=bt709:colormatrix=bt709",
+        "-tag:v",
+        "hvc1",
+        "-movflags",
+        "+faststart",
+        "hevc_full.mp4"
+      ],
+      "codec": "hevc",
+      "color_range": "pc",
+      "color_space": "bt709",
+      "color_transfer": "bt709",
+      "color_primaries": "bt709",
+      "sha256": "830b10903edd67f28f2f954f667bef2d9d1234a5ffe693faaf6e6fac0b0d4d4c"
+    },
+    {
+      "asset": "hevc_limited",
+      "command": [
+        "ffmpeg",
+        "-v",
+        "error",
+        "-y",
+        "-loop",
+        "1",
+        "-framerate",
+        "10",
+        "-i",
+        "<generated-reference.ppm>",
+        "-t",
+        "1",
+        "-vf",
+        "scale=in_range=pc:out_range=tv:out_color_matrix=bt709,format=yuv420p",
+        "-c:v",
+        "libx265",
+        "-preset",
+        "fast",
+        "-crf",
+        "10",
+        "-g",
+        "10",
+        "-bf",
+        "0",
+        "-color_range",
+        "tv",
+        "-colorspace",
+        "bt709",
+        "-color_primaries",
+        "bt709",
+        "-color_trc",
+        "bt709",
+        "-x265-params",
+        "log-level=error:pools=1:frame-threads=1:range=limited:colorprim=bt709:transfer=bt709:colormatrix=bt709",
+        "-tag:v",
+        "hvc1",
+        "-movflags",
+        "+faststart",
+        "hevc_limited.mp4"
+      ],
+      "codec": "hevc",
+      "color_range": "tv",
+      "color_space": "bt709",
+      "color_transfer": "bt709",
+      "color_primaries": "bt709",
+      "sha256": "447bbcdfce587af3de2e86d764b9203af30e2fe4e4f3ca1be685c214c4b97b50"
+    }
+  ]
+}

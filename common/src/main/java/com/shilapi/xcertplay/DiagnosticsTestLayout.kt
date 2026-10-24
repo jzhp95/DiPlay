@@ -12,7 +12,7 @@ import com.shilapi.xcertplay.host.R
 
 /** Navigation stays outside the independently scrolling detail pages, including narrow windows. */
 internal class DiagnosticsTestLayout(private val context: Context, private val palette: DiPlayPalette) {
-    enum class Page { WHEEL, MFI, UID }
+    enum class Page { WHEEL, MFI, UID, COLOR }
     class Views(val root: LinearLayout, private val pages: Map<Page, ScrollView>,
         private val menu: Map<Page, Button>, private val palette: DiPlayPalette,
         private val picker: Button? = null, private val titles: Map<Page, Int> = emptyMap()) {
@@ -27,10 +27,10 @@ internal class DiagnosticsTestLayout(private val context: Context, private val p
             }
         }
     }
-    fun build(wheel: ScrollView, mfi: ScrollView, selected: Page, changed: (Page) -> Unit, back: () -> Unit = {}, uid: ScrollView = UidTestLayout(context, palette).build().root): Views {
-        val pages = linkedMapOf(Page.WHEEL to wheel, Page.MFI to mfi, Page.UID to uid)
+    fun build(wheel: ScrollView, mfi: ScrollView, selected: Page, changed: (Page) -> Unit, back: () -> Unit = {}, uid: ScrollView = UidTestLayout(context, palette).build().root, color: ScrollView = ScrollView(context)): Views {
+        val pages = linkedMapOf(Page.WHEEL to wheel, Page.MFI to mfi, Page.UID to uid, Page.COLOR to color)
         val titles = linkedMapOf(Page.WHEEL to R.string.wheel_test_title, Page.MFI to R.string.diagnostics_mfi_title,
-            Page.UID to R.string.diagnostics_uid_title)
+            Page.UID to R.string.diagnostics_uid_title, Page.COLOR to R.string.color_test_title)
         val compact = FlymeAutoStyle.compact(context)
         val root = LinearLayout(context).apply {
             orientation = if (compact) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
@@ -53,7 +53,7 @@ internal class DiagnosticsTestLayout(private val context: Context, private val p
             setPadding(0, gap, 0, gap)
             gravity = Gravity.CENTER
         }, LinearLayout.LayoutParams(-1, -2))
-        val menu = listOf(Page.WHEEL to R.string.wheel_test_title, Page.MFI to R.string.diagnostics_mfi_title, Page.UID to R.string.diagnostics_uid_title).associate { (page, title) ->
+        val menu = listOf(Page.WHEEL to R.string.wheel_test_title, Page.MFI to R.string.diagnostics_mfi_title, Page.UID to R.string.diagnostics_uid_title, Page.COLOR to R.string.color_test_title).associate { (page, title) ->
             page to Button(context).apply {
                 setText(title)
                 setOnClickListener { changed(page) }

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="color_test_title">画面颜色</string>
+    <string name="color_test_description">一次完成颜色排查。先比较内置标准视频，再比较同源 CarPlay。每项记录观察后自动进入下一项，结果会保留。CarPlay 项需要已连接的 iPhone；没有连接时可跳过，连接后再选该项重试。</string>
+    <string name="color_test_ready">尚未开始。测试只在此页运行，不会修改日常投屏设置。</string>
+    <string name="color_test_start">开始／继续测试</string>
+    <string name="color_test_stop">停止当前测试</string>
+    <string name="color_test_choose">选择测试项目</string>
+    <string name="color_test_record">记录观察并进入下一项</string>
+    <string name="color_test_previous">返回上一项</string>
+    <string name="color_test_range">临时亮度范围</string>
+    <string name="color_test_matrix">临时色彩标准</string>
+    <string name="color_test_picture">画面调整对比</string>
+    <string name="color_test_reference">原生参照：上排近黑，中排近白，下排颜色</string>
+    <string name="color_test_reference_hint">中排灰度为 192、208、224、232、240、248、252、255。与视频的对应色块对比，重点看浅灰是否变白、黑色是否发灰。直接输出模式不应用画面调整。颜色请求可能被解码器忽略，不能仅凭请求值判定原因。</string>
+    <string name="color_test_export">保存并分享完整报告</string>
+    <string name="color_test_clear">清空本次测试记录</string>
+    <string name="color_test_clear_confirm">清空颜色测试结果和截图，并停止当前测试？日常设置不受影响。</string>
+    <string name="color_test_waiting">正在准备视频，等待首帧…</string>
+    <string name="color_test_stopped">测试已停止，记录已保留。</string>
+    <string name="color_test_not_rendered">尚未显示视频，不能记录颜色判断。可以记录无法显示或跳过。</string>
+    <string name="color_test_finished">全部项目已走完。可以选择任意项目补测，或保存完整报告。</string>
+    <string name="color_test_progress">第 %1$d / %2$d 项 · %3$s\n已记录 %4$d 项（含跳过及无法显示）</string>
+    <string name="color_test_range_value">临时亮度范围 · %1$s</string>
+    <string name="color_test_matrix_value">临时色彩标准 · %1$s</string>
+    <string name="color_test_picture_value">画面调整对比 · %1$s</string>
+    <string name="color_test_saved">文字报告：%1$s\n完整报告及截图：%2$s</string>
+    <string name="color_test_export_failed">报告保存失败：%1$s</string>
+    <string name="color_test_rendered">画面已显示。请比较灰阶和颜色，再记录观察。</string>
+</resources>
