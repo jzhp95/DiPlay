@@ -46,11 +46,11 @@ class DetailedDebugSettingsTest {
             toggle.performClick()
             assertTrue(DetailedDebugLog.enabled(context))
             descendants(activity.window.decorView).filterIsInstance<TextView>().first {
-                it.text == activity.getString(R.string.settings_debug_marker)
+                it.text.toString().substringBefore(" · ") == activity.getString(R.string.settings_debug_marker)
             }.performClick()
             assertTrue(DetailedDebugLog.report(context).contains("USER_MARK"))
             assertTrue(descendants(activity.window.decorView).filterIsInstance<TextView>().any {
-                it.text == activity.getString(R.string.save_diagnostic_report)
+                it.text.toString().substringBefore(" · ") == activity.getString(R.string.save_diagnostic_report)
             })
 
             val root = activity.findViewById<ViewGroup>(android.R.id.content).getChildAt(0)

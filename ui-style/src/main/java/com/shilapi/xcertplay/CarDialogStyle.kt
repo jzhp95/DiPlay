@@ -33,8 +33,8 @@ internal object CarDialogStyle {
     private const val WINDOW_MARGIN_DP = 16
     private const val CORNER_DP = FlymeAutoStyle.CARD_CORNER_DP
     private const val BUTTON_HEIGHT_DP = FlymeAutoStyle.DIALOG_CONTROL_HEIGHT_DP
-    private const val ROW_HEIGHT_DP = 68
-    private const val INPUT_HEIGHT_DP = 64
+    private const val ROW_HEIGHT_DP = 88
+    private const val INPUT_HEIGHT_DP = FlymeAutoStyle.INPUT_HEIGHT_DP
     private const val BUTTON_PADDING_DP = 20
     private const val ACTION_GAP_DP = 12
     private const val BODY_SP = FlymeAutoStyle.BODY_TEXT_SP
@@ -65,7 +65,7 @@ internal object CarDialogStyle {
         window.setBackgroundDrawable(shape(palette.dialogSurface, dp(CORNER_DP).toFloat()))
         decor.clipToOutline = true
         window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
-        window.attributes = window.attributes.apply { dimAmount = .6f }
+        window.attributes = window.attributes.apply { dimAmount = .32f }
         @Suppress("DEPRECATION")
         window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
         window.setLayout(width, ViewGroup.LayoutParams.WRAP_CONTENT)
@@ -73,7 +73,7 @@ internal object CarDialogStyle {
         if (dialog !is AlertDialog) return
         val titleId = decor.resources.getIdentifier("alertTitle", "id", "android")
         (if (titleId != 0) decor.findViewById<TextView>(titleId) else null)?.apply {
-            FlymeAutoStyle.text(this, FlymeAutoStyle.TextRole.PAGE_TITLE, compact = false)
+            FlymeAutoStyle.text(this, FlymeAutoStyle.TextRole.PAGE_TITLE)
             setTextColor(palette.primaryText)
             isSingleLine = false
             maxLines = Int.MAX_VALUE
@@ -214,16 +214,25 @@ internal object CarDialogStyle {
         when (view) {
             is ListView -> return // Rows are inflated lazily; decorate them through the adapter.
             is CompoundButton -> {
-                enlargeText(view, BODY_SP)
+                FlymeAutoStyle.text(view, FlymeAutoStyle.TextRole.BODY)
                 view.minimumHeight = max(view.minimumHeight, (ROW_HEIGHT_DP * density).toInt())
             }
             is Button -> styleButton(view, palette, primary = false)
             is EditText -> {
-                enlargeText(view, INPUT_SP)
+                FlymeAutoStyle.text(view, FlymeAutoStyle.TextRole.VALUE)
+                // Editors nested in their own filled row retain that row's focus treatment.
+                if (view.background != null) {
+                    view.backgroundTintList = null
+                    view.background = FlymeAutoStyle.inputBackground(view.context, palette)
+                    view.setTextColor(palette.primaryText)
+                    view.setHintTextColor(palette.secondaryText)
+                    val inset = FlymeAutoStyle.dp(view.context, FlymeAutoStyle.INPUT_PADDING_DP)
+                    view.setPaddingRelative(inset, view.paddingTop, inset, view.paddingBottom)
+                }
                 view.minimumHeight = max(view.minimumHeight, (INPUT_HEIGHT_DP * density).toInt())
             }
             is TextView -> {
-                enlargeText(view, BODY_SP)
+                FlymeAutoStyle.text(view, FlymeAutoStyle.TextRole.BODY)
             }
         }
         if (view is ViewGroup) for (i in 0 until view.childCount) decorateTree(view.getChildAt(i), palette)
@@ -236,7 +245,7 @@ internal object CarDialogStyle {
 
     private fun styleButton(button: Button, palette: DiPlayPalette, primary: Boolean) {
         val previousMinimum = button.minimumHeight
-        FlymeAutoStyle.button(button, palette, primary)
+        FlymeAutoStyle.action(button, palette, primary)
         button.isSingleLine = false
         button.maxLines = Int.MAX_VALUE
         button.minimumHeight = max(previousMinimum, FlymeAutoStyle.dp(button.context, BUTTON_HEIGHT_DP))

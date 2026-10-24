@@ -27,7 +27,7 @@ import org.robolectric.util.ReflectionHelpers
 @Config(sdk = [29], qualifiers = "zh-rCN-w1400dp-h900dp-land-mdpi")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class FlymeSystemLayoutTest {
-    @Test @Config(sdk = [28]) fun categoryKeepsCardsAndIndependentNavigation() {
+    @Test @Config(sdk = [28]) fun categoryUsesOpenGroupsWithVisibleControlsAndIndependentNavigation() {
         RuntimeEnvironment.setFontScale(1.5f)
         InterfaceSize.save(RuntimeEnvironment.getApplication(), 100)
         val owner = Robolectric.buildActivity(DiPlayActivity::class.java,
@@ -44,7 +44,9 @@ class FlymeSystemLayoutTest {
                 it !is Button && it.text.toString() == activity.getString(R.string.connection_setup)
             }
             val group = heading.parent.parent as LinearLayout
-            assertNotNull("Settings sections must retain their card backgrounds", group.background)
+            assertNull("Category groups follow the reviewed open layout", group.background)
+            assertTrue("Open groups must retain visible filled controls", descendants(group).filterIsInstance<Button>()
+                .any { it.background != null })
             val railScroll = ReflectionHelpers.getField<ScrollView>(activity, "settingsRailScroll")
             val rail = (railScroll.getChildAt(0) as ViewGroup).getChildAt(0) as ViewGroup
             assertNull("Navigation is placed directly on the page background", rail.background)
@@ -63,15 +65,13 @@ class FlymeSystemLayoutTest {
     }
 
     @Test @Config(sdk = [28])
-    fun everySettingsCategoryKeepsDayAndNightCardSurfaces() {
+    fun everySettingsCategoryRetainsItsControlsOnTheOpenPage() {
         for (night in listOf(false, true)) {
             RuntimeEnvironment.setQualifiers("zh-rCN-w1400dp-h900dp-land-${if (night) "night" else "notnight"}-mdpi")
             val owner = Robolectric.buildActivity(DiPlayActivity::class.java,
-                Intent(RuntimeEnvironment.getApplication(), DiPlayActivity::class.java)
-                    .putExtra("page", "settings")).setup()
+                Intent(RuntimeEnvironment.getApplication(), DiPlayActivity::class.java).putExtra("page", "settings")).setup()
             val activity = owner.get()
             try {
-                val expected = if (night) DiPlayPalette.DARK else DiPlayPalette.LIGHT
                 for ((category, sections) in SettingsInformationArchitecture.sectionsByCategory) {
                     if (sections.isEmpty()) continue
                     ReflectionHelpers.setField(activity, "settingsCategory", category)
@@ -81,18 +81,14 @@ class FlymeSystemLayoutTest {
                         ReflectionHelpers.ClassParameter(Set::class.java, sections))
                     assertTrue("No sections rendered for $category", content.childCount > 0)
                     for (index in 0 until content.childCount) {
-                        val background = content.getChildAt(index).background
-                        assertTrue("$category/$night section $index lost its card background",
-                            background is GradientDrawable)
-                        background as GradientDrawable
-                        assertEquals("$category/$night card uses the current appearance",
-                            expected.surface, background.color!!.defaultColor)
-                        assertTrue("$category/$night card retains rounded corners", background.cornerRadius > 0f)
+                        val group = content.getChildAt(index)
+                        assertNull("$category must use the reviewed open group", group.background)
+                        descendants(group).filterIsInstance<Button>().forEach {
+                            assertNotNull("$category lost a control background: ${it.text}", it.background)
+                        }
                     }
                 }
-            } finally {
-                owner.pause().stop().destroy()
-            }
+            } finally { owner.pause().stop().destroy() }
         }
     }
 
@@ -120,7 +116,7 @@ class FlymeSystemLayoutTest {
         assertTrue("The driver must be able to reach actions below the short panel viewport",
             descendants(panel).filterIsInstance<ScrollView>().any { it.canScrollVertically(1) })
         val action = descendants(panel).filterIsInstance<DiPlayButton>().first()
-        assertEquals(Color.WHITE, action.currentTextColor)
+        assertEquals(DiPlayPalette.DARK.overlayPrimaryText, action.currentTextColor)
         val scroll = descendants(panel).filterIsInstance<ScrollView>().single()
         scroll.scrollTo(0, scroll.getChildAt(0).height)
         val actionBounds = android.graphics.Rect()
@@ -143,7 +139,7 @@ class FlymeSystemLayoutTest {
             RuntimeEnvironment.setQualifiers(qualifiers.replace("-mdpi", "-${if (night) "night" else "notnight"}-mdpi").replace("-xhdpi", "-${if (night) "night" else "notnight"}-xhdpi"))
             RuntimeEnvironment.setFontScale(1.5f)
             InterfaceSize.save(RuntimeEnvironment.getApplication(), 100)
-            for (category in listOf<SettingsCategory?>(null, SettingsCategory.CONNECTION, SettingsCategory.AUDIO)) {
+            for (category in listOf<SettingsCategory?>(null) + SettingsCategory.entries) {
                 val owner = Robolectric.buildActivity(DiPlayActivity::class.java,
                     Intent(RuntimeEnvironment.getApplication(), DiPlayActivity::class.java)
                         .putExtra("page", if (category == null) "home" else "settings")).setup()
@@ -168,6 +164,13 @@ class FlymeSystemLayoutTest {
                             assertTrue("$name/$category clips ${button.text}",
                                 button.layout.height <= button.height - button.compoundPaddingTop - button.compoundPaddingBottom)
                         }
+                    }
+                    if (category == null) for (row in descendants(root).filterIsInstance<LinearLayout>()) {
+                        if (row.orientation != LinearLayout.HORIZONTAL) continue
+                        val actions = (0 until row.childCount).map(row::getChildAt).filterIsInstance<Button>()
+                            .filter { it.visibility == View.VISIBLE }
+                        if (actions.size > 1) assertEquals("Home action row must keep equal heights", 1,
+                            actions.map { it.height }.distinct().size)
                     }
                     val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
                     try {

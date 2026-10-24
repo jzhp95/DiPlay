@@ -1,0 +1,157 @@
+{
+  "total_failures": 137,
+  "new_failures": [
+    {
+      "test": "com.shilapi.xcertplay.InterfaceSizeActivityTest#aRealSystemDensityChangeRecreatesAtTheNewScaledDensityAndKeepsSettings",
+      "message": "java.lang.IndexOutOfBoundsException"
+    },
+    {
+      "test": "com.shilapi.xcertplay.ClusterMusicTest#rendersRealSettingsCompactFullAndRtlWithLargeFontsAndClusterCard",
+      "message": "java.lang.IndexOutOfBoundsException"
+    },
+    {
+      "test": "com.shilapi.xcertplay.FlymeSystemLayoutTest#pageScreenshotMatrixWithLargeFonts",
+      "message": "java.lang.IndexOutOfBoundsException"
+    },
+    {
+      "test": "com.shilapi.xcertplay.FlymeSystemLayoutTest#categoryUsesOpenGroupsWithVisibleControlsAndIndependentNavigation",
+      "message": "java.lang.IndexOutOfBoundsException"
+    },
+    {
+      "test": "com.shilapi.xcertplay.SettingsTextEditorTest#passwordStartsMaskedAndClearAndEyeOnlyChangeTheDraft",
+      "message": "java.lang.AssertionError: expected:<> but was:<null>"
+    },
+    {
+      "test": "com.shilapi.xcertplay.SettingsTextEditorTest#cancellingEditorRestoresAnInitialReadThatArrivedWhileEditing",
+      "message": "java.lang.AssertionError: expected:<1> but was:<0>"
+    },
+    {
+      "test": "com.shilapi.xcertplay.SettingsTextEditorTest#cancelAndSaveKeepPersistenceOwnedByTheFinalSaveAction",
+      "message": "java.lang.AssertionError: expected: com.shilapi.xcertplay.network.CarHotspotProfile<CarHotspotProfile(security=WPA2, band=AUTO, channel=0, credentials=redacted)> but was: com.shilapi.xcertplay.network.CarHotspotProfile<CarHotspotProfile(security=WPA2, band=AUTO, channel=0, credentials=redacted)>"
+    },
+    {
+      "test": "com.shilapi.xcertplay.CarHotspotNameTextTest#connectionSettingsUseOneInlineHotspotEditor",
+      "message": "java.lang.IndexOutOfBoundsException"
+    },
+    {
+      "test": "com.shilapi.xcertplay.CarHotspotNameTextTest#savingTheInlineCardUpdatesBothHotspotPathsWithoutTurningItOn",
+      "message": "java.lang.IndexOutOfBoundsException"
+    },
+    {
+      "test": "com.shilapi.xcertplay.SettingsHeaderAlignmentTest#compactRtlContentKeepsTheBackButtonsPageEdge",
+      "message": "java.lang.IndexOutOfBoundsException"
+    },
+    {
+      "test": "com.shilapi.xcertplay.SettingsHeaderAlignmentTest#expandedNavigationStartsAtTheBackButtonsPageEdge",
+      "message": "java.lang.IndexOutOfBoundsException"
+    },
+    {
+      "test": "com.shilapi.xcertplay.SettingsHeaderAlignmentTest#expandedRtlNavigationStartsAtTheBackButtonsPageEdge",
+      "message": "java.lang.IndexOutOfBoundsException"
+    },
+    {
+      "test": "com.shilapi.xcertplay.SettingsHeaderAlignmentTest#compactContentKeepsTheBackButtonsPageEdge",
+      "message": "java.lang.IndexOutOfBoundsException"
+    },
+    {
+      "test": "com.shilapi.xcertplay.DetailedDebugSettingsTest#compactDiagnosticsCanEnableMarkAndStopRecording",
+      "message": "java.util.NoSuchElementException: Sequence contains no element matching the predicate."
+    },
+    {
+      "test": "com.shilapi.xcertplay.DetailedDebugSettingsTest#carDiagnosticsCanEnableMarkAndStopRecording",
+      "message": "java.util.NoSuchElementException: Sequence contains no element matching the predicate."
+    },
+    {
+      "test": "com.shilapi.xcertplay.SettingsControlVisibilityTest#compactDayControlsAreVisibleWithoutFocus",
+      "message": "java.lang.NullPointerException: Cannot read field \"mTmpInvalRect\" because \"this.mAttachInfo\" is null"
+    },
+    {
+      "test": "com.shilapi.xcertplay.SettingsControlVisibilityTest#emptyFieldsStillHaveNamedEditingEntrances",
+      "message": "java.lang.NullPointerException: Cannot read field \"mTmpInvalRect\" because \"this.mAttachInfo\" is null"
+    },
+    {
+      "test": "com.shilapi.xcertplay.SettingsControlVisibilityTest#fullNightControlsAreVisibleWithoutFocus",
+      "message": "java.lang.IndexOutOfBoundsException"
+    },
+    {
+      "test": "com.shilapi.xcertplay.SettingsControlVisibilityTest#compactNightControlsAreVisibleWithoutFocus",
+      "message": "java.lang.NullPointerException: Cannot read field \"mTmpInvalRect\" because \"this.mAttachInfo\" is null"
+    },
+    {
+      "test": "com.shilapi.xcertplay.SettingsControlVisibilityTest#fullDayControlsAreVisibleWithoutFocus",
+      "message": "java.lang.IndexOutOfBoundsException"
+    },
+    {
+      "test": "com.shilapi.xcertplay.settings.SettingsWidgetsTest#overlayUsesFlymeBlueAndKeepsTheLabelMetrics",
+      "message": "java.lang.ClassCastException: class android.widget.LinearLayout cannot be cast to class android.widget.TextView (android.widget.LinearLayout and android.widget.TextView are in unnamed module of loader org.robolectric.internal.AndroidSandbox$SdkSandboxClassLoader @4397ad89)"
+    },
+    {
+      "test": "com.shilapi.xcertplay.settings.SettingsWidgetsTest#lightOverlayUsesSemanticTextAndControlColors",
+      "message": "java.lang.ClassCastException: class android.widget.LinearLayout cannot be cast to class android.widget.TextView (android.widget.LinearLayout and android.widget.TextView are in unnamed module of loader org.robolectric.internal.AndroidSandbox$SdkSandboxClassLoader @4397ad89)"
+    },
+    {
+      "test": "com.shilapi.xcertplay.settings.SettingsWidgetsTest#cardDescriptionsKeepMultilineSpacingAndTheirAccessibleTitle",
+      "message": "java.lang.AssertionError: expected:<22.0> but was:<20.0>"
+    },
+    {
+      "test": "com.shilapi.xcertplay.CarHotspotSettingsLayoutTest#inlineCardFitsCompactWideAndRtlWindowsWithLargeText",
+      "message": "java.lang.IndexOutOfBoundsException"
+    },
+    {
+      "test": "com.shilapi.xcertplay.AdaptiveSettingsUiTest#diagnosticsOpensThePhonePageAndBackReturnsToDiagnostics",
+      "message": "java.util.NoSuchElementException: Sequence contains no element matching the predicate."
+    },
+    {
+      "test": "com.shilapi.xcertplay.AdaptiveSettingsUiTest#navigationSliderScreenshotCompactJapaneseLargeFont",
+      "message": "java.lang.IndexOutOfBoundsException"
+    },
+    {
+      "test": "com.shilapi.xcertplay.AdaptiveSettingsUiTest#navigationSliderScreenshotCompactArabicRtlLargeFont",
+      "message": "java.lang.IndexOutOfBoundsException"
+    },
+    {
+      "test": "com.shilapi.xcertplay.AdaptiveSettingsUiTest#navigationSliderScreenshotExpandedLargeFont",
+      "message": "java.lang.IndexOutOfBoundsException"
+    },
+    {
+      "test": "com.shilapi.xcertplay.WheelTestActivityTest#changingToMfiInvalidatesAPendingDisconnectAndStart",
+      "message": "java.lang.AssertionError: 应提供“MFi 认证测试”左侧测试菜单"
+    },
+    {
+      "test": "com.shilapi.xcertplay.WheelTestActivityTest#leavingWheelDetailsStopsFocusAndReturningDoesNotRestartIt",
+      "message": "java.lang.AssertionError"
+    },
+    {
+      "test": "com.shilapi.xcertplay.WheelTestActivityTest#openingDoesNotTakeFocusAndLeavingStopsAnExplicitTest",
+      "message": "java.lang.AssertionError"
+    },
+    {
+      "test": "com.shilapi.xcertplay.WheelTestActivityTest#mfiSelectionAndResultsSurviveAppearanceRebuild",
+      "message": "java.lang.AssertionError: 应提供“MFi 认证测试”左侧测试菜单"
+    },
+    {
+      "test": "com.shilapi.xcertplay.WheelTestActivityTest#mfiMenuChangesTheDetailsWithoutStartingWheelFocus",
+      "message": "java.lang.AssertionError: 应提供“MFi 认证测试”左侧测试菜单"
+    },
+    {
+      "test": "com.shilapi.xcertplay.WheelTestActivityTest#uidMenuReadsIdentityAndStopsWheelWithoutStartingAnotherTest",
+      "message": "java.lang.AssertionError: 应提供“UID 检测”左侧测试菜单"
+    },
+    {
+      "test": "com.shilapi.xcertplay.FlymePressFeedbackTest#physicalPressRemainsContinuousWhenReleasedBeforeItSettles",
+      "message": "java.lang.AssertionError: Press must follow the system spring rather than a fixed decelerator: 0.9"
+    },
+    {
+      "test": "com.shilapi.xcertplay.CarHotspotSettingsUiTest#invalidInlinePasswordCannotReplaceAValidSavedProfile",
+      "message": "java.lang.AssertionError: expected:<0> but was:<1>"
+    },
+    {
+      "test": "com.shilapi.xcertplay.CarHotspotSettingsUiTest#savingInlineCredentialsDoesNotApplyOrEnableTheSystemHotspot",
+      "message": "org.junit.ComparisonFailure: expected:<[Saved Car]> but was:<[WIFI_2033]>"
+    },
+    {
+      "test": "com.shilapi.xcertplay.CarHotspotSettingsUiTest#changingCredentialsPreservesTheSavedRadioIntentAndInterface",
+      "message": "java.lang.AssertionError: expected: com.shilapi.xcertplay.network.CarHotspotProfile<CarHotspotProfile(security=WPA3, band=GHZ_5, channel=149, credentials=redacted)> but was: com.shilapi.xcertplay.network.CarHotspotProfile<CarHotspotProfile(security=WPA3, band=GHZ_5, channel=149, credentials=redacted)>"
+    }
+  ]
+}

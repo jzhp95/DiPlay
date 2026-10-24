@@ -66,7 +66,7 @@ fun XcertplayTheme(
 
     MaterialTheme(
         colorScheme = colorScheme,
-        typography = Typography,
+        typography = flymeTypography(androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp < 600),
         shapes = Shapes(
             small = RoundedCornerShape((FlymeAutoStyle.CARD_CORNER_DP / 2).dp),
             medium = RoundedCornerShape(FlymeAutoStyle.CARD_CORNER_DP.dp),

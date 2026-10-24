@@ -7,6 +7,7 @@ internal data class DiPlayPalette(
     val background: Int,
     val surface: Int,
     val button: Int,
+    val settingsControlFill: Int,
     val outline: Int,
     val railSelected: Int,
     val railSelectedOutline: Int,
@@ -35,6 +36,10 @@ internal data class DiPlayPalette(
     val overlayTrackOff: Int,
     val overlayDanger: Int,
 ) {
+    /** Native text/input roles are separate from the optional functional-card layer. */
+    val supportingText: Int get() = if (systemBarIconsAreDark) 0x7F000000 else 0x7FFFFFFF
+    val inputFill: Int get() = if (systemBarIconsAreDark) Color.rgb(242,248,252) else Color.rgb(48,57,66)
+
     companion object {
         fun of(night: Boolean): DiPlayPalette = if (night) DARK else LIGHT
 
@@ -44,11 +49,12 @@ internal data class DiPlayPalette(
             background = Color.rgb(32, 39, 46),
             surface = 0x66495460,
             button = Color.rgb(40, 44, 49),
+            settingsControlFill = Color.rgb(40, 44, 49),
             outline = Color.rgb(71, 80, 90),
             railSelected = 0xBF15191F.toInt(),
             railSelectedOutline = Color.TRANSPARENT,
             primaryText = 0xE5FFFFFF.toInt(),
-            secondaryText = 0x99FFFFFF.toInt(),
+            secondaryText = 0x80FFFFFF.toInt(),
             accent = Color.rgb(19, 104, 251),
             onAccent = Color.WHITE,
             accentText = Color.rgb(102, 178, 255),
@@ -62,9 +68,9 @@ internal data class DiPlayPalette(
             focusRing = Color.rgb(102, 178, 255),
             systemBar = Color.rgb(32, 39, 46),
             systemBarIconsAreDark = false,
-            overlayBackground = Color.rgb(36, 40, 46),
+            overlayBackground = Color.rgb(32, 39, 46),
             overlayPrimaryText = 0xE5FFFFFF.toInt(),
-            overlaySecondaryText = 0x99FFFFFF.toInt(),
+            overlaySecondaryText = 0x80FFFFFF.toInt(),
             overlayAccent = Color.rgb(19, 104, 251),
             overlayOnAccent = Color.WHITE,
             overlayAccentText = Color.rgb(102, 178, 255),
@@ -77,11 +83,12 @@ internal data class DiPlayPalette(
             background = Color.rgb(211, 219, 229),
             surface = 0xE5F6FBFF.toInt(),
             button = Color.rgb(242, 247, 252),
+            settingsControlFill = Color.rgb(242, 247, 252),
             outline = Color.rgb(184, 190, 204),
             railSelected = 0x99FFFFFF.toInt(),
             railSelectedOutline = Color.TRANSPARENT,
             primaryText = 0xE5000000.toInt(),
-            secondaryText = 0x99000000.toInt(),
+            secondaryText = 0x80000000.toInt(),
             accent = Color.rgb(19, 104, 251),
             onAccent = Color.WHITE,
             accentText = Color.rgb(6, 77, 189),
@@ -95,9 +102,9 @@ internal data class DiPlayPalette(
             focusRing = Color.rgb(6, 77, 189),
             systemBar = Color.rgb(211, 219, 229),
             systemBarIconsAreDark = true,
-            overlayBackground = Color.rgb(218, 226, 235),
+            overlayBackground = Color.rgb(211, 219, 229),
             overlayPrimaryText = 0xE5000000.toInt(),
-            overlaySecondaryText = 0x99000000.toInt(),
+            overlaySecondaryText = 0x80000000.toInt(),
             overlayAccent = Color.rgb(19, 104, 251),
             overlayOnAccent = Color.WHITE,
             overlayAccentText = Color.rgb(6, 77, 189),

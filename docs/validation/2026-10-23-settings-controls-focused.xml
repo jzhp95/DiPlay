@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.shilapi.xcertplay.SettingsControlVisibilityTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-10-23T13:22:58.231Z" hostname="xusongs-MacBook-Pro.local" time="6.029">
+  <properties/>
+  <testcase name="compactDayControlsAreVisibleWithoutFocus" classname="com.shilapi.xcertplay.SettingsControlVisibilityTest" time="4.807"/>
+  <testcase name="fullNightControlsAreVisibleWithoutFocus" classname="com.shilapi.xcertplay.SettingsControlVisibilityTest" time="0.262"/>
+  <testcase name="emptyInputsRemainRecognizable" classname="com.shilapi.xcertplay.SettingsControlVisibilityTest" time="0.168"/>
+  <testcase name="compactNightControlsAreVisibleWithoutFocus" classname="com.shilapi.xcertplay.SettingsControlVisibilityTest" time="0.164"/>
+  <testcase name="fullDayControlsAreVisibleWithoutFocus" classname="com.shilapi.xcertplay.SettingsControlVisibilityTest" time="0.193"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

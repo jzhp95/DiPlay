@@ -55,7 +55,7 @@ internal class DiPlayButton(context: Context) : Button(context) {
                 text = if (overlay) palette.overlayOnAccent else palette.onAccent
             }
             DiPlayButtonKind.SECONDARY -> {
-                fill = if (overlay) palette.overlayTrackOff else palette.button
+                fill = palette.button
                 text = if (overlay) palette.overlayPrimaryText else palette.primaryText
             }
             DiPlayButtonKind.DANGER -> {

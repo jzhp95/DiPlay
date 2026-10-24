@@ -18,13 +18,27 @@ import org.robolectric.annotation.Config
 import org.robolectric.util.ReflectionHelpers
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [29], manifest = Config.NONE)
+@Config(sdk = [28, 29], manifest = Config.NONE)
+@org.robolectric.annotation.LooperMode(org.robolectric.annotation.LooperMode.Mode.PAUSED)
 class FlymePressFeedbackTest {
     private val activityController = Robolectric.buildActivity(Activity::class.java).setup().visible()
     private val activity = activityController.get()
     private val root = FrameLayout(activity).also(activity::setContentView)
 
-    @After fun tearDown() { activityController.pause().stop().destroy() }
+    @org.junit.Before fun resetAnimationFrameOwner() {
+        // AndroidX 1.0.0 caches Choreographer in a ThreadLocal outside Robolectric's
+        // platform reset. Each sandbox test needs a provider for its own current clock.
+        animationHandlers().remove()
+    }
+    private fun animationHandlers(): ThreadLocal<*> = ReflectionHelpers.getStaticField(
+        Class.forName("androidx.dynamicanimation.animation.AnimationHandler"), "sAnimatorHandler")
+
+    @After fun tearDown() {
+        activityController.pause().stop().destroy()
+        animationHandlers().remove()
+        org.robolectric.shadows.ShadowChoreographer.setPaused(false)
+        org.robolectric.shadows.ShadowChoreographer.setFrameDelay(java.time.Duration.ofMillis(1))
+    }
 
     @Test fun styledButtonShrinksWhilePressedAndReturnsAfterRelease() {
         val button = styledButton()
@@ -123,6 +137,70 @@ class FlymePressFeedbackTest {
         assertScale(button, .9f)
         root.removeView(button)
         assertScale(button, 1f)
+    }
+
+    @Test fun replacingTheAnimatorCannotLeaveAnOldSpringWritingTheView() {
+        org.robolectric.shadows.ShadowChoreographer.setPaused(true)
+        org.robolectric.shadows.ShadowChoreographer.setFrameDelay(java.time.Duration.ofMillis(16))
+        val button = styledButton()
+        settleInitialFrames()
+        button.isPressed = true
+        advanceFrames(3)
+        button.stateListAnimator = null
+        root.removeView(button)
+        shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(1000))
+        assertScale(button, 1f)
+        root.addView(button)
+        FlymePressFeedback.install(button)
+        button.isPressed = false
+        button.isPressed = true
+        button.jumpDrawablesToCurrentState()
+        assertScale(button, .9f)
+    }
+
+    @Test fun holdingAfterTheSpringSettlesKeepsThePressedScale() {
+        val button = styledButton()
+        settleInitialFrames()
+        button.isPressed = true
+        advanceFrames(75)
+        assertTrue(button.isPressed)
+        assertScale(button, .9f)
+        button.isPressed = false
+        advanceFrames(75)
+        assertScale(button, 1f)
+    }
+
+    @Test fun physicalPressRemainsContinuousWhenReleasedBeforeItSettles() {
+        org.robolectric.shadows.ShadowChoreographer.setPaused(true)
+        org.robolectric.shadows.ShadowChoreographer.setFrameDelay(java.time.Duration.ofMillis(16))
+        val button = styledButton()
+        settleInitialFrames()
+        button.isPressed = true
+        val startedAt = SystemClock.uptimeMillis()
+        advanceFrames(5)
+        assertEquals("The frame fixture must advance only the requested physical time", 80L,
+            SystemClock.uptimeMillis() - startedAt)
+        assertTrue("Initial window traversal must not cancel the test press", button.isPressed)
+        // k=250 and damping=.89 are still approaching .9 after about 80ms;
+        // the previous 120ms decelerator was already almost at its endpoint.
+        assertTrue("Press must follow the system spring rather than a fixed decelerator: ${button.scaleX}",
+            button.scaleX in .945f.. .985f)
+        val scale = button.scaleX
+        button.isPressed = false
+        assertEquals("Retargeting must not jump to a fresh start scale", scale, button.scaleX, .0001f)
+        advanceFrames(50)
+        assertScale(button, 1f)
+    }
+
+    private fun settleInitialFrames() {
+        org.robolectric.shadows.ShadowChoreographer.setPaused(true)
+        org.robolectric.shadows.ShadowChoreographer.setFrameDelay(java.time.Duration.ofMillis(16))
+        advanceFrames(4)
+        activity.window.decorView.dispatchWindowFocusChanged(true)
+        shadowOf(Looper.getMainLooper()).idle()
+    }
+    private fun advanceFrames(count: Int) {
+        repeat(count) { shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(16)) }
     }
 
     private fun styledButton(): Button = Button(activity).also {

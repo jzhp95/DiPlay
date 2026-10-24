@@ -93,7 +93,7 @@ internal object CenterMapOverlay {
         prefs.edit().putInt(KEY_WIDTH, width)
             .putLong(KEY_ASPECT, java.lang.Double.doubleToRawLongBits(aspect)).apply()
         val height = (width / aspect).toInt()
-        val radius = 24f * metrics.density / 2
+        val radius = FlymeAutoStyle.dp(context, FlymeAutoStyle.CARD_CORNER_DP).toFloat()
         val params = WindowManager.LayoutParams(
             width,
             height,

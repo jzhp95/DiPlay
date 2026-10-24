@@ -58,7 +58,7 @@ class ImageCropActivity : Activity() {
         statusView = TextView(this).apply {
             setTextColor(palette.primaryText)
             background = FlymeAutoStyle.card(this@ImageCropActivity, palette)
-            textSize = FlymeAutoStyle.BODY_TEXT_SP
+            FlymeAutoStyle.text(this, FlymeAutoStyle.TextRole.BODY)
             gravity = Gravity.CENTER
             setPadding(dp(FlymeAutoStyle.CONTROL_GAP_DP), dp(FlymeAutoStyle.BUTTON_PADDING_VERTICAL_DP), dp(FlymeAutoStyle.CONTROL_GAP_DP), dp(FlymeAutoStyle.BUTTON_PADDING_VERTICAL_DP))
             text = getString(R.string.loading_image)

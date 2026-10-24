@@ -4,7 +4,6 @@ import android.content.Context
 import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
-import android.graphics.drawable.RippleDrawable
 import android.view.Gravity
 import android.view.View
 import android.widget.Button
@@ -43,7 +42,19 @@ internal class CarPlayHomeLayout(
     private val gap get() = if (compact) 12 else 24
     private fun dp(value: Int) = (value * context.resources.displayMetrics.density).roundToInt()
     private fun column() = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
-    private fun row() = LinearLayout(context).apply { gravity = Gravity.CENTER_VERTICAL }
+    private fun row() = object : LinearLayout(context) {
+        override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+            val actions = (0 until childCount).map(::getChildAt).filterIsInstance<Button>()
+                .filter { it.visibility != View.GONE }
+            actions.forEach { it.layoutParams.height = android.view.ViewGroup.LayoutParams.WRAP_CONTENT }
+            super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+            if (actions.size > 1) {
+                val tallest = actions.maxOf { it.measuredHeight }
+                actions.forEach { it.layoutParams.height = tallest }
+                super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+            }
+        }
+    }.apply { gravity = Gravity.CENTER_VERTICAL; isBaselineAligned = false }
     private fun space(size: Int) = View(context).apply {
         // A bare WRAP_CONTENT View fills an AT_MOST height during ScrollView's
         // fillViewport pass. Give spacers an exact height so they cannot consume the cards.
@@ -138,7 +149,6 @@ internal class CarPlayHomeLayout(
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
                 setColor(palette.railSelected)
-                setStroke(dp(1), palette.railSelectedOutline)
             }
         }, LinearLayout.LayoutParams(dp(iconSize), dp(iconSize)))
         addView(label(title, if (shortScreen) 20 else if (compact) 24 else 28).apply { gravity = Gravity.CENTER },
@@ -193,7 +203,7 @@ internal class CarPlayHomeLayout(
             gravity = Gravity.CENTER_HORIZONTAL
         })
         val notice = makeLabel("", 14, palette.warning, false).apply {
-            gravity = Gravity.LEFT or Gravity.CENTER_VERTICAL
+            gravity = Gravity.START or Gravity.CENTER_VERTICAL
             minLines = 1
             visibility = View.INVISIBLE
         }

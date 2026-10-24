@@ -32,32 +32,33 @@ class DiPlayPaletteTest {
 
     @Test fun waitingScreenDelegationKeepsItsExactLightAndDarkColors() {
         assertEquals(
-            WaitingScreenColors(Color.rgb(32, 39, 46), 0xE5FFFFFF.toInt(), 0x99FFFFFF.toInt()),
+            WaitingScreenColors(Color.rgb(32, 39, 46), 0xE5FFFFFF.toInt(), 0x80FFFFFF.toInt()),
             WaitingScreenColors.of(night = true),
         )
         assertEquals(
-            WaitingScreenColors(Color.rgb(211, 219, 229), 0xE5000000.toInt(), 0x99000000.toInt()),
+            WaitingScreenColors(Color.rgb(211, 219, 229), 0xE5000000.toInt(), 0x80000000.toInt()),
             WaitingScreenColors.of(night = false),
         )
     }
 
-    @Test fun semanticRolesMeetTheirWcagContrastTargets() {
+    // Flyme C1 supporting copy uses the verified 50% ink; primary body copy keeps 4.5:1.
+    @Test fun semanticRolesRetainReadablePrimaryAndNativeSupportingContrast() {
         for (palette in listOf(DiPlayPalette.DARK, DiPlayPalette.LIGHT)) {
             assertContrastAtLeast(palette.primaryText, palette.background, 4.5)
-            assertContrastAtLeast(palette.secondaryText, palette.background, 4.5)
+            assertContrastAtLeast(palette.secondaryText, palette.background, 3.0)
             assertContrastAtLeast(palette.accentText, palette.background, 4.5)
             assertContrastAtLeast(palette.accent, palette.background, 3.0)
             val surface = androidx.core.graphics.ColorUtils.compositeColors(palette.surface, palette.background)
             assertContrastAtLeast(palette.accentText, surface, 4.5)
             assertContrastAtLeast(palette.primaryText, surface, 4.5)
-            assertContrastAtLeast(palette.secondaryText, surface, 4.5)
+            assertContrastAtLeast(palette.secondaryText, surface, 3.0)
             assertContrastAtLeast(palette.onAccent, palette.accent, 4.5)
             assertContrastAtLeast(palette.warning, palette.background, 4.5)
             assertContrastAtLeast(palette.success, palette.background, 4.5)
             // The legacy dark danger role is used for graphical/status emphasis, not body text.
             assertContrastAtLeast(palette.danger, palette.background, 3.0)
             assertContrastAtLeast(palette.overlayPrimaryText, palette.overlayBackground, 4.5)
-            assertContrastAtLeast(palette.overlaySecondaryText, palette.overlayBackground, 4.5)
+            assertContrastAtLeast(palette.overlaySecondaryText, palette.overlayBackground, 3.0)
             assertContrastAtLeast(palette.overlayAccentText, palette.overlayBackground, 4.5)
             assertContrastAtLeast(palette.overlayOnAccent, palette.overlayAccent, 4.5)
             assertContrastAtLeast(palette.overlayDanger, palette.overlayBackground, 3.0)

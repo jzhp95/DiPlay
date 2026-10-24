@@ -4146,7 +4146,7 @@ class CarPlayHostActivity : ComponentActivity() {
         this.text = text
         FlymeAutoStyle.text(this, when {
             sizeSp >= 28 -> FlymeAutoStyle.TextRole.PAGE_TITLE
-            sizeSp >= 22 && bold -> FlymeAutoStyle.TextRole.SECTION_TITLE
+            sizeSp >= 22 && bold -> FlymeAutoStyle.TextRole.LABEL
             sizeSp >= 18 -> FlymeAutoStyle.TextRole.BODY
             else -> FlymeAutoStyle.TextRole.SECONDARY
         }, compact = false)

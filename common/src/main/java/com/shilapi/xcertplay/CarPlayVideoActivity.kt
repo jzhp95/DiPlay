@@ -11,7 +11,6 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -119,24 +118,29 @@ class CarPlayVideoActivity : Activity() {
         val back = TextView(this).apply {
             text = "‹  " + getString(R.string.video_back_to_carplay)
             setTextColor(Color.WHITE)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
+            FlymeAutoStyle.text(this, FlymeAutoStyle.TextRole.BUTTON)
             gravity = Gravity.CENTER
             minHeight = dp(64)
             minWidth = dp(64)
             setPadding(dp(24), 0, dp(24), 0)
-            background = GradientDrawable().apply { cornerRadius = dp(32).toFloat(); setColor(0xB3000000.toInt()) }
+            background = FlymeAutoStyle.control(this@CarPlayVideoActivity, DiPlayPalette.DARK,
+                DiPlayPalette.DARK.button, dp(FlymeAutoStyle.CONTROL_HEIGHT_DP), cornerDp = FlymeAutoStyle.ACTION_CORNER_DP)
+            FlymePressFeedback.install(this)
             setOnClickListener { finish() }
         }
-        fun round(icon: Int, label: String, onClick: () -> Unit) = ImageView(this).apply {
+        fun round(icon: Int, label: String, primary: Boolean = false, onClick: () -> Unit) = ImageView(this).apply {
             setImageResource(icon)
             setColorFilter(Color.WHITE)
             contentDescription = label
             scaleType = ImageView.ScaleType.FIT_CENTER
             setPadding(dp(18), dp(18), dp(18), dp(18))
-            background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(0x80000000.toInt()) }
+            background = FlymeAutoStyle.control(this@CarPlayVideoActivity, DiPlayPalette.DARK,
+                if (primary) DiPlayPalette.DARK.accent else DiPlayPalette.DARK.button,
+                dp(FlymeAutoStyle.DIALOG_CONTROL_HEIGHT_DP), cornerDp = FlymeAutoStyle.ACTION_CORNER_DP)
+            FlymePressFeedback.install(this)
             setOnClickListener { onClick(); showControls() }
         }
-        playPause = round(Media3R.drawable.exo_icon_play, "") { CarPlayVideo.setPlaying(!CarPlayVideo.playing) }
+        playPause = round(Media3R.drawable.exo_icon_play, "", primary = true) { CarPlayVideo.setPlaying(!CarPlayVideo.playing) }
         val buttons = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
@@ -148,7 +152,7 @@ class CarPlayVideoActivity : Activity() {
         }
         fun timeText() = TextView(this).apply {
             setTextColor(Color.WHITE)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
+            FlymeAutoStyle.text(this, FlymeAutoStyle.TextRole.VALUE)
             fontFeatureSettings = "tnum"
         }
         position = timeText()

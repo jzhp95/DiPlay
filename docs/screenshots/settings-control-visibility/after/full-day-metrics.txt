@@ -1,0 +1,2 @@
+热点名称: width=868, height=64, textLength=10, rowWidth=904
+热点密码: width=790, height=64, textLength=13, rowWidth=904

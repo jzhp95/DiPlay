@@ -26,7 +26,8 @@ internal class CarPlayPicturePanel(
     }
     init {
         orientation = VERTICAL
-        setPadding(dp(12), dp(8), dp(12), dp(8))
+        val inset = dp(FlymeAutoStyle.CARD_PADDING_DP)
+        setPadding(inset, inset, inset, inset)
         setBackgroundColor(palette.overlayBackground)
         isClickable = true
         val rows = LinearLayout(context).apply { orientation = VERTICAL }
@@ -35,9 +36,14 @@ internal class CarPlayPicturePanel(
             addView(rows, LayoutParams(-1, -2))
         }
         addView(scroll, LayoutParams(-1, 0, 1f))
-        rows.addView(text(context.getString(R.string.picture_adjustments)))
+        rows.addView(text(context.getString(R.string.picture_adjustments)).apply {
+            FlymeAutoStyle.text(this, FlymeAutoStyle.TextRole.PAGE_TITLE)
+        })
         rows.addView(text(context.getString(if (adjustmentsAvailable) R.string.picture_live_hint
-            else R.string.picture_surface_output_unavailable)))
+            else R.string.picture_surface_output_unavailable)).apply {
+            FlymeAutoStyle.text(this, FlymeAutoStyle.TextRole.SECONDARY)
+            setTextColor(palette.overlaySecondaryText)
+        })
         val labels = listOf(R.string.picture_brightness, R.string.picture_contrast,
             R.string.picture_saturation, R.string.picture_warmth)
         CarPlayPicture.keys.forEachIndexed { index, key ->
@@ -71,7 +77,7 @@ internal class CarPlayPicturePanel(
             SettingsWidgets.applyLargeSwitchStyle(
                 this,
                 Color.WHITE,
-                palette.overlayPrimaryText,
+                Color.WHITE,
                 palette.overlayAccentTrack,
                 palette.overlayTrackOff,
             )
@@ -85,7 +91,15 @@ internal class CarPlayPicturePanel(
         FlymeAutoStyle.text(original, FlymeAutoStyle.TextRole.BODY)
         original.minimumHeight = dp(FlymeAutoStyle.CONTROL_HEIGHT_DP)
         rows.addView(original, LayoutParams(-1, -2))
-        val actions = LinearLayout(context)
+        val actions = object : LinearLayout(context) {
+            override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+                for (i in 0 until childCount) getChildAt(i).layoutParams.height = -2
+                super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+                val tallest = (0 until childCount).maxOf { getChildAt(it).measuredHeight }
+                for (i in 0 until childCount) getChildAt(i).layoutParams.height = tallest
+                super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+            }
+        }
         actions.addView(DiPlayButton(context).apply {
             text = context.getString(R.string.picture_reset)
             isEnabled = adjustmentsAvailable
@@ -97,11 +111,11 @@ internal class CarPlayPicturePanel(
                     pair.second.progress = CarPlayPicture.defaultValue(key) - CarPlayPicture.range(key).first
                 }
             }
-        }, LayoutParams(0, dp(48), 1f))
+        }, LayoutParams(0, -2, 1f).apply { marginEnd = dp(FlymeAutoStyle.CONTROL_GAP_DP) })
         actions.addView(DiPlayButton(context).apply {
             text = context.getString(R.string.picture_done)
             setOnClickListener { close() }
-        }, LayoutParams(0, dp(48), 1f))
+        }, LayoutParams(0, -2, 1f))
         rows.addView(actions)
         applyPalette(initialPalette)
     }
@@ -116,7 +130,7 @@ internal class CarPlayPicturePanel(
                     SettingsWidgets.applyLargeSwitchStyle(
                         view,
                         Color.WHITE,
-                        palette.overlayPrimaryText,
+                        Color.WHITE,
                         palette.overlayAccentTrack,
                         palette.overlayTrackOff,
                     )
@@ -125,7 +139,8 @@ internal class CarPlayPicturePanel(
                     view.progressTintList = android.content.res.ColorStateList.valueOf(palette.overlayAccent)
                     view.thumbTintList = android.content.res.ColorStateList.valueOf(palette.overlayAccent)
                 }
-                is DiPlayButton -> view.style(DiPlayButtonKind.PRIMARY, palette, overlay = true)
+                is DiPlayButton -> view.style(if (view.text == context.getString(R.string.picture_done))
+                    DiPlayButtonKind.PRIMARY else DiPlayButtonKind.SECONDARY, palette, overlay = true)
                 is TextView -> view.setTextColor(palette.overlayPrimaryText)
             }
             if (view is android.view.ViewGroup) {

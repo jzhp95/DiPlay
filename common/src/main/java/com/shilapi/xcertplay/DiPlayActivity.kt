@@ -1393,18 +1393,18 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                 DetailedDebugLog.record("snapshot", "session=${CarPlayBackgroundSession.hasSession()} active=${CarPlayBackgroundSession.active} wireless=${AirPlayPersistence.loadWirelessEnabled(this)} focusDisabled=${AirPlayPersistence.loadDisableMediaKeyAudioFocus(this)} wheelService=${WheelKeyService.connected()}")
                 toast(getString(if (enabled) R.string.settings_detailed_debug_started else R.string.settings_detailed_debug_stopped))
             }
-            card.addView(button(getString(R.string.settings_debug_marker), false) {
+            card.addView(toolButton(R.string.settings_debug_marker, R.string.settings_debug_marker_hint, R.drawable.ic_dp_diagnostics) {
                 if (DetailedDebugLog.enabled(this)) {
                     DetailedDebugLog.record("USER_MARK", "problem observed session=${CarPlayBackgroundSession.hasSession()} active=${CarPlayBackgroundSession.active}")
                     toast(getString(R.string.settings_debug_marker_added))
                 } else toast(getString(R.string.settings_debug_enable_first))
             }, matchButton(SETTINGS_BLOCK_GAP_DP, 60))
-            exportButton = button(if (exportInProgress) getString(R.string.saving_report) else getString(R.string.save_diagnostic_report), false) {
+            exportButton = toolButton(if (exportInProgress) R.string.saving_report else R.string.save_diagnostic_report, R.string.settings_debug_export_hint, R.drawable.ic_dp_diagnostics) {
                 saveReportToDownloads()
             }.apply { isEnabled = !exportInProgress }
             card.addView(exportButton, matchButton(10, 60))
-            card.addView(button(getString(R.string.choose_save_location), false) { chooseReportDestination() }, matchButton(10, 60))
-            card.addView(button(getString(R.string.settings_report_on_phone), false) { openReportShare() }, matchButton(10, 60))
+            card.addView(toolButton(R.string.choose_save_location, R.string.settings_debug_location_hint, R.drawable.ic_dp_advanced) { chooseReportDestination() }, matchButton(10, 60))
+            card.addView(toolButton(R.string.settings_report_on_phone, R.string.settings_debug_phone_hint, R.drawable.ic_dp_connection) { openReportShare() }, matchButton(10, 60))
             val destination = getString(R.string.reports_save_to_downloads_diplay)
             card.addView(label(destination + getString(R.string.nothing_is_sent_automatically_protocol_payloads_and_creden), 14, MUTED).apply { setPadding(0, dp(12), 0, 0) })
             toggle(card, getString(R.string.settings_fps_counter), getString(R.string.settings_fps_counter_description),
@@ -3412,17 +3412,18 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
 
     private fun section(parent: LinearLayout, title: String, icon: Int? = null, build: (LinearLayout) -> Unit) {
         searchIndexSink?.add(title)
-        val card = if (page == "settings" && settingsCategory != SettingsCategory.OVERVIEW) card().apply {
-            val inset = dp(FlymeAutoStyle.CARD_PADDING_DP)
-            setPadding(inset, dp(FlymeAutoStyle.CONTROL_GAP_DP), inset, dp(FlymeAutoStyle.CONTROL_GAP_DP))
-        } else card()
-        val heading = row().apply { gravity = Gravity.CENTER_VERTICAL; setPadding(0, 0, 0, dp(16)) }
-        if (icon != null) heading.addView(ImageView(this).apply {
+        val openGroup = page == "settings" && settingsCategory != SettingsCategory.OVERVIEW
+        val card = if (openGroup) column() else card()
+        val heading = row().apply { gravity = Gravity.CENTER_VERTICAL; setPadding(0, 0, 0, dp(CONTROL_GAP_DP)) }
+        if (icon != null && !openGroup) heading.addView(ImageView(this).apply {
             setImageResource(icon); imageTintList = ColorStateList.valueOf(ACCENT)
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
         }, LinearLayout.LayoutParams(dp(28), dp(28)).apply { marginEnd = dp(12) })
         heading.addView(label(title, 22, TEXT, true,
-            centreGlyphs = icon != null && usesChineseGlyphAlignment(resources.configuration.locales[0].language, title)),
+            centreGlyphs = !openGroup && icon != null && usesChineseGlyphAlignment(resources.configuration.locales[0].language, title)).apply {
+                FlymeAutoStyle.text(this, FlymeAutoStyle.TextRole.SECTION_TITLE, isCompactLayout)
+                if (openGroup) setTextColor(palette.supportingText)
+            },
             LinearLayout.LayoutParams(0, -2, 1f))
         card.addView(heading)
         build(card)
@@ -3611,7 +3612,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         text = value
         FlymeAutoStyle.text(this, when {
             size >= 28 -> FlymeAutoStyle.TextRole.PAGE_TITLE
-            size >= 22 && bold -> FlymeAutoStyle.TextRole.SECTION_TITLE
+            size >= 22 && bold -> FlymeAutoStyle.TextRole.LABEL
             size >= 18 -> FlymeAutoStyle.TextRole.BODY
             else -> FlymeAutoStyle.TextRole.SECONDARY
         }, compact = isCompactLayout)
@@ -3663,12 +3664,23 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
     )
 
     private fun button(title: String, primary: Boolean, click: () -> Unit) = SettingButton(this, MUTED, ACCENT).apply {
-        FlymeAutoStyle.button(this, palette, primary, compact = isCompactLayout)
+        if (page == "settings") FlymeAutoStyle.settingsButton(this, palette, primary, compact = isCompactLayout)
+        else FlymeAutoStyle.button(this, palette, primary, compact = isCompactLayout)
         compoundDrawablePadding = dp(FlymeAutoStyle.CONTROL_GAP_DP)
         text = title
         searchIndexSink?.add(title.substringBefore(VALUE_SEPARATOR))
         setOnClickListener { click() }
     }
+
+    private fun toolButton(title: Int, description: Int, icon: Int, click: () -> Unit) =
+        button(getString(title) + VALUE_SEPARATOR + getString(description), false, click).apply {
+            val size = dp(FlymeAutoStyle.INPUT_ACTION_DP / 2)
+            val drawable = getDrawable(icon)?.mutate()?.apply {
+                setTint(palette.secondaryText)
+                setBounds(0, 0, size, size)
+            }
+            setCompoundDrawablesRelative(drawable, null, compoundDrawablesRelative[2], null)
+        }
 
     private fun iconButton(icon: Int, description: String, click: () -> Unit) = ImageButton(this).apply {
         setImageResource(icon)
@@ -3706,6 +3718,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         var contentOffsetY = 0f
         var alignVisibleGlyphs = true
         private val glyphBounds = android.graphics.Rect()
+        private var installingTransformation = false
 
         fun textAlignmentCentreY(): Float {
             return alignedTextCentreY(this, text, glyphBounds)
@@ -3744,6 +3757,10 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         }
 
         override fun setText(text: CharSequence?, type: BufferType?) {
+            if (installingTransformation) {
+                super.setText(text, type)
+                return
+            }
             val split = if (action) -1 else text?.indexOf(VALUE_SEPARATOR) ?: -1
             if (text == null || split <= 0) {
                 super.setText(text, type)
@@ -3751,16 +3768,43 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                 setCompoundDrawablesRelative(null, null, null, null)
                 return
             }
-            val styled = android.text.SpannableString(text).apply {
-                setSpan(android.text.style.ForegroundColorSpan(muted), split, text.length,
-                    android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            FlymeAutoStyle.text(this, FlymeAutoStyle.TextRole.LABEL)
+            minHeight = FlymeAutoStyle.dp(context, if (FlymeAutoStyle.compact(context))
+                FlymeAutoStyle.COMPACT_SETTING_ROW_HEIGHT_DP else FlymeAutoStyle.SETTING_ROW_HEIGHT_DP)
+            val inset = FlymeAutoStyle.dp(context, FlymeAutoStyle.INPUT_PADDING_DP)
+            setPaddingRelative(inset, inset, inset, inset)
+            // Keep the source text for search and accessibility; transform only its presentation.
+            super.setText(text, BufferType.SPANNABLE)
+            if (transformationMethod !is SettingsValueTransformation) {
+                installingTransformation = true
+                try { transformationMethod = SettingsValueTransformation(muted) }
+                finally { installingTransformation = false }
             }
-            super.setText(styled, BufferType.SPANNABLE)
             gravity = Gravity.CENTER_VERTICAL or Gravity.START
             setCompoundDrawablesRelativeWithIntrinsicBounds(null, null,
                 context.getDrawable(R.drawable.ic_dp_chevron)?.mutate()?.apply { setTint(accent) }, null)
         }
     }
+    private class SettingsValueTransformation(private val muted: Int) : android.text.method.TransformationMethod {
+        override fun getTransformation(source: CharSequence, view: View): CharSequence {
+            if ((view as? SettingButton)?.action == true) return source
+            val at = source.indexOf(VALUE_SEPARATOR)
+            if (at <= 0) return source
+            // TextView keeps span/layout offsets into the source. Keep the transformation
+            // length unchanged on API 28: newline plus two zero-width separators.
+            return android.text.SpannableString(source.toString().replaceRange(at, at + VALUE_SEPARATOR.length, "\n\u200B\u200B")).apply {
+                setSpan(android.text.style.ForegroundColorSpan(muted), at + 1, length,
+                    android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                setSpan(android.text.style.RelativeSizeSpan(if (FlymeAutoStyle.compact(view.context)) 18f / 20f else 24f / 26f),
+                    at + 1, length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                setSpan(android.text.style.TypefaceSpan("sans-serif"), at + 1, length,
+                    android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            }
+        }
+        override fun onFocusChanged(view: View, sourceText: CharSequence, focused: Boolean,
+            direction: Int, previouslyFocusedRect: android.graphics.Rect?) = Unit
+    }
+
     // Remote and D-pad users need to see where they are; touch mode never shows it.
     private fun focusRing(radiusDp: Int = 20) = android.graphics.drawable.StateListDrawable().apply {
         addState(intArrayOf(android.R.attr.state_focused), GradientDrawable().apply {
@@ -3791,17 +3835,19 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         var noteFollowsButton = false
         for (i in 0 until container.childCount) {
             val child = container.getChildAt(i)
-            val next = container.getChildAt(i + 1)
+            if (child.visibility == View.GONE) continue
+            val next = (i + 1 until container.childCount).asSequence()
+                .map { container.getChildAt(it) }.firstOrNull { it.visibility != View.GONE }
             val lp = child.layoutParams as? LinearLayout.LayoutParams ?: continue
             when {
                 child is Button -> {
                     lp.height = ViewGroup.LayoutParams.WRAP_CONTENT
-                    child.minHeight = dp(CONTROL_HEIGHT_DP); lp.topMargin = 0
+                    child.minHeight = maxOf(child.minHeight, dp(CONTROL_HEIGHT_DP)); lp.topMargin = 0
                     lp.bottomMargin = dp(if (isNote(next)) NOTE_ATTACH_GAP_DP else CONTROL_GAP_DP)
                 }
-                // Toggle rows carried their own vertical padding, which doubled the gap after a button.
                 isToggleRow(child) -> {
-                    child.setPadding(child.paddingLeft, 0, child.paddingRight, 0)
+                    val inset = dp(FlymeAutoStyle.BUTTON_PADDING_VERTICAL_DP)
+                    child.setPadding(child.paddingLeft, inset, child.paddingRight, inset)
                     lp.topMargin = 0
                     lp.bottomMargin = dp(if (isNote(next)) NOTE_ATTACH_GAP_DP else CONTROL_GAP_DP)
                 }

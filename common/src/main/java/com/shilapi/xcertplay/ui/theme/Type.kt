@@ -5,12 +5,19 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
-import com.shilapi.xcertplay.FlymeAutoStyle
 
-val Typography = Typography(
-    titleLarge = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Medium, fontSize = 28.sp, lineHeight = 40.sp),
-    titleMedium = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Medium, fontSize = 26.sp, lineHeight = 36.sp),
-    bodyLarge = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Normal, fontSize = FlymeAutoStyle.BODY_TEXT_SP.sp, lineHeight = 30.sp),
-    bodyMedium = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Normal, fontSize = FlymeAutoStyle.SECONDARY_TEXT_SP.sp, lineHeight = 26.sp),
-    labelLarge = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Medium, fontSize = FlymeAutoStyle.BUTTON_TEXT_SP.sp, lineHeight = 34.sp),
-)
+internal fun flymeTypography(compact: Boolean): Typography {
+    fun role(full: Int, small: Int, line: Int, smallLine: Int, medium: Boolean = false) = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontWeight = if (medium) FontWeight.Medium else FontWeight.Normal,
+        fontSize = (if (compact) small else full).sp,
+        lineHeight = (if (compact) smallLine else line).sp,
+    )
+    return Typography(
+        titleLarge = role(28,22,40,32,true),
+        titleMedium = role(26,20,36,28,true),
+        bodyLarge = role(26,20,36,28),
+        bodyMedium = role(22,16,30,24),
+        labelLarge = role(24,18,34,26,true),
+    )
+}

@@ -26,7 +26,7 @@ object SettingsWidgets {
     private fun TextView.applyTextStyle(context: Context, theme: SettingsTheme, bold: Boolean = false) {
         val requestedSp = textSize / context.resources.displayMetrics.scaledDensity
         FlymeAutoStyle.text(this, when {
-            bold -> FlymeAutoStyle.TextRole.SECTION_TITLE
+            bold -> FlymeAutoStyle.TextRole.LABEL
             requestedSp <= FlymeAutoStyle.SECONDARY_TEXT_SP -> FlymeAutoStyle.TextRole.SECONDARY
             else -> FlymeAutoStyle.TextRole.BODY
         }, compact = !theme.isOverlay && FlymeAutoStyle.compact(context))
@@ -57,32 +57,32 @@ object SettingsWidgets {
         text = title
         textSize = if (theme.isOverlay) FlymeAutoStyle.BUTTON_TEXT_SP else 22f
         setTextColor(if (theme.isOverlay) theme.accentText else theme.textPrimary)
-        applyTextStyle(context, theme, bold = true)
+        FlymeAutoStyle.text(this, FlymeAutoStyle.TextRole.SECTION_TITLE)
+        setTextColor(theme.palette.supportingText)
     }
 
     /**
-     * Replaces the platform switch (about a 36x14dp track) with a 60x34dp track and a 28dp thumb,
-     * so the state reads at arm's length on a head unit.
+     * Native-size track and inset thumb keep both states readable at arm's length.
      */
     fun applyLargeSwitchStyle(switch: Switch, thumbOn: Int, thumbOff: Int, trackOn: Int, trackOff: Int) {
         val density = switch.resources.displayMetrics.density
         fun px(value: Int) = (value * density).roundToInt()
         // Switch stretches the thumb to the full track height, so the inset keeps a margin around it.
-        val thumbInset = px(3)
+        val thumbInset = px(FlymeAutoStyle.SWITCH_INSET_DP)
         switch.thumbDrawable = InsetDrawable(
             GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
-                setSize(px(28), px(28))
+                setSize(px(FlymeAutoStyle.SWITCH_THUMB_DP), px(FlymeAutoStyle.SWITCH_THUMB_DP))
                 setColor(Color.WHITE)
             },
             thumbInset,
         )
         switch.trackDrawable = GradientDrawable().apply {
-            cornerRadius = px(17).toFloat()
-            setSize(px(60), px(34))
+            cornerRadius = px(FlymeAutoStyle.SWITCH_HEIGHT_DP / 2).toFloat()
+            setSize(px(FlymeAutoStyle.SWITCH_WIDTH_DP), px(FlymeAutoStyle.SWITCH_HEIGHT_DP))
             setColor(Color.WHITE)
         }
-        switch.switchMinWidth = px(60)
+        switch.switchMinWidth = px(FlymeAutoStyle.SWITCH_WIDTH_DP)
         switch.showText = false
         switch.thumbTintList = switchStates(thumbOn, thumbOff)
         switch.trackTintList = switchStates(trackOn, trackOff)
@@ -116,64 +116,45 @@ object SettingsWidgets {
             isChecked = checked
             this.contentDescription = contentDescription
             isEnabled = enabled
-            applyLargeSwitchStyle(this, Color.WHITE, theme.textPrimary, theme.accentTrack, theme.trackOff)
+            applyLargeSwitchStyle(this, Color.WHITE, Color.WHITE, theme.accentTrack, theme.trackOff)
             minHeight = theme.dp(context, FlymeAutoStyle.CONTROL_HEIGHT_DP)
             setOnCheckedChangeListener { _, isChecked -> onChanged(isChecked) }
         }
 
-        if (theme.isOverlay) {
-            val labelView = TextView(context).apply {
-                text = label
-                textSize = maxOf(labelSizeSp, FlymeAutoStyle.BUTTON_TEXT_SP)
-                setTextColor(theme.textSecondary)
-                applyTextStyle(context, theme)
-            }
-            row.addView(labelView, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-            row.addView(switch, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        } else {
-            row.setPadding(0, theme.dp(context, 12), 0, theme.dp(context, 12))
-            val textCol = LinearLayout(context).apply {
-                orientation = LinearLayout.VERTICAL
-            }
-            val labelView = TextView(context).apply {
-                text = label
-                textSize = maxOf(labelSizeSp, FlymeAutoStyle.BUTTON_TEXT_SP)
-                setTextColor(theme.textPrimary)
-                applyTextStyle(context, theme, bold = true)
-            }
-            val descView = TextView(context).apply {
-                text = description
-                textSize = FlymeAutoStyle.SECONDARY_TEXT_SP
-                setTextColor(theme.textSecondary)
-                setPadding(0, theme.dp(context, 6), theme.dp(context, 16), 0)
-                applyTextStyle(context, theme)
-            }
-            textCol.addView(labelView)
-            if (description.isNotBlank()) textCol.addView(descView)
-            row.addView(textCol, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-            row.addView(switch)
-            // The whole row is the target; the switch stays out of the focus order so D-pad stops once.
-            switch.isFocusable = false
-            row.isFocusable = true
-            row.background = android.graphics.drawable.RippleDrawable(
-                ColorStateList.valueOf(theme.ripple), null, android.graphics.drawable.ColorDrawable(Color.WHITE))
-            row.foreground = android.graphics.drawable.StateListDrawable().apply {
-                addState(intArrayOf(android.R.attr.state_focused), android.graphics.drawable.GradientDrawable().apply {
-                    setColor(Color.TRANSPARENT)
-                    cornerRadius = theme.dp(context, 12).toFloat()
-                    setStroke(theme.dp(context, 3), theme.focusRing)
-                })
-            }
-            row.setOnClickListener { if (switch.isEnabled) switch.toggle() }
-            switch.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-            row.accessibilityDelegate = object : View.AccessibilityDelegate() {
-                override fun onInitializeAccessibilityNodeInfo(host: View, info: android.view.accessibility.AccessibilityNodeInfo) {
-                    super.onInitializeAccessibilityNodeInfo(host, info)
-                    info.className = Switch::class.java.name
-                    info.isCheckable = true
-                    info.isChecked = switch.isChecked
-                    info.isEnabled = switch.isEnabled
-                }
+        val inset = theme.dp(context, FlymeAutoStyle.INPUT_PADDING_DP)
+        row.setPaddingRelative(inset, inset, inset, inset)
+        row.minimumHeight = theme.dp(context, if (FlymeAutoStyle.compact(context))
+            FlymeAutoStyle.COMPACT_SETTING_ROW_HEIGHT_DP else FlymeAutoStyle.SETTING_ROW_HEIGHT_DP)
+        val textCol = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
+        textCol.addView(TextView(context).apply {
+            text = label
+            setTextColor(theme.textPrimary)
+            FlymeAutoStyle.text(this, FlymeAutoStyle.TextRole.LABEL)
+        })
+        if (description.isNotBlank()) textCol.addView(TextView(context).apply {
+            text = description
+            setTextColor(theme.textSecondary)
+            FlymeAutoStyle.text(this, FlymeAutoStyle.TextRole.SECONDARY)
+            setPaddingRelative(0, theme.dp(context, FlymeAutoStyle.TITLE_DESCRIPTION_GAP_DP), 0, 0)
+        })
+        row.addView(textCol, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+            marginEnd = theme.dp(context, FlymeAutoStyle.CONTROL_GAP_DP)
+        })
+        row.addView(switch)
+        switch.isFocusable = false
+        row.isFocusable = true
+        row.isEnabled = enabled
+        row.background = FlymeAutoStyle.control(context, theme.palette, theme.palette.button, row.minimumHeight)
+        com.shilapi.xcertplay.FlymePressFeedback.install(row)
+        row.setOnClickListener { if (switch.isEnabled) switch.toggle() }
+        switch.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        row.accessibilityDelegate = object : View.AccessibilityDelegate() {
+            override fun onInitializeAccessibilityNodeInfo(host: View, info: android.view.accessibility.AccessibilityNodeInfo) {
+                super.onInitializeAccessibilityNodeInfo(host, info)
+                info.className = Switch::class.java.name
+                info.isCheckable = true
+                info.isChecked = switch.isChecked
+                info.isEnabled = switch.isEnabled
             }
         }
 
@@ -213,9 +194,13 @@ object SettingsWidgets {
             val button = RadioButton(context).apply {
                 id = View.generateViewId()
                 this.text = text
-                textSize = FlymeAutoStyle.BUTTON_TEXT_SP
-                minHeight = theme.dp(context, FlymeAutoStyle.COMPACT_CONTROL_HEIGHT_DP)
-                setTextColor(theme.textSecondary)
+                FlymeAutoStyle.text(this, FlymeAutoStyle.TextRole.VALUE)
+                minHeight = theme.dp(context, FlymeAutoStyle.INPUT_HEIGHT_DP)
+                val inset = theme.dp(context, FlymeAutoStyle.INPUT_PADDING_DP)
+                setPaddingRelative(inset, inset, inset, inset)
+                setTextColor(theme.textPrimary)
+                background = FlymeAutoStyle.control(context, theme.palette, theme.palette.button, minHeight)
+                com.shilapi.xcertplay.FlymePressFeedback.install(this)
                 buttonTintList = ColorStateList(
                     arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()),
                     intArrayOf(theme.accent, theme.textSecondary),
@@ -229,7 +214,7 @@ object SettingsWidgets {
                 RadioGroup.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT,
-                ),
+                ).apply { topMargin = theme.dp(context, FlymeAutoStyle.CONTROL_GAP_DP) },
             )
         }
         if (selectedId != View.NO_ID) group.check(selectedId)

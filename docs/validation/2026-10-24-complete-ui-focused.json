@@ -1,0 +1,85 @@
+{
+  "tests": 59,
+  "failures": 0,
+  "errors": 0,
+  "suites": [
+    {
+      "name": "com.shilapi.xcertplay.FlymeNativePresentationTest",
+      "tests": "2",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "com.shilapi.xcertplay.FlymeSystemLayoutTest",
+      "tests": "5",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "com.shilapi.xcertplay.SettingsTextEditorTest",
+      "tests": "4",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "com.shilapi.xcertplay.SettingsHeaderAlignmentTest",
+      "tests": "4",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "com.shilapi.xcertplay.DetailedDebugSettingsTest",
+      "tests": "2",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "com.shilapi.xcertplay.SettingsControlVisibilityTest",
+      "tests": "5",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "com.shilapi.xcertplay.CarHotspotSettingsLayoutTest",
+      "tests": "1",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "com.shilapi.xcertplay.DiagnosticsTestLayoutTest",
+      "tests": "1",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "com.shilapi.xcertplay.WheelTestActivityTest",
+      "tests": "9",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "com.shilapi.xcertplay.FlymeAutoStyleTest",
+      "tests": "5",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "com.shilapi.xcertplay.FlymePressFeedbackTest",
+      "tests": "20",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    }
+  ],
+  "extra_test": "CarHotspotSettingsUiTest#savingAnUnchangedEditorDoesNotBlockStartingTheSavedHotspot"
+}

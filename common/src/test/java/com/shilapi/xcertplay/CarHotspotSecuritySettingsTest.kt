@@ -61,7 +61,7 @@ class CarHotspotSecuritySettingsTest {
         for (mode in listOf(ManualHotspotSecurity.WPA3, ManualHotspotSecurity.WPA3_TRANSITION)) {
             CarHotspotProfiles.saveSaved(app, profile.copy(security = mode))
             val card = card()
-            inputs(card)[1].setText("87654321")
+            editHotspotDraft(activity, card, R.string.hotspot_password, "87654321")
             button(card, R.string.settings_hotspot_save).performClick()
             assertEquals(mode, AirPlayPersistence.loadManualHotspotSecurity(app))
             assertEquals("87654321", AirPlayPersistence.loadManualHotspotPassphrase(app))
@@ -86,11 +86,11 @@ class CarHotspotSecuritySettingsTest {
     @Test fun emptyPasswordUsesOpenAndRetypingBeforeSavePreservesTheProtectedMode() {
         CarHotspotProfiles.saveSaved(app, profile.copy(security = ManualHotspotSecurity.WPA3))
         val card = card()
-        inputs(card)[1].setText("")
-        inputs(card)[1].setText("87654321")
+        editHotspotDraft(activity, card, R.string.hotspot_password, "")
+        editHotspotDraft(activity, card, R.string.hotspot_password, "87654321")
         button(card, R.string.settings_hotspot_save).performClick()
         assertEquals(ManualHotspotSecurity.WPA3, AirPlayPersistence.loadManualHotspotSecurity(app))
-        inputs(card)[1].setText("")
+        editHotspotDraft(activity, card, R.string.hotspot_password, "")
         button(card, R.string.settings_hotspot_save).performClick()
         assertEquals(ManualHotspotSecurity.OPEN, AirPlayPersistence.loadManualHotspotSecurity(app))
         assertEquals("", AirPlayPersistence.loadManualHotspotPassphrase(app))
@@ -99,7 +99,7 @@ class CarHotspotSecuritySettingsTest {
     @Test fun credentialValidationAndCancelledInterfaceEditsPreserveTheOverride() {
         AirPlayPersistence.saveManualHotspotInterface(app, "eth0.3")
         val card = card()
-        inputs(card)[0].setText("")
+        editHotspotDraft(activity, card, R.string.hotspot_name, "")
         button(card, R.string.settings_hotspot_save).performClick()
         assertEquals(profile, CarHotspotProfiles.saved(app))
         assertEquals("eth0.3", AirPlayPersistence.loadManualHotspotInterface(app))

@@ -5,6 +5,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.RadioButton
 import android.widget.TextView
+import com.shilapi.xcertplay.FlymeAutoStyle
 import com.shilapi.xcertplay.DiPlayPalette
 import com.shilapi.xcertplay.airplay.CarPlayDisplayScale
 import com.shilapi.xcertplay.orchestration.MfiTarget
@@ -64,14 +65,14 @@ class SettingsWidgetsTest {
 
     @Test fun overlayUsesFlymeBlueAndKeepsTheLabelMetrics() {
         val row = ConnectionSettingsSection.createWirelessCarPlayRow(context, true, onChanged = {})
-        val label = (row.rowView as ViewGroup).getChildAt(0) as TextView
-        assertEquals(22f, label.textSize / context.resources.displayMetrics.scaledDensity, 0.01f)
+        val label = views(row.rowView).filterIsInstance<TextView>().first { it !== row.switch }
+        assertEquals(if (FlymeAutoStyle.compact(context)) 20f else 26f, label.textSize / context.resources.displayMetrics.scaledDensity, 0.01f)
         assertFalse(label.includeFontPadding)
-        assertEquals(DiPlayPalette.DARK.overlaySecondaryText, label.currentTextColor)
+        assertEquals(DiPlayPalette.DARK.overlayPrimaryText, label.currentTextColor)
         assertEquals(Color.WHITE, row.switch.thumbTintList!!.getColorForState(
             intArrayOf(android.R.attr.state_enabled, android.R.attr.state_checked), 0))
         val heading = SettingsWidgets.createCategoryHeader(context, "Heading")
-        assertEquals(DiPlayPalette.DARK.overlayAccentText, heading.currentTextColor)
+        assertEquals(DiPlayPalette.DARK.supportingText, heading.currentTextColor)
         assertFalse(heading.includeFontPadding)
     }
 
@@ -95,9 +96,9 @@ class SettingsWidgetsTest {
             SettingsTheme.CARD, onChanged = {})
         val texts = views(row.rowView).filterIsInstance<TextView>().filter { it !== row.switch }.toList()
         assertEquals(listOf("Title", "First line\nSecond line"), texts.map { it.text.toString() })
-        assertEquals(22f, texts[0].textSize / context.resources.displayMetrics.scaledDensity, 0.01f)
+        assertEquals(20f, texts[0].textSize / context.resources.displayMetrics.scaledDensity, 0.01f)
         assertEquals(16f, texts[1].textSize / context.resources.displayMetrics.scaledDensity, 0.01f)
-        for ((view, targetLineSp) in texts.zip(listOf(30f, 24f))) {
+        for ((view, targetLineSp) in texts.zip(listOf(28f, 24f))) {
             val metrics = view.paint.fontMetricsInt
             val lineSp = (metrics.descent - metrics.ascent + view.lineSpacingExtra) / context.resources.displayMetrics.scaledDensity
             assertEquals("Paired type size and line height", targetLineSp, lineSp, 1f)
@@ -131,9 +132,9 @@ class SettingsWidgetsTest {
             theme,
             onChanged = {},
         )
-        val label = (row.rowView as ViewGroup).getChildAt(0) as TextView
+        val label = views(row.rowView).filterIsInstance<TextView>().first { it !== row.switch }
 
-        assertEquals(DiPlayPalette.LIGHT.overlaySecondaryText, label.currentTextColor)
+        assertEquals(DiPlayPalette.LIGHT.overlayPrimaryText, label.currentTextColor)
         assertEquals(
             Color.WHITE,
             row.switch.thumbTintList!!.getColorForState(intArrayOf(android.R.attr.state_enabled, android.R.attr.state_checked), 0),

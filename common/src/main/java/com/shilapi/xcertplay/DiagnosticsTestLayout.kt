@@ -14,8 +14,10 @@ import com.shilapi.xcertplay.host.R
 internal class DiagnosticsTestLayout(private val context: Context, private val palette: DiPlayPalette) {
     enum class Page { WHEEL, MFI, UID }
     class Views(val root: LinearLayout, private val pages: Map<Page, ScrollView>,
-        private val menu: Map<Page, Button>, private val palette: DiPlayPalette) {
+        private val menu: Map<Page, Button>, private val palette: DiPlayPalette,
+        private val picker: Button? = null, private val titles: Map<Page, Int> = emptyMap()) {
         fun select(page: Page) {
+            titles[page]?.let { title -> picker?.text = picker?.context?.getString(title) }
             pages.forEach { (item, view) -> view.visibility = if (item == page) View.VISIBLE else View.GONE }
             menu.forEach { (item, button) ->
                 button.isSelected = item == page
@@ -27,8 +29,11 @@ internal class DiagnosticsTestLayout(private val context: Context, private val p
     }
     fun build(wheel: ScrollView, mfi: ScrollView, selected: Page, changed: (Page) -> Unit, back: () -> Unit = {}, uid: ScrollView = UidTestLayout(context, palette).build().root): Views {
         val pages = linkedMapOf(Page.WHEEL to wheel, Page.MFI to mfi, Page.UID to uid)
+        val titles = linkedMapOf(Page.WHEEL to R.string.wheel_test_title, Page.MFI to R.string.diagnostics_mfi_title,
+            Page.UID to R.string.diagnostics_uid_title)
+        val compact = FlymeAutoStyle.compact(context)
         val root = LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
+            orientation = if (compact) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
             // The requested menu is physically on the left, including RTL configuration previews.
             layoutDirection = View.LAYOUT_DIRECTION_LTR
             setBackgroundColor(palette.background)
@@ -42,7 +47,7 @@ internal class DiagnosticsTestLayout(private val context: Context, private val p
         }
         rail.addView(TextView(context).apply {
             setText(R.string.diagnostics_test_title)
-            textSize = FlymeAutoStyle.NAVIGATION_TEXT_SP
+            FlymeAutoStyle.text(this, FlymeAutoStyle.TextRole.SECTION_TITLE)
             setTextColor(palette.secondaryText)
             val gap = FlymeAutoStyle.dp(context, FlymeAutoStyle.CONTROL_GAP_DP)
             setPadding(0, gap, 0, gap)
@@ -67,20 +72,43 @@ internal class DiagnosticsTestLayout(private val context: Context, private val p
             topMargin = FlymeAutoStyle.dp(context, FlymeAutoStyle.BLOCK_GAP_DP)
         })
         val railScroll = ScrollView(context).apply { isFillViewport = true; addView(rail) }
-        root.addView(railScroll, LinearLayout.LayoutParams(FlymeAutoStyle.dp(context, menuWidthDp(context.resources.configuration.screenWidthDp)), -1))
+        val picker = if (compact) Button(context).apply {
+            FlymeAutoStyle.button(this, palette)
+            val chevron = context.getDrawable(R.drawable.ic_dp_chevron)?.mutate()?.apply {
+                setTint(palette.secondaryText)
+            }
+            setCompoundDrawablesRelativeWithIntrinsicBounds(null, null, chevron, null)
+            setOnClickListener {
+                context.appDialogBuilder().setTitle(R.string.diagnostics_test_title)
+                    .setItems(titles.values.map(context::getString).toTypedArray()) { _, index ->
+                        changed(titles.keys.elementAt(index))
+                    }.setNegativeButton(R.string.cancel, null).show()
+            }
+        } else null
+        if (picker != null) root.addView(LinearLayout(context).apply {
+            val inset = FlymeAutoStyle.dp(context, FlymeAutoStyle.CONTROL_GAP_DP)
+            setPadding(inset, inset, inset, inset)
+            addView(Button(context).apply {
+                setText(R.string.back)
+                FlymeAutoStyle.action(this, palette, textOnly = true)
+                setOnClickListener { back() }
+            }, LinearLayout.LayoutParams(-2, -2).apply { marginEnd = inset })
+            addView(picker, LinearLayout.LayoutParams(0, -2, 1f))
+        }, LinearLayout.LayoutParams(-1, -2)) else root.addView(railScroll,
+            LinearLayout.LayoutParams(FlymeAutoStyle.dp(context, menuWidthDp(context.resources.configuration.screenWidthDp)), -1))
         root.addView(FrameLayout(context).apply {
             layoutDirection = context.resources.configuration.layoutDirection
             pages.values.forEach { addView(it, FrameLayout.LayoutParams(-1, -1)) }
-        }, LinearLayout.LayoutParams(0, -1, 1f))
+        }, LinearLayout.LayoutParams(if (compact) -1 else 0, if (compact) 0 else -1, 1f))
         root.addOnLayoutChangeListener { _, left, _, right, _, _, _, _, _ ->
             val density = context.resources.displayMetrics.density
             val width = ((right - left) / density).toInt()
             val wanted = FlymeAutoStyle.dp(context, menuWidthDp(width))
-            if (railScroll.layoutParams.width != wanted) {
+            if (!compact && railScroll.layoutParams.width != wanted) {
                 railScroll.layoutParams = (railScroll.layoutParams as LinearLayout.LayoutParams).apply { this.width = wanted }
             }
         }
-        return Views(root, pages, menu, palette).also { it.select(selected) }
+        return Views(root, pages, menu, palette, picker, titles).also { it.select(selected) }
     }
     companion object {
         fun menuWidthDp(widthDp: Int) = minOf(FlymeAutoStyle.CONTROL_HEIGHT_DP * 4,

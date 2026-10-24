@@ -66,12 +66,22 @@ class DiagnosticsTestLayoutTest {
                 val menus = visible(ui.root).filterIsInstance<Button>().filter {
                     it.text == "方控测试" || it.text == "MFi 认证测试" || it.text == "UID 检测"
                 }.toList()
-                assertEquals(3, menus.size)
+                assertEquals(if (width < 600) 1 else 3, menus.size)
                 menus.forEach { menu ->
                     val menuBounds = bounds(ui.root, menu)
                     val detailBounds = bounds(ui.root, detail)
-                    assertTrue("Menu must stay on the left", menuBounds.right <= detailBounds.left)
-                    menu.performClick()
+                    if (width >= 600) {
+                        assertTrue("Wide menu must stay on the left", menuBounds.right <= detailBounds.left)
+                        menu.performClick()
+                    } else {
+                        assertTrue("Compact picker must stay above details", menuBounds.bottom <= detailBounds.top)
+                        menu.performClick()
+                        val dialog = org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog()
+                        for (index in DiagnosticsTestLayout.Page.entries.indices) {
+                            dialog.listView.performItemClick(null, index, index.toLong())
+                        }
+                        dialog.dismiss()
+                    }
                 }
                 screenshot(ui.root, w, h, "$prefix-${page.name.lowercase()}-top")
                 assertReadable(ui.root, w)

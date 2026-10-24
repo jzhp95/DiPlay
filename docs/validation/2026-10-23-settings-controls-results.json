@@ -1,0 +1,572 @@
+{
+  "base_commit": "92ad14d2",
+  "source": "uncommitted settings control visibility fix",
+  "before_visibility_tests": {
+    "tests": 4,
+    "failures": 4
+  },
+  "ui_suites": [
+    {
+      "name": "com.shilapi.xcertplay.SettingsLayoutPolicyTest",
+      "tests": "6",
+      "failures": "0",
+      "errors": "0"
+    },
+    {
+      "name": "com.shilapi.xcertplay.FlymeSystemLayoutTest",
+      "tests": "5",
+      "failures": "0",
+      "errors": "0"
+    },
+    {
+      "name": "com.shilapi.xcertplay.SettingsHeaderAlignmentTest",
+      "tests": "4",
+      "failures": "0",
+      "errors": "0"
+    },
+    {
+      "name": "com.shilapi.xcertplay.SettingsControlVisibilityTest",
+      "tests": "5",
+      "failures": "0",
+      "errors": "0"
+    },
+    {
+      "name": "com.shilapi.xcertplay.CarHotspotSettingsLayoutTest",
+      "tests": "1",
+      "failures": "0",
+      "errors": "0"
+    }
+  ],
+  "full_validation_exit": 1,
+  "modules": {
+    "common": {
+      "tests": 1289,
+      "failures": 99,
+      "errors": 0,
+      "skipped": 0
+    },
+    "shared": {
+      "tests": 1157,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 1
+    },
+    "integrations/flyme-eas": {
+      "tests": 10,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  },
+  "failures": [
+    {
+      "test": "com.shilapi.xcertplay.AppUpdateRemovedTest#compactHomeAlsoIgnoresCachedReleases",
+      "message": "java.lang.AssertionError",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.AppUpdateRemovedTest#cachedReleaseCannotAddAnUpdatePromptToHome",
+      "message": "java.lang.AssertionError",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.HomeConnectionChoiceTest#wirelessCardDuringUsbSessionUsesWirelessSetupRatherThanOpeningUsb",
+      "message": "org.junit.ComparisonFailure: expected:<[connection]> but was:<[home]>",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.ChooseIphoneTitleTest#aChosenIphoneIsNamedOnTheButton",
+      "message": "java.lang.AssertionError: connection setup expected:<[选择 iPhone · Test iPhone]> but was:<[]>",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.ChooseIphoneTitleTest#traditionalSystemLocaleStillShowsSimplifiedChinese",
+      "message": "java.lang.AssertionError: connection setup expected:<[选择 iPhone]> but was:<[]>",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.ChooseIphoneTitleTest#beforeAnIphoneIsChosenTheButtonNamesNone",
+      "message": "java.lang.AssertionError: connection setup expected:<[选择 iPhone]> but was:<[]>",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.WirelessPermissionRefusalTest#refusedNearbyDevicesIsNamedOnAndroid13",
+      "message": "org.junit.ComparisonFailure: expected:<[请在车机应用权限中允许 Apple CarPlay 访问附近的设备。]> but was:<[正在准备 CarPlay…]>",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.WirelessPermissionRefusalTest#refusedLocationIsNamedInsteadOfWaitingForTheIphone",
+      "message": "org.junit.ComparisonFailure: expected:<[请在车机应用权限中允许 Apple CarPlay 使用精确位置信息。]> but was:<[正在准备 CarPlay…]>",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.WirelessPermissionRefusalTest#theScreenNamesWhatIsStillMissingAfterTheDriverAllowsPartOfIt",
+      "message": "org.junit.ComparisonFailure: expected:<[请在车机应用权限中允许 Apple CarPlay 使用精确位置信息。]> but was:<[正在准备 CarPlay…]>",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.WheelKeyPermissionSetupTest#disablingTheFeaturesDuringTheRestoreGraceStopsTheRequest",
+      "message": "java.lang.AssertionError",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.CarHotspotSetupTest#startupNeedsValidCredentialsAndNoExistingSession",
+      "message": "java.lang.AssertionError",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.WheelJoystickSessionTest#aClosedControllerDoesNotOwnTheWheelWhileItsSnapshotIsStillStored",
+      "message": "java.lang.AssertionError: expected:<(true, true)> but was:<(false, false)>",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.WheelJoystickSessionTest#mainScreenTeardownRestoresKeysBeforeMediaResourceShutdown",
+      "message": "java.lang.AssertionError: expected:<(true, true)> but was:<(false, false)>",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.WheelJoystickSessionTest#replacementMainScreenResetsJoystickButPreservesAHeldKeysRelease",
+      "message": "java.lang.AssertionError: expected:<(true, true)> but was:<(false, false)>",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.WheelJoystickSessionTest#aClosedPhoneCannotKeepWheelKeysEvenBeforeTheControllerPointerIsCleared",
+      "message": "java.lang.AssertionError: expected:<(true, true)> but was:<(false, false)>",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.WheelJoystickSessionTest#aClusterContentStreamReplacementDoesNotResetTheMainScreenJoystick",
+      "message": "java.lang.AssertionError: expected:<(true, true)> but was:<(false, false)>",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.WheelJoystickSessionTest#aNewIphoneInsideTheSameControllerMustNotInheritJoystickMode",
+      "message": "java.lang.AssertionError: expected:<(true, true)> but was:<(false, false)>",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.WheelJoystickSessionTest#mainScreenTeardownAndResetupRestoreKeysWithoutAnyInterveningPress",
+      "message": "java.lang.AssertionError: expected:<(true, true)> but was:<(false, false)>",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.WifiDirectChannelSettingsTest#defaultIsAutoAndCancelDoesNotSavePreviewedChannel",
+      "message": "java.lang.AssertionError",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.WifiDirectChannelSettingsTest#autoBandChoicesAreListedAfterAutoAndPersist",
+      "message": "org.junit.ComparisonFailure: expected:<[Auto] · 5 GHz> but was:<[自动] · 5 GHz>",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.CarHotspotSecuritySettingsTest#editingCredentialsPreservesSavedWpa3Modes",
+      "message": "java.lang.AssertionError: expected:<WPA3_TRANSITION> but was:<WPA3>",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.CarHotspotSecuritySettingsTest#credentialValidationAndCancelledInterfaceEditsPreserveTheOverride",
+      "message": "java.util.NoSuchElementException: Sequence contains no element matching the predicate.",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.CarHotspotSecuritySettingsTest#cancellingStartupOptionsDoesNotSaveTheSecurityChoice",
+      "message": "java.lang.NullPointerException: getLatestAlertDialog(...) must not be null",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.CarHotspotSecuritySettingsTest#selectingWpa3SavesOnlyWhenStartupOptionsAreConfirmed",
+      "message": "java.lang.NullPointerException: getLatestAlertDialog(...) must not be null",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.CarHotspotSecuritySettingsTest#emptyPasswordUsesOpenAndRetypingBeforeSavePreservesTheProtectedMode",
+      "message": "java.lang.AssertionError: expected:<OPEN> but was:<WPA3>",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.HomeCompactLayoutTest#compactLandscapeKeepsWirelessAndUsbInSeparateColumns",
+      "message": "java.util.NoSuchElementException: Sequence contains no element matching the predicate.",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.HomeCompactLayoutTest#compactPortraitStacksWirelessBeforeUsb",
+      "message": "java.util.NoSuchElementException: Sequence contains no element matching the predicate.",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.SiriLongPressSwitchTest#aSwitchAlreadyOnStaysWhereItCanBeTurnedOff",
+      "message": "java.lang.AssertionError: [返回, 设置, 已保存。部分更改将在 CarPlay 重新连接后生效。, 立即重新连接, 概览, 连接, 显示, 音频, 导航, 车辆, 诊断, 高级, 关于, CarPlay 操作, 快捷菜单 · 下滑手指数 · 3 指, 选择未被车机系统手势占用的手指数。, 方向盘按键, 方向盘 Siri 按键, 在 CarPlay 显示于屏幕时，用你选择的方向盘按键打开 Siri。车辆自身保留的按键只能配合方向盘按键服务使用，该服务在 CarPlay 处于后台时也可使用。未连接 CarPlay 或通话时，该按键保留车辆原有功能。, , 高级, 车辆和仪表盘功能因车型和固件而异。启用实验性设置前，请先在高级设置中查看。, 打开高级设置]",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.SiriLongPressSwitchTest#aBydHeadUnitHasTheSwitchWithTheWheelKeys",
+      "message": "java.lang.AssertionError: [返回, 设置, 已保存。部分更改将在 CarPlay 重新连接后生效。, 立即重新连接, 概览, 连接, 显示, 音频, 导航, 车辆, 诊断, 高级, 关于, CarPlay 操作, 快捷菜单 · 下滑手指数 · 3 指, 选择未被车机系统手势占用的手指数。, 方向盘按键, 方向盘 Siri 按键, 在 CarPlay 显示于屏幕时，用你选择的方向盘按键打开 Siri。车辆自身保留的按键只能配合方向盘按键服务使用，该服务在 CarPlay 处于后台时也可使用。未连接 CarPlay 或通话时，该按键保留车辆原有功能。, , 高级, 车辆和仪表盘功能因车型和固件而异。启用实验性设置前，请先在高级设置中查看。, 打开高级设置]",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.CarHotspotOffConnectTest#connectInTheOffDialogConnectsInsteadOfAskingAgain",
+      "message": "java.lang.NullPointerException: Cannot invoke \"org.robolectric.internal.bytecode.ShadowedObject.$$robo$getData()\" because \"instance\" is null",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.ChooseIphoneBluetoothDialogTest#bluetoothThatIsOnGoesOnToPairing",
+      "message": "java.lang.AssertionError: [配对 iPhone, 在 iPhone 上打开“设置 → 蓝牙”并与车机配对。然后返回 Apple CarPlay，点击“连接手机”。, 知道了, 打开蓝牙]",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.CarPlayVpnConsentTest#deniedConsentLaunchDoesNotCrashOrUnlockUsb[28]",
+      "message": "java.lang.AssertionError",
+      "historical_record": "2026-10-23-settings-card-background-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.CarPlayVpnConsentTest#missingConsentDialogDoesNotCrashOrLeaveAuthorizationPending[28]",
+      "message": "java.lang.AssertionError",
+      "historical_record": "2026-10-23-settings-card-background-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.CarPlayVpnConsentTest#deniedPrepareDoesNotCrashOrLeaveStaleAuthorization[28]",
+      "message": "java.lang.AssertionError",
+      "historical_record": "2026-10-23-settings-card-background-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.CarPlayVpnConsentTest#deniedConsentLaunchDoesNotCrashOrUnlockUsb",
+      "message": "java.lang.AssertionError",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.CarPlayVpnConsentTest#missingConsentDialogDoesNotCrashOrLeaveAuthorizationPending",
+      "message": "java.lang.AssertionError",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.CarPlayVpnConsentTest#deniedPrepareDoesNotCrashOrLeaveStaleAuthorization",
+      "message": "java.lang.AssertionError",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.CarHotspotNameTextTest#theHomePageDoesNotQuoteAHotspotNameThatWasNeverSaved",
+      "message": "java.lang.AssertionError: [Apple CarPlay, 选择 iPhone, 断开连接, 热点, 设置, 车机主页, 无线连接, 一切就绪, 连接手机, 车载热点 · 保持车载热点、蓝牙和 iPhone 的 Wi-Fi 开启。, 有线连接, 请使用 USB 数据线连接 iPhone, 通过 USB 连接, 将 iPhone 连接到支持数据传输的 USB 接口。\n手机出现提示时允许使用 CarPlay。, 车机热点“WIFI_2033”未开启。请在车机设置中开启后再连接。]",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.MfiTargetSettingsTest#connectionSettingsSwitchFromCh341BackToLocalWithoutConnecting[28]",
+      "message": "java.util.NoSuchElementException: Sequence contains no element matching the predicate.",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.MfiTargetSettingsTest#connectionSettingsSwitchFromCh341BackToLocalWithoutConnecting",
+      "message": "java.util.NoSuchElementException: Sequence contains no element matching the predicate.",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.CarHotspotFallbackTest#cancelledStartupDoesNotFallBackEvenWhenApStateIsUnreadable",
+      "message": "java.lang.AssertionError: Hotspot startup cancelled",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.CarHotspotFallbackTest#knownOffHotspotWithUnsupportedControlDoesNotFallBack",
+      "message": "java.lang.AssertionError: Car hotspot startup was not confirmed. Open the car hotspot settings and connect again.",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.CarHotspotFallbackTest#missingControlPermissionIsStillReported",
+      "message": "java.lang.AssertionError: Car hotspot startup was not confirmed. Open the car hotspot settings and connect again.",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.settings.SettingsWidgetsTest#carHotspotIsTheFirstAndRecommendedHotspotChoice",
+      "message": "org.junit.ComparisonFailure: expected:<[Built-in car hotspot (recommended)]> but was:<[车载热点（推荐）]>",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.ConnectionSettingsCardsTest#connectionAndAuthenticationChoicesShareOneCard",
+      "message": "java.lang.AssertionError",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.CarPlayHostSettingsTest#selectingLocalWithoutIdentityKeepsTheMenuAndSavedUsbChoice",
+      "message": "java.util.NoSuchElementException: Sequence contains no element matching the predicate.",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.CarPlayHostSettingsTest#switchingToUsbPersistsAndPassesUsbToTheRuntime",
+      "message": "java.util.NoSuchElementException: Sequence contains no element matching the predicate.",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.CarPlayHostSettingsTest#authenticationChoicesExposeAutomaticLocalAndCh341",
+      "message": "java.lang.AssertionError: expected:<[AUTO, LOCAL, USB_CH341]> but was:<[]>",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.WheelKeyServiceReportTest#theDiagnosticReportCarriesTheWheelKeyLines[28]",
+      "message": "org.junit.ComparisonFailure: expected:<[]> but was:<[Flyme EAS (source 36)]>",
+      "historical_record": "2026-10-23-settings-card-background-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.WheelKeyServiceReportTest#aKeyDiPlayKeepsIsListedWithWhatItDid[28]",
+      "message": "java.lang.AssertionError",
+      "historical_record": "2026-10-23-settings-card-background-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.WheelKeyServiceReportTest#theDiagnosticReportCarriesTheWheelKeyLines",
+      "message": "org.junit.ComparisonFailure: expected:<[]> but was:<[Flyme EAS (source 36)]>",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.WheelKeyServiceReportTest#aKeyDiPlayKeepsIsListedWithWhatItDid",
+      "message": "java.lang.AssertionError",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.AdaptiveSettingsUiTest#compactHeaderActionsShareOneHeight",
+      "message": "java.util.NoSuchElementException: Sequence contains no element matching the predicate.",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.AdaptiveSettingsUiTest#japaneseSettingsDoNotEllipsizeVisibleTextOnNarrowScreens",
+      "message": "org.junit.ComparisonFailure: expected:<[アプリの言語]> but was:<[应用语言]>",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.AdaptiveSettingsUiTest#expandedAboutWorksWithoutLanguageDestination",
+      "message": "java.lang.AssertionError",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.AdaptiveSettingsUiTest#connectionCategoryUsesAChoiceAndDoesNotDuplicateHomeActions",
+      "message": "java.lang.AssertionError",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.AdaptiveSettingsUiTest#overviewUtilitiesFollowAboutAsSeparateCategoryCards",
+      "message": "java.lang.AssertionError: expected:<16> but was:<32>",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.AdaptiveSettingsUiTest#chosenPhoneWithMissingManualHotspotOffersConnectionSetup",
+      "message": "java.lang.AssertionError",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.AdaptiveSettingsUiTest#headerSearchBoxListsMatchesAsYouTypeAndOpensTheChosenSetting",
+      "message": "java.util.NoSuchElementException: Sequence contains no element matching the predicate.",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.AdaptiveSettingsUiTest#headerActionsShareOneHeight",
+      "message": "java.util.NoSuchElementException: Sequence contains no element matching the predicate.",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.AdaptiveSettingsUiTest#searchOpensTheCategoryThatOwnsTheSetting",
+      "message": "java.util.NoSuchElementException: Collection contains no element matching the predicate.",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.AdaptiveSettingsUiTest#expandedRailUsesAnIconForEveryDestination",
+      "message": "java.lang.AssertionError: expected:<10> but was:<0>",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.AdaptiveSettingsUiTest#backCollapsesAnEmptySearchAndFullLayoutKeepsItsExistingLabel",
+      "message": "java.util.NoSuchElementException: Sequence contains no element matching the predicate.",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.AdaptiveSettingsUiTest#compactSettingsOpenOnAnEverydayDriverOverview",
+      "message": "java.lang.AssertionError",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.AdaptiveSettingsUiTest#backClosesAnOpenSearchBeforeLeavingSettings",
+      "message": "java.util.NoSuchElementException: Sequence contains no element matching the predicate.",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.AdaptiveSettingsUiTest#traditionalChineseSettingsFitNarrowScreensWithLargeFonts",
+      "message": "org.junit.ComparisonFailure: expected:<[應用程式語]言> but was:<[应用语]言>",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.AdaptiveSettingsUiTest#compactAboutWorksWithoutLanguageDestination",
+      "message": "java.lang.AssertionError",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.AdaptiveSettingsUiTest#compactSearchUsesASquareTouchTargetAndCollapsesAfterBack",
+      "message": "java.util.NoSuchElementException: Sequence contains no element matching the predicate.",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.AdaptiveSettingsUiTest#rebuiltSearchFieldsDoNotLeaveLayoutListenersOnTheWindow",
+      "message": "java.util.NoSuchElementException: Sequence contains no element matching the predicate.",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.AdaptiveSettingsUiTest#traditionalChineseSettingsFitExpandedScreensWithLargeFonts",
+      "message": "org.junit.ComparisonFailure: expected:<[應用程式語]言> but was:<[应用语]言>",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.AdaptiveSettingsUiTest#hotspotSearchKeepsTheCarHotspotAudienceGateAndNeedsNoAdbOffBydUnits",
+      "message": "java.util.NoSuchElementException: Collection contains no element matching the predicate.",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.AdaptiveSettingsUiTest#headerSearchBoxListsMatchesAsYouTypeAndOpensTheChosenSetting[28]",
+      "message": "java.util.NoSuchElementException: Sequence contains no element matching the predicate.",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.CarButtonImagePickerTest#savingCarButtonNameMarksTheActiveSessionWithoutStoppingIt[28]",
+      "message": "java.util.NoSuchElementException: Sequence contains no element matching the predicate.",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.CarButtonImagePickerTest#savingCarButtonNameMarksTheActiveSessionWithoutStoppingIt",
+      "message": "java.util.NoSuchElementException: Sequence contains no element matching the predicate.",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.CarHotspotSwitchTest#enablingDirectlyRequestsPermissionWithoutAnotherDialog",
+      "message": "java.lang.NoSuchMethodException: com.shilapi.xcertplay.DiPlayActivity.renderBydAdbControls(android.widget.LinearLayout,com.shilapi.xcertplay.adb.LocalAdb$Access)",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.CarHotspotSwitchTest#unexpectedAdbFailureRestoresTheSameSwitch",
+      "message": "java.lang.NoSuchMethodException: com.shilapi.xcertplay.DiPlayActivity.renderBydAdbControls(android.widget.LinearLayout,com.shilapi.xcertplay.adb.LocalAdb$Access)",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.CarHotspotSwitchTest#aFailedBootGrantPreservesHotspotAndDoesNotEnableBootLaunch",
+      "message": "java.lang.NoSuchMethodException: com.shilapi.xcertplay.DiPlayActivity.renderBydAdbControls(android.widget.LinearLayout,com.shilapi.xcertplay.adb.LocalAdb$Access)",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.CarHotspotSwitchTest#anExistingPermissionStillWaitsForAdbBeforeEnabling",
+      "message": "java.lang.NoSuchMethodException: com.shilapi.xcertplay.DiPlayActivity.renderBydAdbControls(android.widget.LinearLayout,com.shilapi.xcertplay.adb.LocalAdb$Access)",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.CarHotspotSwitchTest#turningTheSwitchOffDoesNotRequestOrRevokePermissions",
+      "message": "java.lang.NoSuchMethodException: com.shilapi.xcertplay.DiPlayActivity.renderBydAdbControls(android.widget.LinearLayout,com.shilapi.xcertplay.adb.LocalAdb$Access)",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.CarHotspotSwitchTest#adbSuccessWithoutActualPermissionDoesNotEnableTheSwitch",
+      "message": "java.lang.NoSuchMethodException: com.shilapi.xcertplay.DiPlayActivity.renderBydAdbControls(android.widget.LinearLayout,com.shilapi.xcertplay.adb.LocalAdb$Access)",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.CarHotspotSwitchTest#incompleteBootPermissionKeepsTheHotspotSwitchOff",
+      "message": "java.lang.NoSuchMethodException: com.shilapi.xcertplay.DiPlayActivity.renderBydAdbControls(android.widget.LinearLayout,com.shilapi.xcertplay.adb.LocalAdb$Access)",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.CarHotspotSwitchTest#selectingBootFirstGrantsBothRequiredPermissionsFromTheHotspotSwitch",
+      "message": "java.lang.NoSuchMethodException: com.shilapi.xcertplay.DiPlayActivity.renderBydAdbControls(android.widget.LinearLayout,com.shilapi.xcertplay.adb.LocalAdb$Access)",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.CarHotspotSwitchTest#adbApprovalFailureLeavesTheSwitchOffAndShowsTheReason",
+      "message": "java.lang.NoSuchMethodException: com.shilapi.xcertplay.DiPlayActivity.renderBydAdbControls(android.widget.LinearLayout,com.shilapi.xcertplay.adb.LocalAdb$Access)",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.CarHotspotSwitchTest#anOutstandingVehicleCheckPreventsASecondAuthorizationFlow",
+      "message": "java.lang.NoSuchMethodException: com.shilapi.xcertplay.DiPlayActivity.renderBydAdbControls(android.widget.LinearLayout,com.shilapi.xcertplay.adb.LocalAdb$Access)",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.CarHotspotSwitchTest#selectingBootLaterRequestsOnlyBootPermission",
+      "message": "java.lang.NoSuchMethodException: com.shilapi.xcertplay.DiPlayActivity.renderBydAdbControls(android.widget.LinearLayout,com.shilapi.xcertplay.adb.LocalAdb$Access)",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.CarHotspotSwitchTest#returningFromApprovalAfterCompletionKeepsThePage",
+      "message": "java.lang.NoSuchMethodException: com.shilapi.xcertplay.DiPlayActivity.renderBydAdbControls(android.widget.LinearLayout,com.shilapi.xcertplay.adb.LocalAdb$Access)",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.CarHotspotSwitchTest#returningFromApprovalBeforeCompletionKeepsThePage",
+      "message": "java.lang.NoSuchMethodException: com.shilapi.xcertplay.DiPlayActivity.renderBydAdbControls(android.widget.LinearLayout,com.shilapi.xcertplay.adb.LocalAdb$Access)",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.WheelSiriWindowTest#removedPlayPauseControlsStayHiddenWithALegacyAssignment[28]",
+      "message": "java.lang.AssertionError: 方向盘按键服务：已关闭 expected:<1> but was:<0>",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.WheelSiriWindowTest#removedPlayPauseControlsStayHiddenWithALegacyAssignment",
+      "message": "java.lang.AssertionError: 方向盘按键服务：已关闭 expected:<1> but was:<0>",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.ExistingWifiSettingsTest#cancellingSetupPreservesModeAndSavingValidCredentialsSelectsLan",
+      "message": "java.util.NoSuchElementException: Collection contains no element matching the predicate.",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.HomeHotspotAccessTest#onABydUnitHomeKeepsTheAdbRoute",
+      "message": "java.lang.AssertionError: Home has FAILED, not PERMISSION_REQUIRED",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.HomeHotspotAccessTest#offBydUnitsHomeAsksForTheSystemAccessAndOpensItsScreen",
+      "message": "java.lang.AssertionError: Home has FAILED, not PERMISSION_REQUIRED",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.HomeHotspotAccessTest#returningWithoutTheAccessKeepsAskingForIt",
+      "message": "java.lang.AssertionError: Home has FAILED, not PERMISSION_REQUIRED",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.HomeHotspotAccessTest#onceTheAccessIsAllowedTheHotspotIsStartedOnReturn",
+      "message": "java.lang.AssertionError: Home has FAILED, not PERMISSION_REQUIRED",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.CarHotspotSettingsUiTest#cancellingInterfaceEditKeepsTheExistingOverride",
+      "message": "java.util.NoSuchElementException: Sequence contains no element matching the predicate.",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.CarHotspotSettingsUiTest#mismatchedSecurityKeepsOptionsOpenWithoutWritingOrStarting",
+      "message": "java.lang.NullPointerException: getLatestAlertDialog(...) must not be null",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.CarHotspotSettingsUiTest#cancellingStartupOptionsDoesNotChangeTheSavedProfileOrHotspot",
+      "message": "java.lang.NullPointerException: getLatestAlertDialog(...) must not be null",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.CarHotspotSettingsUiTest#aSessionStartingWhileTheHotspotRequestIsQueuedCancelsTheRequest",
+      "message": "java.lang.NullPointerException: getLatestAlertDialog(...) must not be null",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    },
+    {
+      "test": "com.shilapi.xcertplay.CarHotspotSettingsUiTest#confirmedStartupUsesTheSavedCredentialsAndChosenRadioOptions",
+      "message": "java.lang.NullPointerException: getLatestAlertDialog(...) must not be null",
+      "historical_record": "2026-10-22-byd-removal-results.json"
+    }
+  ],
+  "new_failure_signatures": [],
+  "historical_comparison": "Class and method signatures only; no fresh unmodified HEAD baseline run.",
+  "lint": {
+    "Error": 0,
+    "Fatal": 0,
+    "Warning": 3
+  },
+  "apk_sha256": "8220e3fb30320ab6c20ca34789d2b5ae6c918f4d507654820aca06b39519ab4a",
+  "apk_signature_v2_verified": true,
+  "compact_password_width_before": 66,
+  "compact_password_width_after": 222,
+  "profile": "400dp, mdpi, fontScale 1.5",
+  "screenshots": "API 28 Robolectric native rendering; not car capture",
+  "real_vehicle_verified": false
+}

@@ -14,8 +14,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.TextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.getValue
@@ -50,16 +50,21 @@ class MainActivity : ComponentActivity() {
                         modifier = Modifier.padding(padding).padding(24.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        Text("Board I2C diagnostic")
-                        OutlinedTextField(
+                        Text(getString(com.shilapi.xcertplay.host.R.string.settings_internal_i2c), style = androidx.compose.material3.MaterialTheme.typography.titleLarge)
+                        TextField(
                             value = devicePath,
                             onValueChange = { devicePath = it },
                             modifier = Modifier.fillMaxWidth(),
-                            label = { Text("Linux I2C device") },
-                            colors = OutlinedTextFieldDefaults.colors(
+                            label = { Text(getString(com.shilapi.xcertplay.host.R.string.settings_internal_i2c_device)) },
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = androidx.compose.ui.graphics.Color(DiPlayPalette.of(appNight).inputFill),
+                                unfocusedContainerColor = androidx.compose.ui.graphics.Color(DiPlayPalette.of(appNight).inputFill),
+                                focusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
+                                unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
                                 focusedLabelColor = androidx.compose.ui.graphics.Color(DiPlayPalette.of(appNight).accentText),
                                 cursorColor = androidx.compose.ui.graphics.Color(DiPlayPalette.of(appNight).accentText),
                             ),
+                            shape = RoundedCornerShape(FlymeAutoStyle.CARD_CORNER_DP.dp),
                             singleLine = true,
                             enabled = status !is DiagnosticStatus.Running,
                         )
@@ -67,13 +72,13 @@ class MainActivity : ComponentActivity() {
                             onClick = { runSelfCheck(devicePath) },
                             enabled = status !is DiagnosticStatus.Running,
                             modifier = Modifier.fillMaxWidth().heightIn(min = FlymeAutoStyle.CONTROL_HEIGHT_DP.dp),
-                            shape = RoundedCornerShape(FlymeAutoStyle.CARD_CORNER_DP.dp),
+                            shape = RoundedCornerShape(FlymeAutoStyle.ACTION_CORNER_DP.dp),
                         ) {
-                            Text("Run MFi self-check")
+                            Text(getString(com.shilapi.xcertplay.host.R.string.settings_internal_mfi_run))
                         }
                         Spacer(Modifier.height(4.dp))
                         Text(status.message())
-                        Text("CH341 requires deployment-specific VID/PID configuration.")
+                        Text(getString(com.shilapi.xcertplay.host.R.string.settings_internal_mfi_hint), style = androidx.compose.material3.MaterialTheme.typography.bodyMedium)
                     }
                 }
             }

@@ -101,9 +101,8 @@ class CarHotspotNameTextTest {
     @Test fun savingTheInlineCardUpdatesBothHotspotPathsWithoutTurningItOn() {
         saveHotspot("Car 5G")
         val setup = open("connection")
-        val inputs = descendants(setup.window.decorView).filterIsInstance<EditText>().toList()
-        inputs.single { it.contentDescription == setup.getString(R.string.hotspot_name) }.setText("Updated Car")
-        inputs.single { it.contentDescription == setup.getString(R.string.hotspot_password) }.setText("abcdefgh")
+        editHotspotDraft(setup, setup.window.decorView, R.string.hotspot_name, "Updated Car")
+        editHotspotDraft(setup, setup.window.decorView, R.string.hotspot_password, "abcdefgh")
         descendants(setup.window.decorView).filterIsInstance<Button>().single {
             it.text == setup.getString(R.string.settings_hotspot_save)
         }.performClick()

@@ -14,7 +14,7 @@ import org.robolectric.util.ReflectionHelpers
 import org.robolectric.shadows.ShadowAlertDialog
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [29], manifest = Config.NONE)
+@Config(sdk = [29], manifest = Config.NONE, qualifiers = "w1080dp-h720dp-land")
 class WheelTestActivityTest {
     @Test fun aLiveCarPlaySessionRequiresAnExplicitDisconnectChoice() {
         var stops = 0

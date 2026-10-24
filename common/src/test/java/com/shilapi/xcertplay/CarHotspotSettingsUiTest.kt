@@ -70,9 +70,14 @@ class CarHotspotSettingsUiTest {
         shadowOf(Looper.getMainLooper()).idle()
     }
 
-    @Test fun hotspotCredentialsAreEditedInlineWithoutASeparateManualEntry() {
+    @Test fun hotspotCredentialsUseSeparateDraftEditorsWithoutASeparateManualEntry() {
         val parent = card()
-        assertEquals("Hotspot name and password must be editable in the card", 2, inputs(parent).size)
+        assertTrue(inputs(parent).isEmpty())
+        for (title in listOf(R.string.hotspot_name, R.string.hotspot_password)) {
+            val dialog = openHotspotEditor(activity, parent, title)
+            assertEquals(1, inputs(dialog.window!!.decorView).size)
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE).performClick()
+        }
         assertFalse(views(parent).filterIsInstance<Button>().any { it.text == activity.getString(R.string.settings_hotspot_manual) })
         button(parent, R.string.settings_hotspot_save)
         assertFalse(CarHotspotSettings.enabled(activity))
@@ -82,8 +87,8 @@ class CarHotspotSettingsUiTest {
 
     @Test fun savingInlineCredentialsDoesNotApplyOrEnableTheSystemHotspot() {
         val parent = card()
-        inputs(parent)[0].setText("Saved Car")
-        inputs(parent)[1].setText("abcdefgh")
+        editHotspotDraft(activity, parent, R.string.hotspot_name, "Saved Car")
+        editHotspotDraft(activity, parent, R.string.hotspot_password, "abcdefgh")
         button(parent, R.string.settings_hotspot_save).performClick()
 
         assertEquals("Saved Car", CarHotspotProfiles.resolve(activity, manual = { null })?.profile?.ssid)
@@ -96,8 +101,8 @@ class CarHotspotSettingsUiTest {
         CarHotspotProfiles.saveSaved(activity, profile)
         AirPlayPersistence.saveManualHotspotInterface(activity, "eth0.3")
         val parent = card()
-        inputs(parent)[0].setText("Updated Car")
-        inputs(parent)[1].setText("abcdefgh")
+        editHotspotDraft(activity, parent, R.string.hotspot_name, "Updated Car")
+        editHotspotDraft(activity, parent, R.string.hotspot_password, "abcdefgh")
         button(parent, R.string.settings_hotspot_save).performClick()
 
         assertEquals(profile.copy(ssid = "Updated Car", passphrase = "abcdefgh"), CarHotspotProfiles.saved(activity))
@@ -166,11 +171,23 @@ class CarHotspotSettingsUiTest {
     @Test fun invalidInlinePasswordCannotReplaceAValidSavedProfile() {
         CarHotspotProfiles.saveSaved(activity, profile)
         val parent = card()
-        inputs(parent)[1].setText("short")
+        editHotspotDraft(activity, parent, R.string.hotspot_password, "short")
         button(parent, R.string.settings_hotspot_save).performClick()
         assertEquals(profile, CarHotspotProfiles.saved(activity))
         assertNull(fake.applied)
         assertEquals(0, changes)
+    }
+
+    @Test fun savingAnUnchangedEditorDoesNotBlockStartingTheSavedHotspot() {
+        CarHotspotProfiles.saveSaved(activity, profile)
+        val parent = card()
+        val dialog = openHotspotEditor(activity, parent, R.string.hotspot_name)
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        shadowOf(Looper.getMainLooper()).idle()
+        button(parent, R.string.settings_hotspot_start).performClick()
+        await { fake.completed }
+        assertEquals(profile, fake.applied)
+        assertEquals(profile, CarHotspotProfiles.saved(activity))
     }
 
     @Test fun startRequiresAnExplicitlySavedProfile() {
@@ -183,13 +200,18 @@ class CarHotspotSettingsUiTest {
     @Test fun passwordVisibilityDoesNotChangeTheSavedOrEditedValue() {
         CarHotspotProfiles.saveSaved(activity, profile)
         val parent = card()
-        val password = inputs(parent)[1]
-        button(parent, R.string.settings_hotspot_show_password).performClick()
+        val dialog = openHotspotEditor(activity, parent, R.string.hotspot_password)
+        val password = inputs(dialog.window!!.decorView).single()
+        val eye = views(dialog.window!!.decorView).filterIsInstance<android.widget.ImageButton>().single {
+            it.contentDescription == activity.getString(R.string.settings_hotspot_show_password)
+        }
+        eye.performClick()
         assertNull(password.transformationMethod)
         assertEquals(profile.passphrase, password.text.toString())
-        button(parent, R.string.settings_hotspot_hide_password).performClick()
+        eye.performClick()
         assertNotNull(password.transformationMethod)
         assertEquals(profile, CarHotspotProfiles.saved(activity))
+        dialog.getButton(AlertDialog.BUTTON_NEGATIVE).performClick()
     }
 
     @Test fun cancellingInterfaceEditKeepsTheExistingOverride() {

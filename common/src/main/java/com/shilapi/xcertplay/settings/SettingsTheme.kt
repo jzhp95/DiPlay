@@ -14,6 +14,7 @@ class SettingsTheme private constructor(
     val buttonText: Int,
     val ripple: Int,
     val focusRing: Int,
+    internal val palette: DiPlayPalette,
 ) {
 
     fun dp(context: Context, value: Int): Int =
@@ -27,6 +28,7 @@ class SettingsTheme private constructor(
 
         internal fun card(palette: DiPlayPalette) = SettingsTheme(
             isOverlay = false,
+            palette = palette,
             textPrimary = palette.primaryText,
             textSecondary = palette.secondaryText,
             accent = palette.accent,
@@ -40,6 +42,7 @@ class SettingsTheme private constructor(
 
         internal fun overlay(palette: DiPlayPalette) = SettingsTheme(
             isOverlay = true,
+            palette = palette,
             textPrimary = palette.overlayPrimaryText,
             textSecondary = palette.overlaySecondaryText,
             accent = palette.overlayAccent,

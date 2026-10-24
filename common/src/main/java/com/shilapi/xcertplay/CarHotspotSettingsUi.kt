@@ -3,19 +3,11 @@ package com.shilapi.xcertplay
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.Intent
-import android.graphics.drawable.GradientDrawable
-import android.os.Build
 import android.provider.Settings
-import android.text.Editable
-import android.text.InputType
-import android.text.TextWatcher
-import android.text.method.PasswordTransformationMethod
 import android.view.Gravity
 import android.view.View
-import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.widget.Button
-import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
 import com.shilapi.xcertplay.host.R
@@ -42,10 +34,10 @@ internal class CarHotspotSettingsUi(
     @Volatile private var closed = false
     private var busy = false
     private var initialReadStarted = false
+    private var pendingInitialProfile: CarHotspotProfile? = null
     private var edited = false
     private var nameText: String? = null
     private var passwordText: String? = null
-    private var passwordVisible = false
     private var securitySelection: ManualHotspotSecurity? = null
     private var bandSelection: ManualHotspotBand? = null
     private var channelSelection: Int? = null
@@ -57,13 +49,13 @@ internal class CarHotspotSettingsUi(
     private fun gap() = LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(FlymeAutoStyle.CONTROL_GAP_DP) }
     private fun label(text: String, secondary: Boolean = true) = TextView(activity).apply {
         this.text = text
-        textSize = if (secondary) FlymeAutoStyle.SECONDARY_TEXT_SP else FlymeAutoStyle.BODY_TEXT_SP
+        FlymeAutoStyle.text(this, if (secondary) FlymeAutoStyle.TextRole.SECONDARY else FlymeAutoStyle.TextRole.LABEL)
         setTextColor(if (secondary) palette.secondaryText else palette.primaryText)
     }
     private fun button(id: Int, primary: Boolean = false, action: () -> Unit) = Button(activity).apply {
         text = activity.getString(id)
         isEnabled = !busy
-        FlymeAutoStyle.button(this, palette, primary)
+        FlymeAutoStyle.settingsButton(this, palette, primary)
         layoutParams = gap()
         setOnClickListener { action() }
     }
@@ -93,19 +85,8 @@ internal class CarHotspotSettingsUi(
         )
         parent.addView(toggle.rowView)
         parent.addView(label(activity.getString(R.string.settings_hotspot_configure), false), gap())
-        val name = field(parent, R.string.hotspot_name, R.string.settings_hotspot_ssid_placeholder, nameText.orEmpty())
-        val password = field(parent, R.string.hotspot_password, R.string.settings_hotspot_password_placeholder,
-            passwordText.orEmpty(), secret = true)
-        watch(name) { nameText = it }
-        watch(password) { passwordText = it }
-        name.imeOptions = EditorInfo.IME_ACTION_NEXT or EditorInfo.IME_FLAG_NO_EXTRACT_UI
-        password.imeOptions = EditorInfo.IME_ACTION_DONE or EditorInfo.IME_FLAG_NO_EXTRACT_UI
-        name.setOnEditorActionListener { _, action, _ ->
-            if (action == EditorInfo.IME_ACTION_NEXT) { password.requestFocus(); true } else false
-        }
-        password.setOnEditorActionListener { _, action, _ ->
-            if (action == EditorInfo.IME_ACTION_DONE) { hideKeyboard(password); true } else false
-        }
+        field(parent, R.string.hotspot_name, nameText.orEmpty()) { nameText = it }
+        field(parent, R.string.hotspot_password, passwordText.orEmpty(), secret = true) { passwordText = it }
         val securities = listOf(ManualHotspotSecurity.OPEN, ManualHotspotSecurity.WPA2,
             ManualHotspotSecurity.WPA3_TRANSITION, ManualHotspotSecurity.WPA3)
         val securityTitles = listOf(activity.getString(R.string.open), "WPA2", "WPA2/WPA3", "WPA3")
@@ -137,8 +118,8 @@ internal class CarHotspotSettingsUi(
             setTextColor(palette.accentText)
         }
         parent.addView(error, gap())
-        parent.addView(button(R.string.settings_hotspot_save, primary = true) {
-            val profile = CarHotspotProfile(name.text.toString().trim(), password.text.toString(),
+        val saveButton = button(R.string.settings_hotspot_save, primary = true) {
+            val profile = CarHotspotProfile(nameText.orEmpty().trim(), passwordText.orEmpty(),
                 securitySelection ?: ManualHotspotSecurity.WPA2,
                 bandSelection ?: ManualHotspotBand.AUTO, channelSelection ?: 0)
             val problem = problem(profile)
@@ -152,95 +133,59 @@ internal class CarHotspotSettingsUi(
                 edited = false
                 status = activity.getString(R.string.settings_hotspot_credentials_saved)
                 error.visibility = View.GONE
-                hideKeyboard(password)
                 changed()
             }
-        })
-        parent.addView(button(R.string.settings_hotspot_start) { startSavedHotspot() })
+        }
+        val startButton = button(R.string.settings_hotspot_start) { startSavedHotspot() }
+        FlymeAutoStyle.action(startButton, palette, textOnly = true)
+        FlymeAutoStyle.action(saveButton, palette, primary = true)
+        val actions = LinearLayout(activity).apply {
+            orientation = if (FlymeAutoStyle.compact(activity) || activity.resources.configuration.fontScale > 1.3f)
+                LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
+        }
+        listOf(startButton, saveButton).forEachIndexed { index, action ->
+            actions.addView(action, LinearLayout.LayoutParams(
+                if (actions.orientation == LinearLayout.HORIZONTAL) 0 else -1, -2,
+                if (actions.orientation == LinearLayout.HORIZONTAL) 1f else 0f).apply {
+                if (index == 0 && actions.orientation == LinearLayout.HORIZONTAL) marginEnd = dp(FlymeAutoStyle.CONTROL_GAP_DP)
+                if (index == 1 && actions.orientation == LinearLayout.VERTICAL) topMargin = dp(FlymeAutoStyle.CONTROL_GAP_DP)
+            })
+        }
+        actions.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+            if (actions.orientation == LinearLayout.HORIZONTAL) {
+                val tallest = maxOf(startButton.height, saveButton.height)
+                if (startButton.minimumHeight < tallest) startButton.minimumHeight = tallest
+                if (saveButton.minimumHeight < tallest) saveButton.minimumHeight = tallest
+            }
+        }
+        parent.addView(actions, gap())
         status?.let { parent.addView(label(it), gap()) }
         if (saved == null && !initialReadStarted) loadInitialProfile()
     }
 
-    private fun field(parent: LinearLayout, title: Int, hint: Int, value: String, secret: Boolean = false): EditText {
-        val row = LinearLayout(activity).apply {
-            gravity = Gravity.CENTER_VERTICAL
-            minimumHeight = dp(FlymeAutoStyle.CONTROL_HEIGHT_DP)
-            setPadding(dp(FlymeAutoStyle.BUTTON_PADDING_HORIZONTAL_DP), 0,
-                dp(FlymeAutoStyle.BUTTON_PADDING_VERTICAL_DP), 0)
-        }
-        row.addView(label(activity.getString(title), secondary = false).apply {
-            textSize = FlymeAutoStyle.BODY_TEXT_SP
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, dp(FlymeAutoStyle.BUTTON_PADDING_VERTICAL_DP),
-                dp(FlymeAutoStyle.CONTROL_GAP_DP), dp(FlymeAutoStyle.BUTTON_PADDING_VERTICAL_DP))
-        }, LinearLayout.LayoutParams(-2, -1))
-        val input = EditText(activity).apply {
-            setText(value)
-            setHint(hint)
-            contentDescription = activity.getString(title)
-            textSize = FlymeAutoStyle.BODY_TEXT_SP
-            setTextColor(palette.secondaryText)
-            setHintTextColor(palette.secondaryText)
-            gravity = Gravity.END or Gravity.CENTER_VERTICAL
-            background = null
-            setSingleLine()
-            minimumHeight = dp(FlymeAutoStyle.CONTROL_HEIGHT_DP)
-            setPadding(0, dp(FlymeAutoStyle.BUTTON_PADDING_VERTICAL_DP),
-                dp(FlymeAutoStyle.BUTTON_PADDING_VERTICAL_DP), dp(FlymeAutoStyle.BUTTON_PADDING_VERTICAL_DP))
-            inputType = InputType.TYPE_CLASS_TEXT or if (secret) InputType.TYPE_TEXT_VARIATION_PASSWORD
-                else InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
-            if (secret && !passwordVisible) transformationMethod = PasswordTransformationMethod.getInstance()
+    private fun field(parent: LinearLayout, title: Int, value: String, secret: Boolean = false, save: (String) -> Unit) {
+        var draft = value
+        val row = DiPlayActivity.SettingButton(activity, palette.secondaryText, palette.accent).apply {
+            FlymeAutoStyle.settingRow(this, palette)
             isEnabled = !busy
-            importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO
         }
-        row.addView(input, LinearLayout.LayoutParams(0, -1, 1f))
-        if (secret) {
-            row.addView(Button(activity).apply {
-                fun updateLabel() {
-                    setText(if (passwordVisible) R.string.settings_hotspot_hide_password else R.string.settings_hotspot_show_password)
-                }
-                updateLabel()
-                FlymeAutoStyle.button(this, palette, compact = true)
-                minimumWidth = 0
-                minWidth = 0
-                val inset = dp(FlymeAutoStyle.BUTTON_PADDING_VERTICAL_DP)
-                setPadding(inset, inset, inset, inset)
-                minimumHeight = dp(FlymeAutoStyle.CONTROL_HEIGHT_DP)
-                isEnabled = !busy
-                setOnClickListener {
-                    passwordVisible = !passwordVisible
-                    val cursor = input.selectionStart.coerceAtLeast(0)
-                    input.transformationMethod = if (passwordVisible) null else PasswordTransformationMethod.getInstance()
-                    input.setSelection(cursor.coerceAtMost(input.text.length))
-                    updateLabel()
-                }
-            }, LinearLayout.LayoutParams(-2, -1))
+        fun update() {
+            val display = if (draft.isEmpty()) activity.getString(R.string.settings_value_empty)
+                else if (secret) "••••••••" else draft
+            row.text = activity.getString(title) + " · " + display
         }
-        fun paint() {
-            row.background = GradientDrawable().apply {
-                setColor(palette.button)
-                cornerRadius = FlymeAutoStyle.radius(activity, row.height.takeIf { it > 0 } ?: row.minimumHeight)
-                if (input.hasFocus()) setStroke(dp(FlymeAutoStyle.FOCUS_STROKE_DP), palette.focusRing)
+        update()
+        row.setOnClickListener {
+            activeDialog = SettingsTextEditor.show(activity, activity.getString(title), draft, secret, onDismiss = ::restoreInitialProfile) {
+                if (!closed && draft != it) {
+                    draft = it
+                    save(it)
+                    edited = true
+                    update()
+                }
             }
         }
-        input.setOnFocusChangeListener { _, _ -> paint() }
-        row.addOnLayoutChangeListener { _, _, top, _, bottom, _, oldTop, _, oldBottom ->
-            if (bottom - top != oldBottom - oldTop) paint()
-        }
-        paint()
         parent.addView(row, gap())
-        return input
-    }
-
-    private fun watch(input: EditText, save: (String) -> Unit) {
-        input.addTextChangedListener(object : TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-                edited = true
-                save(s?.toString().orEmpty())
-            }
-            override fun afterTextChanged(s: Editable?) = Unit
-        })
     }
 
     private fun loadInitialProfile() {
@@ -249,22 +194,29 @@ internal class CarHotspotSettingsUi(
             val profile = runCatching { CarHotspotProfiles.resolve(activity, manual = ::legacyProfile, log = ::log)?.profile }.getOrNull()
             activity.runOnUiThread {
                 if (closed || activity.isFinishing || activity.isDestroyed || edited || profile == null) return@runOnUiThread
-                val latest = CarHotspotProfiles.saved(activity) ?: profile
-                nameText = latest.ssid
-                passwordText = latest.passphrase
-                securitySelection = latest.security
-                bandSelection = latest.band
-                channelSelection = latest.channel
-                redraw()
+                pendingInitialProfile = profile
+                if (activeDialog?.isShowing != true) restoreInitialProfile()
             }
         }, "carplay-hotspot-read").start()
+    }
+
+    private fun restoreInitialProfile() {
+        val pending = pendingInitialProfile ?: return
+        pendingInitialProfile = null
+        if (closed || activity.isFinishing || activity.isDestroyed || edited) return
+        val latest = CarHotspotProfiles.saved(activity) ?: pending
+        nameText = latest.ssid
+        passwordText = latest.passphrase
+        securitySelection = latest.security
+        bandSelection = latest.band
+        channelSelection = latest.channel
+        redraw()
     }
 
     private fun <T> choice(parent: LinearLayout, title: Int, options: () -> List<Pair<T, String>>,
         selected: () -> T, save: (T) -> Unit): Button {
         val row = DiPlayActivity.SettingButton(activity, palette.secondaryText, palette.accent).apply {
-            FlymeAutoStyle.button(this, palette)
-            textSize = FlymeAutoStyle.BODY_TEXT_SP
+            FlymeAutoStyle.settingRow(this, palette)
             isEnabled = !busy
         }
         fun update() {
@@ -283,7 +235,9 @@ internal class CarHotspotSettingsUi(
                         edited = true
                         update()
                     }
-                }.setNegativeButton(R.string.cancel, null).show()
+                }.setNegativeButton(R.string.cancel, null).show().also {
+                    it.setOnDismissListener { restoreInitialProfile() }
+                }
         }
         parent.addView(row, gap())
         return row
