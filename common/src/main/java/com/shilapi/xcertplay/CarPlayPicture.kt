@@ -23,10 +23,10 @@ internal object CarPlayPicture {
         previewListeners.toList().forEach { it() }
     }
 
-    class Binding(private val view: TextureView) : java.io.Closeable {
+    class Binding(private val view: TextureView, private val neutral: Boolean = false) : java.io.Closeable {
         private var closed = false
         private val prefs = preferences(view.context)
-        private val update: () -> Unit = { if (!closed) apply(view, prefs) }
+        private val update: () -> Unit = { if (!closed) { if (neutral) view.setLayerPaint(null) else apply(view, prefs) } }
         private val handler = android.os.Handler(android.os.Looper.getMainLooper())
         private val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> handler.post { update() } }
         init {

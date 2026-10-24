@@ -35,11 +35,13 @@ import java.util.zip.ZipOutputStream
 /** All color experiments are local to this page. Opening it never starts decoding or changes settings. */
 internal class ColorTestPage(private val activity: Activity, private val palette: DiPlayPalette) {
     val run = ColorTestRun()
-    private val prefs = activity.getSharedPreferences("color_test_results", Activity.MODE_PRIVATE)
+    private val prefs = activity.getSharedPreferences(ColorMainProbeRegistry.PREFS, Activity.MODE_PRIVATE)
     private val player = ColorTestPlayer(activity)
     private val handler = Handler(Looper.getMainLooper())
+    private val pendingProbePoll = Runnable { if (visible && !disposed) consumeMainResult() }
     private val exportWorker = Executors.newSingleThreadExecutor()
     private val lines = prefs.getString("log", "")!!.lines().filter { it.isNotBlank() }.toMutableList()
+    private val caseLines = mutableListOf<String>()
     private var active = false
     private var visible = false
     private var disposed = false
@@ -56,6 +58,7 @@ internal class ColorTestPage(private val activity: Activity, private val palette
     private lateinit var preview: FrameLayout
     private lateinit var status: TextView
     private lateinit var progress: TextView
+    private lateinit var coverage: TextView
     private lateinit var details: TextView
     private lateinit var observation: Button
     private lateinit var start: Button
@@ -73,7 +76,7 @@ internal class ColorTestPage(private val activity: Activity, private val palette
                 run.history.add(ColorTestRun.Observation(item.getInt("index"), item.getString("verdict"),
                     if (item.isNull("range")) null else item.getInt("range"),
                     if (item.isNull("standard")) null else item.getInt("standard"),
-                    item.getBoolean("savedPicture"), if (item.isNull("capture")) null else item.getString("capture"), item.getLong("time")))
+                    item.getBoolean("savedPicture"), if (item.isNull("capture")) null else item.getString("capture"), item.getLong("time"), item.optJSONObject("evidence")?.toString() ?: "{}"))
             }
         }
         ColorTestRun.cases.indices.forEach { i -> prefs.getString("result_$i", null)?.let { run.results[i] = it } }
@@ -94,13 +97,16 @@ internal class ColorTestPage(private val activity: Activity, private val palette
         label(R.string.color_test_title, FlymeAutoStyle.TextRole.PAGE_TITLE)
         label(R.string.color_test_description, FlymeAutoStyle.TextRole.SECONDARY)
         progress = label(R.string.color_test_ready)
+        coverage = label(R.string.color_evidence_pending, FlymeAutoStyle.TextRole.SECONDARY)
         start = action(R.string.color_test_start, true) {
+            if (prefs.getString("pending_token", null) != null) { status.setText(R.string.color_main_closing); return@action }
             if (active) stop() else { active = true; playCurrent() }
             update()
         }
         action(R.string.color_test_choose) {
+            if (prefs.getString("pending_token", null) != null) { status.setText(R.string.color_main_closing); return@action }
             activity.appDialogBuilder().setTitle(R.string.color_test_choose)
-                .setItems(ColorTestRun.cases.mapIndexed { i, case -> "${i + 1}. ${case.title}" }.toTypedArray()) { _, i ->
+                .setItems(ColorTestRun.cases.mapIndexed { i, case -> "${i + 1}. ${case.title} · ${coverageState(i)}" }.toTypedArray()) { _, i ->
                     run.select(i); range = run.current.color.range; standard = null; savedPicture = false
                     persist(); if (active) playCurrent() else update()
                 }.setNegativeButton(R.string.cancel, null).show()
@@ -123,6 +129,7 @@ internal class ColorTestPage(private val activity: Activity, private val palette
                 .setItems(values) { _, i -> record(values[i]) }.setNegativeButton(R.string.cancel, null).show()
         }
         action(R.string.color_test_previous) {
+            if (prefs.getString("pending_token", null) != null) { status.setText(R.string.color_main_closing); return@action }
             run.select((run.index - 1).coerceAtLeast(0)); range = run.current.color.range
             standard = null; savedPicture = false; persist(); if (active) playCurrent() else update()
         }
@@ -159,7 +166,81 @@ internal class ColorTestPage(private val activity: Activity, private val palette
         update()
     }
 
-    fun setVisible(value: Boolean) { visible = value; if (!value) stop() }
+    fun setVisible(value: Boolean) {
+        visible = value
+        if (!value) { handler.removeCallbacks(pendingProbePoll); stop() } else consumeMainResult()
+    }
+    private fun consumeMainResult() {
+        val token = prefs.getString("pending_token", null) ?: return
+        val raw = prefs.getString("pending_result", null)
+        if (raw == null) {
+            if (ColorMainProbeRegistry.lookup(token) == null) {
+                status.setText(R.string.color_main_interrupted)
+                log("正式主屏采集未完成：进程重启或测试令牌已失效；本项需要补采")
+                prefs.edit().remove("pending_token").remove("pending_index").apply()
+            }
+            return
+        }
+        val data = runCatching { JSONObject(raw) }.getOrNull() ?: return
+        if (data.optString("token") != token) return
+        if (!data.optBoolean("teardown_complete")) {
+            if (ColorMainProbeRegistry.isClosing(token)) {
+                status.setText(R.string.color_main_closing)
+                handler.removeCallbacks(pendingProbePoll); handler.postDelayed(pendingProbePoll, 200)
+                return
+            }
+            data.put("continue", false).put("teardown_complete", true)
+            data.optJSONObject("evidence")?.apply {
+                put("teardown_interrupted", true)
+                optJSONArray("missing")?.put("connection_teardown_unconfirmed")
+            }
+        }
+        val index = data.optInt("index", -1)
+        if (index !in ColorTestRun.cases.indices || ColorTestRun.cases[index].mainProfile == null) return
+        val evidence = data.optJSONObject("evidence") ?: JSONObject()
+        run.select(index); run.rendered = evidence.optBoolean("rendered")
+        val capture = data.optString("capture").takeIf { it.isNotEmpty() && it != "null" }
+        val verdict = data.optString("verdict", "跳过")
+        val accepted = run.record(verdict, range = ColorTestRun.cases[index].color.range,
+            savedPicture = evidence.optJSONObject("requested")?.optBoolean("neutralPicture") == false,
+            capture = capture, evidence = evidence.toString())
+        if (!accepted) {
+            evidence.put("observer_verdict", verdict).put("observation_failed", "stream_changed_during_capture")
+            evidence.optJSONArray("missing")?.put("observation_context_changed")
+            run.record("无法显示", capture = capture, evidence = evidence.toString())
+        }
+        persist()
+        prefs.edit().remove("pending_token").remove("pending_result").remove("pending_index").apply()
+        if (accepted && data.optBoolean("continue") && !evidence.optBoolean("capture_context_changed") && index < ColorTestRun.cases.lastIndex) {
+            run.select(index + 1); range = run.current.color.range; standard = null; savedPicture = false
+            persist(); active = true
+            root.post { if (visible && !disposed) playCurrent() }
+        } else {
+            status.setText(if (!accepted || evidence.optBoolean("capture_context_changed") || evidence.optBoolean("teardown_interrupted")) R.string.color_main_interrupted else R.string.color_test_finished)
+            update()
+        }
+    }
+    private fun launchMainProbe() {
+        if (prefs.getString("pending_token", null) != null) {
+            status.setText(R.string.color_main_closing); return
+        }
+        val request = ColorMainProbeRegistry.begin(run.index, run.current.color)
+        prefs.edit().putString("pending_token", request.token).putInt("pending_index", run.index)
+            .remove("pending_result").apply()
+        // Finish an existing host before starting a temporary host; never race singleTask recreation with its old shutdown.
+        CarPlayBackgroundSession.stop {
+            activity.runOnUiThread {
+                if (!visible || disposed || ColorMainProbeRegistry.lookup(request.token) == null) {
+                    ColorMainProbeRegistry.finish(request.token)
+                    ColorMainProbeRegistry.teardownFinished(request.token)
+                    prefs.edit().remove("pending_token").remove("pending_index").apply()
+                    return@runOnUiThread
+                }
+                activity.startActivity(Intent(activity, CarPlayHostActivity::class.java)
+                    .putExtra(ColorMainProbeRegistry.EXTRA_TOKEN, request.token).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }
+        }
+    }
     fun stop() {
         epoch++; active = false; capturing = false; run.rendered = false
         player.stop(); preview.removeAllViews(); texture = null; surfaceView = null
@@ -174,11 +255,15 @@ internal class ColorTestPage(private val activity: Activity, private val palette
     private fun playCurrent() {
         if (!active || !visible || disposed) return
         val token = ++epoch
+        caseLines.clear()
         run.rendered = false; capturing = false
         player.stop()
         wrapper?.let { old -> player.stop { old.release() } }; wrapper = null
         preview.removeAllViews(); texture = null; surfaceView = null
         status.setText(R.string.color_test_waiting)
+        if (run.current.mainProfile != null) {
+            launchMainProbe(); update(); return
+        }
         log("CASE ${run.index + 1}: ${run.current.title}; range=$range standard=$standard savedPicture=$savedPicture")
         fun begin(surface: Surface) {
             if (token != epoch || !active) return
@@ -190,6 +275,7 @@ internal class ColorTestPage(private val activity: Activity, private val palette
                 when {
                     message.contains("first frame rendered") -> status.setText(R.string.color_test_rendered)
                     message.startsWith("错误：") || message.startsWith("提示：") -> status.text = message
+                    message.contains("diagnostic software decoder unavailable") -> status.setText(R.string.color_software_unavailable)
                     message.contains("configuration failed") -> status.setText(R.string.color_test_not_rendered)
                 }
                 update()
@@ -235,6 +321,7 @@ internal class ColorTestPage(private val activity: Activity, private val palette
         val technical = verdict == "无法显示" || verdict == "跳过"
         if (!technical && !run.rendered) { status.setText(R.string.color_test_not_rendered); return }
         val token = epoch
+        val beforeCapture = player.evidence()
         capturing = true; captureName = null; update()
         fun complete(bitmap: Bitmap?) {
             if (token != epoch || disposed) { bitmap?.recycle(); return }
@@ -255,12 +342,30 @@ internal class ColorTestPage(private val activity: Activity, private val palette
                     }.onFailure { log("截图保存失败：${it.javaClass.simpleName}") }
                 bitmap.recycle()
             } else log("本项未获取截图，观察结果仍保留")
-            if (run.record(verdict, range, standard, savedPicture, captureName)) {
+            val requested = JSONObject().apply {
+                put("asset", run.current.asset); put("range", range ?: JSONObject.NULL)
+                put("standard", standard ?: JSONObject.NULL); put("savedPicture", savedPicture)
+                put("softwareRequired", run.current.forceSoftware)
+                put("actualView", if (run.current.surface) "SurfaceView" else "TextureView")
+            }
+            val afterCapture = player.evidence()
+            val evidence = ColorProbeEvidence.capture(afterCapture, run.rendered, run.current.forceSoftware,
+                listOfNotNull(captureName), "production_decoder_fixture", requested).put("logs", JSONArray(caseLines.toList()))
+            if (!technical && (beforeCapture?.sourceHash != afterCapture?.sourceHash ||
+                    beforeCapture?.output?.instance != afterCapture?.output?.instance ||
+                    beforeCapture?.output?.generation != afterCapture?.output?.generation)) {
+                evidence.put("capture_context_changed", true).put("before_capture", ColorProbeEvidence.capture(beforeCapture,
+                    beforeCapture?.output?.firstFrameRendered == true, run.current.forceSoftware, emptyList(), "before_capture", requested))
+                evidence.getJSONArray("missing").put("capture_context_changed")
+            }
+            if (run.record(verdict, range, standard, savedPicture, captureName, evidence.toString())) {
                 log("OBSERVATION ${run.index + 1}: $verdict; range=$range standard=$standard savedPicture=$savedPicture")
                 persist()
-                val retained = run.history.mapNotNull { it.capture }.toSet()
+                val retained = observationCaptures().toSet()
                 captureDirectory().listFiles()?.filter { it.name.startsWith("observation-") && it.name !in retained }?.forEach { it.delete() }
-                if (run.index < ColorTestRun.cases.lastIndex) {
+                if (evidence.optBoolean("capture_context_changed")) {
+                    stop(); status.setText(R.string.color_main_interrupted)
+                } else if (run.index < ColorTestRun.cases.lastIndex) {
                     run.select(run.index + 1); range = run.current.color.range; standard = null; savedPicture = false
                     persist(); if (active) playCurrent() else update()
                 } else { stop(); status.setText(R.string.color_test_finished) }
@@ -308,14 +413,25 @@ internal class ColorTestPage(private val activity: Activity, private val palette
         progress.text = activity.getString(R.string.color_test_progress, run.index + 1, ColorTestRun.cases.size,
             run.current.title, run.results.size)
         start.setText(if (active) R.string.color_test_stop else R.string.color_test_start)
-        observation.isEnabled = !capturing && !exporting
+        val pendingMain = prefs.getString("pending_token", null) != null
+        start.isEnabled = !pendingMain
+        observation.isEnabled = !capturing && !exporting && !pendingMain
         rangeButton.text = activity.getString(R.string.color_test_range_value, when(range) { 1 -> "全范围"; 2 -> "有限范围"; else -> "自动" })
         matrixButton.text = activity.getString(R.string.color_test_matrix_value, when(standard) { 1 -> "BT.709"; 2 -> "BT.601 PAL"; 4 -> "BT.601 NTSC"; else -> "自动" })
         pictureButton.text = activity.getString(R.string.color_test_picture_value, if (savedPicture) "已保存参数" else "原始画面")
-        pictureButton.isEnabled = !run.current.surface
+        pictureButton.isEnabled = !run.current.surface && run.current.mainProfile == null
+        rangeButton.isEnabled = run.current.mainProfile == null && !pendingMain
+        matrixButton.isEnabled = run.current.mainProfile == null && !pendingMain
+        val states = ColorTestRun.cases.indices.map(::coverageState)
+        coverage.text = activity.getString(R.string.color_evidence_summary, states.count { it == "齐全" },
+            ColorTestRun.cases.size, states.count { it == "未测试" }, states.count { it.startsWith("缺") }, states.count { it == "不支持" }, states.count { it == "平台未报告" })
         if (::details.isInitialized) details.text = run.report() + "\n\n" + lines.takeLast(12).joinToString("\n")
     }
     private fun log(message: String) {
+        if (active && run.current.mainProfile == null) {
+            caseLines.add(message.take(1200))
+            while (caseLines.size > 64) caseLines.removeAt(24)
+        }
         lines.add("${System.currentTimeMillis()} $message")
         while (lines.size > 240) lines.removeAt(0)
         persist()
@@ -323,28 +439,57 @@ internal class ColorTestPage(private val activity: Activity, private val palette
     private fun historyJson(): JSONArray = JSONArray().apply {
         run.history.forEach { observation -> put(JSONObject().apply {
             put("index", observation.index); put("case", ColorTestRun.cases[observation.index].title)
+            put("software_required", ColorTestRun.cases[observation.index].forceSoftware)
+            put("main_profile", ColorTestRun.cases[observation.index].mainProfile ?: JSONObject.NULL)
             put("verdict", observation.verdict); put("range", observation.range ?: JSONObject.NULL)
             put("standard", observation.standard ?: JSONObject.NULL); put("savedPicture", observation.savedPicture)
             put("capture", observation.capture ?: JSONObject.NULL); put("time", observation.time)
+            put("evidence", evidenceWithFiles(observation.evidence))
         }) }
     }
+    private fun evidenceWithFiles(raw: String): JSONObject {
+        val evidence = runCatching { JSONObject(raw) }.getOrDefault(JSONObject())
+        val missing = evidence.optJSONArray("missing") ?: JSONArray().put("evidence_snapshot").also { evidence.put("missing", it) }
+        ColorProbeEvidence.captures(evidence).forEach { name ->
+            val key = "capture_file_missing:$name"
+            if (!File(captureDirectory(), name).isFile && (0 until missing.length()).none { missing.optString(it) == key }) missing.put(key)
+        }
+        return evidence
+    }
+    private fun coverageState(index: Int): String {
+        val record = run.history.lastOrNull { it.index == index } ?: return "未测试"
+        val evidence = evidenceWithFiles(record.evidence)
+        if (evidence.optString("unsupported_reason").isNotEmpty()) return "不支持"
+        val missing = evidence.optJSONArray("missing") ?: return "缺证据"
+        if (missing.length() > 0 && (0 until missing.length()).all { missing.optString(it).startsWith("output_color-") }) return "平台未报告"
+        return if (missing.length() == 0 && record.verdict !in listOf("跳过", "无法显示")) "齐全" else "缺 ${missing.length()} 项"
+    }
+    private fun observationCaptures(): List<String> = run.history.flatMap { item ->
+        listOfNotNull(item.capture) + ColorProbeEvidence.captures(runCatching { JSONObject(item.evidence) }.getOrDefault(JSONObject()))
+    }.distinct()
     private fun persist() {
         val editor = prefs.edit().putString("history", historyJson().toString()).putInt("index", run.index).putString("log", lines.joinToString("\n"))
         run.results.forEach { (i, result) -> editor.putString("result_$i", result) }; editor.apply()
     }
-    private fun captureDirectory() = File(activity.filesDir, "color-test-captures").apply { mkdirs() }
+    private fun captureDirectory() = ColorProbeEvidence.directory(activity)
     private fun export() {
         if (exporting || disposed || capturing) return
+        if (prefs.getString("pending_token", null) != null) { status.setText(R.string.color_main_closing); return }
         exporting = true
         update()
         val observations = historyJson().toString(2)
-        val captures = run.history.mapNotNull { it.capture }.distinct().map { File(captureDirectory(), it) }
+        val captures = observationCaptures().map { File(captureDirectory(), it) }
         val report = buildString {
             appendLine("DiPlay 画面颜色测试；主观观察并非自动校色结果")
             appendLine("${Build.MANUFACTURER} ${Build.MODEL}; Android ${Build.VERSION.RELEASE}; API ${Build.VERSION.SDK_INT}")
-            appendLine("app=${activity.packageName}; hardwareAccelerated=${activity.window.decorView.isHardwareAccelerated}")
+            appendLine("app=${activity.packageName}; hardwareAccelerated=${activity.window.decorView.isHardwareAccelerated}; hardware=${Build.HARDWARE}; board=${Build.BOARD}; build=${Build.DISPLAY}")
             appendLine("注意：请求颜色参数不保证车机采纳；请结合输出格式日志。截图不包含面板亮度、背光和显示后处理。")
-            appendLine(run.report()); appendLine("\n逐次观察（含实际参数与唯一截图）\n$observations"); appendLine("\n日常画面参数（测试不会修改）")
+            appendLine(run.report())
+            appendLine("\n采集完整性（不支持和缺项不计为通过）")
+            ColorTestRun.cases.forEachIndexed { index, case -> appendLine("${index + 1}. ${case.title}: ${coverageState(index)}") }
+            appendLine("\n本机解码器清单（API28 软件识别基于已知平台名称前缀）")
+            com.shilapi.xcertplay.media.diagnosticSoftwareCandidates().forEach { appendLine("${it.name}; types=${it.types}; softwareReported=${it.softwareReported}") }
+            appendLine("\n逐次观察（含实际参数与唯一截图）\n$observations"); appendLine("\n日常画面参数（测试不会修改）")
             CarPlayPicture.keys.forEach { appendLine("$it=${CarPlayPicture.value(CarPlayPicture.preferences(activity), it)}") }
             appendLine("\n正式 CarPlay 协商记录\n${DisplayDiagnosticSnapshot.report(activity)}")
             appendLine("\n测试日志\n${lines.joinToString("\n")}")

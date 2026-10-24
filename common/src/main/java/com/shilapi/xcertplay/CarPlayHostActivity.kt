@@ -403,6 +403,10 @@ class CarPlayHostActivity : ComponentActivity() {
         }
     }
     // Smooth video (a setting): SurfaceView output with frames released at the iPhone's frame time.
+    private var colorMainProbe: ColorMainProbeRegistry.Request? = null
+    private var colorMainOverlay: ColorMainProbeOverlay? = null
+    private var colorMainFinishing = false
+    private val colorMainLines = ArrayDeque<String>()
     private var smoothVideo = false
     // Direct video output (a setting): SurfaceView output with frames shown as soon as they are decoded.
     private var directVideoOutput = false
@@ -780,6 +784,7 @@ class CarPlayHostActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        colorMainProbe = ColorMainProbeRegistry.lookup(intent.getStringExtra(ColorMainProbeRegistry.EXTRA_TOKEN))
         NavigationWidgetUpdater.attach(applicationContext)
         CenterMapOverlay.requestShow = ::showCenterMap
         MapMirrors.sink = mirrorSink
@@ -789,6 +794,10 @@ class CarPlayHostActivity : ComponentActivity() {
             AirPlayPersistence.saveWirelessEnabled(this, false)
         }
         if (runCatching { DiPlayBootstrap.ensure(this, AirPlayPersistence.loadMfiTarget(this)) }.isFailure) {
+            if (colorMainProbe != null) {
+                finishColorMainProbe("无法显示", colorMainEvidence(emptyList()).put("startup_error", "bootstrap_failed"), false)
+                return
+            }
             OwnScreenStart.start(this, Intent(this, DiPlayActivity::class.java), ::appendLog)
             finish(); return
         }
@@ -809,7 +818,9 @@ class CarPlayHostActivity : ComponentActivity() {
             this,
             object : OnBackPressedCallback(true) {
                 override fun handleOnBackPressed() {
-                    if (picturePanel != null) {
+                    if (colorMainProbe != null) {
+                        finishColorMainProbe("跳过", colorMainEvidence(emptyList()).put("interrupted", true), false)
+                    } else if (picturePanel != null) {
                         closePicturePanel()
                     } else if (menuOpen) {
                         if (safeAreaEditorActive) closeSafeAreaEditor() else leaveSettingsMenu()
@@ -1079,6 +1090,13 @@ class CarPlayHostActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        val probe = ColorMainProbeRegistry.lookup(intent.getStringExtra(ColorMainProbeRegistry.EXTRA_TOKEN))
+        if (probe != null) {
+            colorMainOverlay?.close(); colorMainOverlay = null
+            colorMainProbe = null
+            shutdown(false, "prepare explicit main-screen color test") { if (!isDestroyed) recreate() }
+            return
+        }
         if (isIphoneUsbAttachment(intent)) {
             if (wirelessEnabled) {
                 if (menuOpen) cancelSettingsEdits()
@@ -1388,6 +1406,9 @@ class CarPlayHostActivity : ComponentActivity() {
     }
 
     override fun onStop() {
+        if (colorMainProbe != null && !isChangingConfigurations && !colorMainFinishing) {
+            finishColorMainProbe("跳过", colorMainEvidence(emptyList()).put("interrupted", true), false, returnToTests = false)
+        }
         fpsCounter?.stop()
         closePicturePanel()
         // The controller, USB/iAP2 link, and VPN attachment intentionally outlive the UI.
@@ -1476,6 +1497,9 @@ class CarPlayHostActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        if (colorMainProbe != null && !colorMainFinishing && !isChangingConfigurations)
+            finishColorMainProbe("无法显示", colorMainEvidence(emptyList()).put("startup_error", "destroyed_without_result"), false, returnToTests = false)
+        colorMainOverlay?.close(); colorMainOverlay = null
         mainHandler.removeCallbacks(hideTemporarySystemBars)
         discardLastPicture()
         if (pictureCopyThreadStarted) pictureCopyThread.quitSafely()
@@ -1520,7 +1544,7 @@ class CarPlayHostActivity : ComponentActivity() {
             isOpaque = false
             surfaceTextureListener = textureListener
         }
-        pictureBinding = CarPlayPicture.Binding(video)
+        pictureBinding = CarPlayPicture.Binding(video, neutral = colorMainProbe?.profile?.neutral == true)
         val gestureLayer = View(this).apply {
             isClickable = true
             setOnTouchListener { view, event -> onHostTouch(view, event) }
@@ -1697,8 +1721,11 @@ class CarPlayHostActivity : ComponentActivity() {
         safeAreaEditor = buildSafeAreaEditor().apply { visibility = View.GONE }
         root.addView(safeAreaEditor, FrameLayout.LayoutParams(-1, -1))
         videoView = video
-        smoothVideo = AirPlayPersistence.loadSmoothVideo(this)
-        directVideoOutput = AirPlayPersistence.loadDirectVideoOutput(this)
+        val savedSmooth = AirPlayPersistence.loadSmoothVideo(this)
+        val savedDirect = AirPlayPersistence.loadDirectVideoOutput(this)
+        val probeOutput = colorMainProbe?.profile?.resolve(savedSmooth, savedDirect)
+        smoothVideo = probeOutput?.first ?: savedSmooth
+        directVideoOutput = probeOutput?.second ?: savedDirect
         observeVideoWindow(video)
         gestureOverlay = gestureLayer
         settingsGestureHint = gestureHint
@@ -1707,6 +1734,15 @@ class CarPlayHostActivity : ComponentActivity() {
         connectionHelpView = help
         connectionPanel = viewport
         updateDebugOverlays()
+        colorMainProbe?.let { request ->
+            colorMainOverlay = ColorMainProbeOverlay(this, request,
+                ready = { sink?.videoColorOutput()?.let { it.active && it.firstFrameRendered } == true },
+                connection = { stageStatusView?.text?.toString().orEmpty() },
+                outputs = { (videoView as? TextureView) to fallbackVideoView },
+                evidence = ::colorMainEvidence,
+                completed = { verdict, data, next -> finishColorMainProbe(verdict, data, next) })
+            root.addView(colorMainOverlay!!.root, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM))
+        }
         return root
     }
 
@@ -4702,6 +4738,8 @@ class CarPlayHostActivity : ComponentActivity() {
             videoWidth = videoWidth,
             videoHeight = videoHeight,
             preferSoftwareHevcDecoder = hevcSoftwareDecoderEnabled,
+            forceSoftwareVideoDecoder = colorMainProbe?.profile?.software == true,
+            videoColorOverride = colorMainProbe?.color ?: com.shilapi.xcertplay.media.VideoColorOverride(),
             advancedAudioChannelMapping = advancedAudioChannelMapping,
             audioFocusEnabled = AirPlayPersistence.loadAudioFocusEnabled(this),
             audioFocusAutoYield = AirPlayPersistence.loadAudioFocusAutoYield(this),
@@ -4835,6 +4873,10 @@ class CarPlayHostActivity : ComponentActivity() {
             }
 
             override fun onDebugLog(message: String) {
+                if (colorMainProbe != null) synchronized(colorMainLines) {
+                    DiagnosticRedactor.redact(message)?.let { colorMainLines.addLast(it.take(700)) }
+                    while (colorMainLines.size > 80) colorMainLines.removeFirst()
+                }
                 DetailedDebugLog.record("protocol", "generation=$controllerGeneration $message")
                 if (DiagnosticRedactor.redact(message) == null) return
                 if (message.startsWith(CarPlayController.CONNECTION_DIAGNOSTIC_PREFIX + " ")) {
@@ -4917,6 +4959,10 @@ class CarPlayHostActivity : ComponentActivity() {
 
     private fun adoptBackgroundSession(): Boolean {
         val snapshot = CarPlayBackgroundSession.snapshot() ?: return false
+        if (colorMainProbe != null) {
+            CarPlayBackgroundSession.stop { mainHandler.post { if (!isDestroyed) maybeStartCarPlay() } }
+            return false
+        }
         if (snapshot.controller.isClosed()) {
             CarPlayBackgroundSession.clear(snapshot.controller)
             return false
@@ -5386,7 +5432,7 @@ class CarPlayHostActivity : ComponentActivity() {
         if (controller == null && adoptBackgroundSession()) return
         // The video view is chosen once per activity; a changed Smooth video or Direct video output
         // setting needs a new one.
-        if (controller == null && (AirPlayPersistence.loadSmoothVideo(this) != smoothVideo ||
+        if (colorMainProbe == null && controller == null && (AirPlayPersistence.loadSmoothVideo(this) != smoothVideo ||
                 AirPlayPersistence.loadDirectVideoOutput(this) != directVideoOutput)) {
             appendLog("Video output setting changed; rebuilding the video view")
             // No session runs here, but a restart keeps this host as the session owner; the new instance
@@ -5547,6 +5593,85 @@ class CarPlayHostActivity : ComponentActivity() {
         }
     }
 
+    private fun colorMainEvidence(files: List<String>): org.json.JSONObject {
+        val request = colorMainProbe
+        val config = org.json.JSONObject().apply {
+            put("profile", request?.profile?.id ?: "missing")
+            put("smoothVideo", smoothVideo); put("directVideoOutput", directVideoOutput)
+            put("softwareRequired", request?.profile?.software == true)
+            put("range", request?.color?.range ?: org.json.JSONObject.NULL)
+            put("standard", request?.color?.standard ?: org.json.JSONObject.NULL)
+            put("neutralPicture", request?.profile?.neutral == true)
+            put("actualView", if (fallbackVideoView != null) "SurfaceView" else "TextureView")
+            put("windowHardwareAccelerated", videoView?.isHardwareAccelerated ?: false)
+            put("windowColorMode", window.colorMode)
+            put("windowBrightness", window.attributes.screenBrightness)
+            put("fps", fps); put("hevcRequested", sessionHevc)
+            put("vendorLowLatency", AirPlayPersistence.loadLowLatencyDecoder(this@CarPlayHostActivity))
+            put("mtkTuning", AirPlayPersistence.loadMtkDecoderTuning(this@CarPlayHostActivity))
+        }
+        return ColorProbeEvidence.capture(sink?.videoColorEvidence(), sink?.videoColorOutput()?.let { it.active && it.firstFrameRendered } == true,
+            request?.profile?.software == true, files, "actual_carplay_host", config).apply {
+            sink?.liveVideoCounters()?.let { counters -> put("performance", org.json.JSONObject().apply {
+                put("received", counters.received); put("rendered", counters.rendered)
+                put("decodeSamples", counters.decodeSamples)
+                put("averageDecodeMillis", if (counters.decodeSamples > 0) counters.decodeNanos / counters.decodeSamples / 1_000_000.0 else org.json.JSONObject.NULL)
+            }) }
+            put("connection_status", stageStatusView?.text?.toString()?.take(700) ?: org.json.JSONObject.NULL)
+            put("logs", org.json.JSONArray(synchronized(colorMainLines) { colorMainLines.toList() }))
+            put("dailyPicture", org.json.JSONObject().apply {
+                val prefs = CarPlayPicture.preferences(this@CarPlayHostActivity)
+                CarPlayPicture.keys.forEach { put(it, CarPlayPicture.value(prefs, it)) }
+            })
+        }
+    }
+
+    private fun finishColorMainProbe(verdict: String, evidence: org.json.JSONObject, continueRun: Boolean,
+        returnToTests: Boolean = true) {
+        val request = colorMainProbe ?: return
+        if (colorMainFinishing) return
+        colorMainFinishing = true
+        colorMainOverlay?.close(); colorMainOverlay = null
+        colorMainProbe = null
+        intent.removeExtra(ColorMainProbeRegistry.EXTRA_TOKEN)
+        if (ColorMainProbeRegistry.finish(request.token) != null) {
+            val prefs = getSharedPreferences(ColorMainProbeRegistry.PREFS, Context.MODE_PRIVATE)
+            if (prefs.getString("pending_token", null) == request.token) {
+                val result = org.json.JSONObject().apply {
+                    put("token", request.token); put("index", request.index); put("verdict", verdict)
+                    put("evidence", evidence.put("probe_token", request.token)); put("continue", continueRun && (verdict != "无法显示" || evidence.optInt("input_csd_size") > 0))
+                    put("teardown_complete", false)
+                    put("capture", ColorProbeEvidence.captures(evidence).firstOrNull() ?: org.json.JSONObject.NULL)
+                }
+                prefs.edit().putString("pending_result", result.toString()).apply()
+            }
+        }
+        val closingController = controller ?: retiringAuthenticationController
+        val closingSink = sink
+        if (closingController != null) CarPlayBackgroundSession.retainAuthenticationTeardown(closingController)
+        shutdown(false, "main-screen color test finished") {
+            ColorMainProbeRegistry.teardownFinished(request.token)
+            val prefs = getSharedPreferences(ColorMainProbeRegistry.PREFS, Context.MODE_PRIVATE)
+            if (prefs.getString("pending_token", null) == request.token) {
+                val data = runCatching { org.json.JSONObject(prefs.getString("pending_result", "{}") ?: "{}") }.getOrDefault(org.json.JSONObject())
+                val confirmed = (closingController?.awaitClosed(0) ?: true) && (closingSink?.awaitVideoReleased(0) ?: true)
+                data.put("teardown_complete", true).put("teardown_confirmed", confirmed)
+                if (!confirmed) {
+                    data.put("continue", false)
+                    data.optJSONObject("evidence")?.apply {
+                        put("teardown_interrupted", true)
+                        optJSONArray("missing")?.put("connection_teardown_unconfirmed")
+                    }
+                }
+                prefs.edit().putString("pending_result", data.toString()).apply()
+            }
+            if (returnToTests) OwnScreenStart.start(this,
+                Intent(this, WheelTestActivity::class.java).putExtra("diagnostics_page", "COLOR")
+                    .addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT), ::appendLog)
+            finish()
+        }
+    }
+
     private fun showDiPlayHome(page: String = "home") {
         controller?.sendTouch(emptyList())
         OwnScreenStart.start(this, Intent(this, DiPlayActivity::class.java)
@@ -5563,6 +5688,7 @@ class CarPlayHostActivity : ComponentActivity() {
     }
 
     private fun openSettingsMenu() {
+        if (colorMainProbe != null) return
         cancelTemporarySystemBars()
         if (menuOpen) return
         controller?.sendTouch(emptyList())
@@ -5588,6 +5714,7 @@ class CarPlayHostActivity : ComponentActivity() {
     }
 
     private fun openPicturePanel() {
+        if (colorMainProbe != null) return
         closePicturePanel()
         val generation = picturePanelGeneration
         val root = videoView?.parent as? FrameLayout ?: return

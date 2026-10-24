@@ -88,6 +88,58 @@ class ColorTestPageTest {
             } else assertTrue(com.shilapi.xcertplay.media.MediaCodecSupport.hevcCodecSpecificData(csd).isNotEmpty())
         }
     }
+    @Test fun aDisconnectedCaptureKeepsTheObservationAsIncompleteInsteadOfDroppingIt() {
+        val controller = Robolectric.buildActivity(WheelTestActivity::class.java).setup()
+        val activity = controller.get()
+        val page = ReflectionHelpers.getField<ColorTestPage>(activity, "colorPage")
+        val prefs = activity.getSharedPreferences(ColorMainProbeRegistry.PREFS, android.content.Context.MODE_PRIVATE)
+        try {
+            val index = ColorTestRun.cases.indexOfFirst { it.mainProfile == "current" }
+            val result = org.json.JSONObject().apply {
+                put("token", "capture-context-changed"); put("index", index); put("verdict", "正常"); put("continue", true); put("teardown_complete", true)
+                put("evidence", org.json.JSONObject().apply { put("rendered", false); put("missing", org.json.JSONArray().put("first_frame")) })
+            }
+            prefs.edit().putString("pending_token", "capture-context-changed").putString("pending_result", result.toString()).commit()
+            page.setVisible(true)
+            assertEquals(index, page.run.index)
+            assertEquals("无法显示", page.run.history.last().verdict)
+            val saved = org.json.JSONObject(page.run.history.last().evidence)
+            assertEquals("正常", saved.getString("observer_verdict"))
+            assertEquals("stream_changed_during_capture", saved.getString("observation_failed"))
+            assertNull(prefs.getString("pending_token", null))
+        } finally { controller.pause().stop().destroy(); prefs.edit().clear().commit() }
+    }
+    @Test fun aSavedObservationCannotAdvanceBeforeItsConnectionFinishesClosing() {
+        val controller = Robolectric.buildActivity(WheelTestActivity::class.java).setup()
+        val activity = controller.get()
+        val page = ReflectionHelpers.getField<ColorTestPage>(activity, "colorPage")
+        val prefs = activity.getSharedPreferences(ColorMainProbeRegistry.PREFS, android.content.Context.MODE_PRIVATE)
+        val index = ColorTestRun.cases.indexOfFirst { it.mainProfile == "current" }
+        val request = ColorMainProbeRegistry.begin(index, com.shilapi.xcertplay.media.VideoColorOverride())
+        ColorMainProbeRegistry.finish(request.token)
+        try {
+            val result = org.json.JSONObject().apply {
+                put("token", request.token); put("index", index); put("verdict", "无法显示"); put("continue", false)
+                put("teardown_complete", false)
+                put("evidence", org.json.JSONObject().apply { put("rendered", false); put("missing", org.json.JSONArray().put("first_frame")) })
+            }
+            prefs.edit().putString("pending_token", request.token).putString("pending_result", result.toString()).commit()
+            page.setVisible(true)
+            assertTrue(page.run.history.isEmpty())
+            assertEquals(request.token, prefs.getString("pending_token", null))
+            ColorMainProbeRegistry.teardownFinished(request.token)
+            result.put("teardown_complete", true)
+            prefs.edit().putString("pending_result", result.toString()).commit()
+            page.setVisible(true)
+            assertEquals(1, page.run.history.size)
+            assertEquals(index, page.run.index)
+            assertNull(prefs.getString("pending_token", null))
+        } finally {
+            controller.pause().stop().destroy()
+            ColorMainProbeRegistry.teardownFinished(request.token)
+            prefs.edit().clear().commit()
+        }
+    }
     private fun all(view: View): Sequence<View> = sequence {
         if (view.visibility != View.VISIBLE) return@sequence
         yield(view)

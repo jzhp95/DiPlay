@@ -7,9 +7,9 @@ class ColorTestRunTest {
     @Test fun planCoversBothPathsBothCodecsAndBothEncodedRanges() {
         val cases = ColorTestRun.cases
         val local = cases.filter { it.asset != null }
-        assertEquals(8, local.size)
-        assertEquals(8, local.map { Pair(it.asset, it.surface) }.distinct().size)
-        assertEquals(6, cases.count { it.asset == null })
+        assertEquals(16, local.size)
+        assertEquals(16, local.map { Triple(it.asset, it.surface, it.forceSoftware) }.distinct().size)
+        assertEquals(10, cases.count { it.mainProfile != null })
     }
     @Test fun unrenderedAndFailedCasesCannotBeReportedAsNormal() {
         val run = ColorTestRun()

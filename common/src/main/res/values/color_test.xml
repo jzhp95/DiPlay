@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="color_test_title">画面颜色</string>
-    <string name="color_test_description">一次完成颜色排查。先比较内置标准视频，再比较同源 CarPlay。每项记录观察后自动进入下一项，结果会保留。CarPlay 项需要已连接的 iPhone；没有连接时可跳过，连接后再选该项重试。</string>
+    <string name="color_test_description">先运行默认解码／强制软件解码标准片，再进入正式 CarPlay 主屏对照。正式主屏项目会重新连接 iPhone；记录后结束本次测试连接并继续下一项。退出不修改日常设置。采集完整性会列出未测、不支持及缺失证据。“平台未报告”表示已记录接口限制，重复同一项不一定能补齐。</string>
     <string name="color_test_ready">尚未开始。测试只在此页运行，不会修改日常投屏设置。</string>
     <string name="color_test_start">开始／继续测试</string>
     <string name="color_test_stop">停止当前测试</string>
@@ -19,7 +19,7 @@
     <string name="color_test_waiting">正在准备视频，等待首帧…</string>
     <string name="color_test_stopped">测试已停止，记录已保留。</string>
     <string name="color_test_not_rendered">尚未显示视频，不能记录颜色判断。可以记录无法显示或跳过。</string>
-    <string name="color_test_finished">全部项目已走完。可以选择任意项目补测，或保存完整报告。</string>
+    <string name="color_test_finished">已走完当前顺序。请查看采集完整性；未测试、不支持或证据缺失不会计为完整。可选择项目补采后导出。</string>
     <string name="color_test_progress">第 %1$d / %2$d 项 · %3$s\n已记录 %4$d 项（含跳过及无法显示）</string>
     <string name="color_test_range_value">临时亮度范围 · %1$s</string>
     <string name="color_test_matrix_value">临时色彩标准 · %1$s</string>
@@ -27,4 +27,15 @@
     <string name="color_test_saved">文字报告：%1$s\n完整报告及截图：%2$s</string>
     <string name="color_test_export_failed">报告保存失败：%1$s</string>
     <string name="color_test_rendered">画面已显示。请比较灰阶和颜色，再记录观察。</string>
+    <string name="color_evidence_pending">正在核对采集项目…</string>
+    <string name="color_evidence_summary">证据齐全 %1$d / %2$d 项 · 未测试 %3$d · 缺证据 %4$d · 不支持 %5$d · 平台未报告 %6$d</string>
+    <string name="color_main_waiting">等待正式主屏首帧 · %1$s。软件解码不支持或连接失败时，可记录无法显示。</string>
+    <string name="color_main_cancel">结束正式测试并返回</string>
+    <string name="color_main_interrupted">正式主屏测试未完成，或进程已重启。此项缺少证据，请选择该项补采。</string>
+    <string name="color_software_unavailable">本机没有已确认的软件解码器，本项不支持。不会改用硬件解码冒充结果。</string>
+    <string name="color_main_closing">正在等待上一项连接关闭，完成后再继续。观察结果已保存，请勿重复启动。</string>
+    <string name="color_main_waiting_short">等待画面；无画面时可记录无法显示。</string>
+    <string name="color_main_record">记录观察并继续</string>
+    <string name="color_main_observe">全屏观察 8 秒</string>
+    <string name="color_main_observe_required">请先全屏观察 8 秒，再记录颜色。控件会自动恢复。</string>
 </resources>

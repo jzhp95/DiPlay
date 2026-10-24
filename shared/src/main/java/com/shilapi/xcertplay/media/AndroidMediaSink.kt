@@ -218,6 +218,7 @@ class AndroidMediaSink(
     /** Opt-in MTK ACodec low-latency/no-reorder modes, with per-session automatic fallback. */
     private val mtkDecoderTuningEnabled: Boolean = false,
     private val videoColorOverride: VideoColorOverride = VideoColorOverride(),
+    private val forceSoftwareVideoDecoder: Boolean = false,
 ) : MediaSink {
     // Each downlink publishes its own reference; a mic must match that stream and sample rate.
     private val callEchoReferences = ConcurrentHashMap<AudioStreamId, EchoReference>()
@@ -281,6 +282,20 @@ class AndroidMediaSink(
     private val lastVideoConfig = ConcurrentHashMap<Int, Pair<VideoCodec, ByteArray>>()
     private val recoveryExecutor = Executors.newSingleThreadExecutor { task ->
         Thread(task, "carplay-video-recovery").apply { isDaemon = true }
+    }
+
+    fun videoColorOutput(type: Int = 110): VideoDecoderColorEvidence? = synchronized(videoOwnershipLock) {
+        val config = lastVideoConfig[type] ?: return@synchronized null
+        videoDecoders[type]?.colorSnapshot()?.takeIf { it.configurationHash == videoConfigurationHash(config.second) }
+    }
+    fun videoColorEvidence(type: Int = 110): VideoSourceColorEvidence? {
+        val captured = synchronized(videoOwnershipLock) {
+            val config = lastVideoConfig[type] ?: return null
+            Triple(config.first, config.second.copyOf(), videoDecoders[type]?.colorSnapshot())
+        }
+        val hash = videoConfigurationHash(captured.second)
+        return VideoSourceColorEvidence(captured.first.name, captured.second,
+            VideoColorMetadata.parse(captured.first, captured.second), captured.third?.takeIf { it.configurationHash == hash }, hash)
     }
 
     override fun setVideoRecoveryHandler(type: Int, handler: () -> Unit) {
@@ -700,7 +715,9 @@ class AndroidMediaSink(
     }
 
     private fun newVideoDecoder(type: Int, surface: Surface?, statsLabel: String? = null, startImmediately: Boolean = true,
-        colorOverride: VideoColorOverride = videoColorOverride, diagnostic: ((String) -> Unit)? = null) = VideoDecoder(
+        colorOverride: VideoColorOverride = videoColorOverride, diagnostic: ((String) -> Unit)? = null): VideoDecoder {
+        lateinit var created: VideoDecoder
+        created = VideoDecoder(
         type,
         surface,
         videoWidth,
@@ -712,6 +729,7 @@ class AndroidMediaSink(
             else videoDiagnosticHandlers[type]?.invoke(message)
         },
         colorOverride = colorOverride,
+        forceSoftwareVideoDecoder = forceSoftwareVideoDecoder,
         statsLabel = statsLabel,
         onExit = ::onVideoDecoderExit,
         // Only the main screen goes to the host's SurfaceView; mirrors and the cluster keep their path.
@@ -723,7 +741,10 @@ class AndroidMediaSink(
         // Keep the experimental MTK mode on the main CarPlay picture only. Mirrors and the
         // cluster have separate timing and must retain their established decoder configuration.
         mtkDecoderTuningEnabled = mtkDecoderTuningEnabled && type == MAIN_SCREEN_TYPE && statsLabel == null,
-    ).also { if (startImmediately) it.start() }
+    )
+        if (startImmediately) created.start()
+        return created
+    }
 
     @Synchronized
     private fun audioRenderer(id: AudioStreamId, format: AudioFormat): AudioRenderer {
@@ -902,6 +923,7 @@ private class VideoDecoder(
     private val requestKeyFrame: () -> Unit,
     private val report: (String) -> Unit,
     private val colorOverride: VideoColorOverride = VideoColorOverride(),
+    private val forceSoftwareVideoDecoder: Boolean = false,
     private val statsLabel: String? = null,
     pacingDelayNanos: Long = 0L,
     /** Called on the worker as its last step, after it has released its codec. */
@@ -949,6 +971,9 @@ private class VideoDecoder(
     // The operating rate still asked for, dropped for this stream once a decoder refuses it; and the rate
     // the current codec was configured with.
     private var operatingRate = operatingRate
+    private val colorEvidence = VideoColorEvidenceState()
+    private var colorGeneration = 0L
+    fun colorSnapshot(): VideoDecoderColorEvidence = colorEvidence.snapshot()
     private var configuredRate = 0
     private var maximumMtkMode = if (mtkDecoderTuningEnabled) {
         MtkDecoderMode.LOW_LATENCY_NO_REORDER
@@ -1189,6 +1214,7 @@ private class VideoDecoder(
         lastConfig = config
         duplicateConfigLogged = false
         releaseDecoder()
+        colorGeneration = colorEvidence.begin(videoConfigurationHash(config.codecData))
         referenceChain.reset()
         val surface = outputSurface ?: return
         val codec = config.codec
@@ -1216,12 +1242,14 @@ private class VideoDecoder(
             MtkDecoderTuning.legacyAcodecDecoderName(mime) != null) maximumMtkMode else MtkDecoderMode.NONE
         var configured: ConfiguredVideoDecoder? = null
         var used: DecoderAttempt? = null
-        for (attempt in videoDecoderAttempts(
+        val diagnosticSoftware = if (forceSoftwareVideoDecoder) diagnosticSoftwareDecoderName(diagnosticSoftwareCandidates(), mime) else null
+        if (forceSoftwareVideoDecoder && diagnosticSoftware == null) report("diagnostic software decoder unavailable mime=$mime; hardware fallback disabled")
+        for (attempt in diagnosticVideoDecoderAttempts(forceSoftwareVideoDecoder, diagnosticSoftware, videoDecoderAttempts(
             requestedRate,
             softwareDecoderName(mime),
             requestedLowLatency,
             requestedMtkMode,
-        )) {
+        ))) {
             configured = tryConfigure(mime, csd, surface, attempt, atOnce)
             if (configured != null) { used = attempt; break }
         }
@@ -1237,6 +1265,11 @@ private class VideoDecoder(
         renderedFrameLogged = false
         submittedFrameLogged = false
         synchronized(outputLock) {
+            configured?.let { ready ->
+                val software = diagnosticSoftwareCandidates().firstOrNull { it.name == ready.codecName }?.softwareReported
+                    ?: isKnownPlatformSoftwareVideoDecoder(ready.codecName)
+                colorEvidence.configured(colorGeneration, ready.codecName, software)
+            }
             decoder = configured?.codec
             outputLock.notifyAll()
         }
@@ -1626,6 +1659,7 @@ private class VideoDecoder(
                 if (shown) {
                     stats.onRendered()
                     liveRendered.incrementAndGet()
+                    colorEvidence.rendered(colorGeneration)
                 }
                 if (shown && !renderedFrameLogged) {
                     renderedFrameLogged = true
@@ -1640,6 +1674,11 @@ private class VideoDecoder(
     }
 
     private fun logOutputFormat(format: MediaFormat) {
+        colorEvidence.format(colorGeneration,
+            listOf(MediaFormat.KEY_WIDTH, MediaFormat.KEY_HEIGHT, MediaFormat.KEY_COLOR_STANDARD,
+                MediaFormat.KEY_COLOR_RANGE, MediaFormat.KEY_COLOR_TRANSFER, MediaFormat.KEY_COLOR_FORMAT,
+                MediaFormat.KEY_STRIDE, MediaFormat.KEY_SLICE_HEIGHT, "crop-left", "crop-top", "crop-right", "crop-bottom")
+                .associateWith { format.intOrNull(it) }, format.toString())
         report("output format requested=${width}x${height} " +
             "coded=${format.intOrNull(MediaFormat.KEY_WIDTH)}x${format.intOrNull(MediaFormat.KEY_HEIGHT)} " +
             "crop=${format.intOrNull("crop-left")},${format.intOrNull("crop-top")}," +
@@ -1676,6 +1715,7 @@ private class VideoDecoder(
             decoder = null
             // The output thread returns from dequeueOutputBuffer within its timeout and then sees no codec.
             awaitNotDequeuing(codec)
+            colorEvidence.invalidate(colorGeneration)
         }
         configuredRate = 0
         configuredMtkMode = MtkDecoderMode.NONE

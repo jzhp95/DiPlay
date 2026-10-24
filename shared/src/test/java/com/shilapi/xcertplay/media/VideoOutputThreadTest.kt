@@ -62,6 +62,14 @@ class VideoOutputThreadTest {
         assertTrue("a decoded frame was rendered", rendered.await(5, TimeUnit.SECONDS))
         assertTrue(reports.toString(), reports.any { it.startsWith("decoder=") && it.endsWith(" outputThread=true") })
 
+        val evidence = checkNotNull(sink.videoColorEvidence())
+        val color = checkNotNull(evidence.output)
+        assertEquals(evidence.sourceHash, color.configurationHash)
+        assertTrue(color.active)
+        assertTrue(color.firstFrameRendered)
+        assertTrue(color.generation > 0)
+        assertTrue(color.instance.isNotEmpty())
+        assertTrue("output format must survive the first-frame/configure race", color.format.isNotEmpty())
         val decoder = mainDecoder(sink)
         val output = checkNotNull(decoder.field<Thread?>("outputThread")) { "no output thread" }
         assertTrue(output.isAlive)

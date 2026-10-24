@@ -25,12 +25,22 @@ internal class ColorTestPlayer(context: Context) {
     private val stateLock = Any()
     private data class Request(val token: Int, val surface: Surface)
     private var pending: Request? = null
+    private var attachedRequest: Request? = null
+    private var retainedRequest: Request? = null
     @Volatile private var closed = false
     @Volatile private var attachedSink: AndroidMediaSink? = null
     @Volatile private var attachedSurface: Surface? = null
 
+    @Volatile private var retainedEvidence: com.shilapi.xcertplay.media.VideoSourceColorEvidence? = null
+    fun evidence(): com.shilapi.xcertplay.media.VideoSourceColorEvidence? = synchronized(stateLock) {
+        val request = pending ?: return@synchronized null
+        if (attachedRequest === request) attachedSink?.videoColorEvidence(110)
+            ?: retainedEvidence.takeIf { retainedRequest === request }
+        else retainedEvidence.takeIf { retainedRequest === request }
+    }
+
     fun stop(released: () -> Unit = {}) {
-        synchronized(stateLock) { pending = null; generation.incrementAndGet() }
+        synchronized(stateLock) { pending = null; retainedRequest = null; retainedEvidence = null; generation.incrementAndGet() }
         afterCleanup(released)
     }
     fun afterCleanup(released: () -> Unit) {
@@ -52,7 +62,7 @@ internal class ColorTestPlayer(context: Context) {
     fun start(case: ColorTestRun.Case, color: VideoColorOverride, surface: Surface, event: (String) -> Unit) {
         if (closed) return
         val request = synchronized(stateLock) {
-            Request(generation.incrementAndGet(), surface).also { pending = it }
+            Request(generation.incrementAndGet(), surface).also { pending = it; retainedEvidence = null; retainedRequest = it }
         }
         val token = request.token
         fun alive() = token == generation.get() && !closed
@@ -69,7 +79,7 @@ internal class ColorTestPlayer(context: Context) {
                     synchronized(stateLock) {
                         if (pending !== request || !surface.isValid) return@execute
                         sink = session.sink
-                        attachedSink = sink; attachedSurface = surface
+                        attachedSink = sink; attachedSurface = surface; attachedRequest = request
                         live = true
                         emit("同源 CarPlay 镜像 ${session.width}x${session.height}；镜像单独解码，不改变主屏")
                         sink!!.setMirrorSurface(110, MIRROR, surface, color, ::emit)
@@ -86,6 +96,12 @@ internal class ColorTestPlayer(context: Context) {
                         Thread.sleep(100)
                     }
                 } else {
+                    val fixtureCodec = if (case.asset.startsWith("h264")) VideoCodec.H264 else VideoCodec.H265
+                    val fixtureCsd = app.assets.open("color-test/${case.asset}.csd").use { it.readBytes() }
+                    synchronized(stateLock) { if (pending === request) retainedEvidence =
+                        com.shilapi.xcertplay.media.VideoSourceColorEvidence(fixtureCodec.name, fixtureCsd,
+                            com.shilapi.xcertplay.media.VideoColorMetadata.parse(fixtureCodec, fixtureCsd), null,
+                            com.shilapi.xcertplay.media.videoConfigurationHash(fixtureCsd)) }
                     val reader = MediaExtractor().also { extractor = it }
                     app.assets.openFd("color-test/${case.asset}.mp4").use {
                         reader.setDataSource(it.fileDescriptor, it.startOffset, it.length)
@@ -98,8 +114,8 @@ internal class ColorTestPlayer(context: Context) {
                     sink = AndroidMediaSink(surface = surface,
                         videoWidth = format.getInteger(MediaFormat.KEY_WIDTH),
                         videoHeight = format.getInteger(MediaFormat.KEY_HEIGHT),
-                        videoColorOverride = color)
-                    attachedSink = sink; attachedSurface = surface
+                        videoColorOverride = color, forceSoftwareVideoDecoder = case.forceSoftware)
+                    attachedSink = sink; attachedSurface = surface; attachedRequest = request
                     sink!!.setVideoDiagnosticHandler(110, ::emit)
                     emit("测试片输入 $format；请求 range=${color.range ?: "auto"} standard=${color.standard ?: "auto"}")
                     sink!!.onVideoCodec(110, if (hevc) VideoCodec.H265 else VideoCodec.H264)
@@ -128,6 +144,9 @@ internal class ColorTestPlayer(context: Context) {
                 emit("错误：${error.javaClass.simpleName}: ${error.message}")
             } finally {
                 runCatching { extractor?.release() }
+                synchronized(stateLock) {
+                    if (pending === request) sink?.videoColorEvidence()?.let { retainedEvidence = it; retainedRequest = request }
+                }
                 sink?.let { output ->
                     if (live) {
                         if (!output.detachMirrorAndAwait(110, MIRROR, 5_000)) {
@@ -144,7 +163,7 @@ internal class ColorTestPlayer(context: Context) {
                         }
                     }
                 }
-                synchronized(stateLock) { attachedSink = null; attachedSurface = null }
+                synchronized(stateLock) { attachedSink = null; attachedSurface = null; attachedRequest = null }
             }
         }
     }

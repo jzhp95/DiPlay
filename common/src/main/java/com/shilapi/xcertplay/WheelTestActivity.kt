@@ -7,6 +7,7 @@ import android.content.res.Configuration
 import android.os.Handler
 import android.os.Looper
 import android.content.Context
+import android.content.Intent
 import android.media.AudioManager
 import android.os.Bundle
 import android.view.KeyEvent
@@ -53,8 +54,16 @@ class WheelTestActivity : Activity(), AppAppearanceOwner {
         mfiController = MfiTestController(this, ::showMfiState)
         selectedPage = savedInstanceState?.getString("diagnostics_page")?.let { name ->
             DiagnosticsTestLayout.Page.entries.firstOrNull { it.name == name }
+        } ?: intent.getStringExtra("diagnostics_page")?.let { name ->
+            DiagnosticsTestLayout.Page.entries.firstOrNull { it.name == name }
         } ?: DiagnosticsTestLayout.Page.WHEEL
         renderAppearance()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (intent.getStringExtra("diagnostics_page") == "COLOR") selectPage(DiagnosticsTestLayout.Page.COLOR)
     }
 
     private fun renderAppearance() {
