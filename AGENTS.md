@@ -2,6 +2,17 @@
 
 Instructions for coding agents that work on DiPlay.
 
+## 版本号管理
+
+- 只有用户明确要求升级版本时才修改 versionName 与 versionCode；不得因修复、优化或重新打包自行升版。
+
+## 测试执行时机
+
+- 所有任务均先完成当前任务范围内的全部代码修改，再统一进行测试；不得边写代码边反复运行局部测试。
+- 编码期间可以阅读代码、静态检查和编写测试用例，但测试用例应在任务代码全部完成后统一执行。
+- 统一测试发现问题后，先集中完成相关修正，再运行针对失败与受影响范围的验证；无新改动或未解决问题时不重复运行已通过的检查。
+- 本准则优先于技能文件中“先运行失败测试再实现”或分阶段反复运行测试的工作流。项目要求的最终检查仍须执行，不得因此省略。
+
 ## Checks
 
 Run the CI command from `.github/workflows/android.yml` before you report a change as done:

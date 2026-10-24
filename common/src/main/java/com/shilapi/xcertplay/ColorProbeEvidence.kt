@@ -23,12 +23,16 @@ internal object ColorProbeEvidence {
         if (!output?.format.isNullOrEmpty()) listOf("color-range", "color-standard", "color-transfer").forEach {
             if (output?.format?.get(it) == null) missing.add("output_$it")
         }
-        val expected = mapOf("color-range" to input?.fullRange?.let { if (it) 1 else 2 },
-            "color-standard" to when(input?.matrix) { 1 -> 1; 5 -> 2; 6 -> 4; 9, 10 -> 6; else -> null },
-            "color-transfer" to when(input?.transfer) { 1, 6, 14, 15 -> 3; 13 -> 2; 8 -> 1; 16 -> 6; 18 -> 7; else -> null })
+        val expected = input?.let(VideoColorMetadata::androidHints).orEmpty()
         return JSONObject().apply {
             put("schema", 2); put("source_kind", sourceKind); put("rendered", currentRendered)
-            put("requested", requested); put("captures", JSONArray(files)); put("missing", JSONArray(missing))
+            put("requested", requested)
+            put("sps_color_hints", JSONObject(expected))
+            put("requested_color_format", JSONObject().apply {
+                if (requested.optBoolean("fromSps")) expected.forEach { (key, value) -> put(key, value) }
+                if (!requested.isNull("range") && requested.has("range")) put("color-range", requested.getInt("range"))
+                if (!requested.isNull("standard") && requested.has("standard")) put("color-standard", requested.getInt("standard"))
+            }); put("captures", JSONArray(files)); put("missing", JSONArray(missing))
             put("codec", source?.codec ?: JSONObject.NULL)
             put("configuration_sha256", source?.sourceHash ?: JSONObject.NULL)
             put("input_csd_size", source?.csd?.size ?: 0)

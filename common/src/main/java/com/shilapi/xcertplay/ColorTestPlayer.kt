@@ -117,7 +117,7 @@ internal class ColorTestPlayer(context: Context) {
                         videoColorOverride = color, forceSoftwareVideoDecoder = case.forceSoftware)
                     attachedSink = sink; attachedSurface = surface; attachedRequest = request
                     sink!!.setVideoDiagnosticHandler(110, ::emit)
-                    emit("测试片输入 $format；请求 range=${color.range ?: "auto"} standard=${color.standard ?: "auto"}")
+                    emit("测试片输入 $format；请求 range=${color.range ?: "auto"} standard=${color.standard ?: "auto"} fromSps=${color.fromSps}")
                     sink!!.onVideoCodec(110, if (hevc) VideoCodec.H265 else VideoCodec.H264)
                     sink!!.onVideoConfig(110, app.assets.open("color-test/${case.asset}.csd").use { it.readBytes() })
                     }

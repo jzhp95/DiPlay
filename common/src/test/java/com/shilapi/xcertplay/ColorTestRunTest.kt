@@ -7,9 +7,9 @@ class ColorTestRunTest {
     @Test fun planCoversBothPathsBothCodecsAndBothEncodedRanges() {
         val cases = ColorTestRun.cases
         val local = cases.filter { it.asset != null }
-        assertEquals(16, local.size)
-        assertEquals(16, local.map { Triple(it.asset, it.surface, it.forceSoftware) }.distinct().size)
-        assertEquals(10, cases.count { it.mainProfile != null })
+        assertEquals(24, local.size)
+        assertEquals(24, local.map { listOf(it.asset, it.surface, it.forceSoftware, it.color.fromSps) }.distinct().size)
+        assertEquals(12, cases.count { it.mainProfile != null })
     }
     @Test fun unrenderedAndFailedCasesCannotBeReportedAsNormal() {
         val run = ColorTestRun()
@@ -49,4 +49,17 @@ class ColorTestRunTest {
         assertTrue(run.report().contains("range=1"))
     }
 
+
+    @Test fun spsComparisonsAppendWithoutChangingExistingCaseIndices() {
+        val cases = ColorTestRun.cases
+        assertEquals(36, cases.size)
+        assertEquals("current", cases[16].mainProfile)
+        assertEquals("software-direct", cases[25].mainProfile)
+        assertTrue(cases.take(26).none { it.color.fromSps })
+        val sps = cases.filter { it.color.fromSps }
+        assertEquals(10, sps.size)
+        assertEquals(8, sps.count { it.asset != null })
+        assertEquals(setOf("sps-texture", "sps-direct"), sps.mapNotNull { it.mainProfile }.toSet())
+        assertTrue(sps.all { it.color.range == null && it.color.standard == null })
+    }
 }

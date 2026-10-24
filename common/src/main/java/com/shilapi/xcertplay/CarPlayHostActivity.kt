@@ -4740,6 +4740,7 @@ class CarPlayHostActivity : ComponentActivity() {
             preferSoftwareHevcDecoder = hevcSoftwareDecoderEnabled,
             forceSoftwareVideoDecoder = colorMainProbe?.profile?.software == true,
             videoColorOverride = colorMainProbe?.color ?: com.shilapi.xcertplay.media.VideoColorOverride(),
+            nativeHfpCalls = AirPlayPersistence.loadNativeHfpCalls(this),
             advancedAudioChannelMapping = advancedAudioChannelMapping,
             audioFocusEnabled = AirPlayPersistence.loadAudioFocusEnabled(this),
             audioFocusAutoYield = AirPlayPersistence.loadAudioFocusAutoYield(this),
@@ -5597,6 +5598,7 @@ class CarPlayHostActivity : ComponentActivity() {
         val request = colorMainProbe
         val config = org.json.JSONObject().apply {
             put("profile", request?.profile?.id ?: "missing")
+            put("fromSps", request?.color?.fromSps == true)
             put("smoothVideo", smoothVideo); put("directVideoOutput", directVideoOutput)
             put("softwareRequired", request?.profile?.software == true)
             put("range", request?.color?.range ?: org.json.JSONObject.NULL)

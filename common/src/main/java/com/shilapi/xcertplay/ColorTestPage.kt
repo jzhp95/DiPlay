@@ -264,10 +264,10 @@ internal class ColorTestPage(private val activity: Activity, private val palette
         if (run.current.mainProfile != null) {
             launchMainProbe(); update(); return
         }
-        log("CASE ${run.index + 1}: ${run.current.title}; range=$range standard=$standard savedPicture=$savedPicture")
+        log("CASE ${run.index + 1}: ${run.current.title}; range=$range standard=$standard fromSps=${run.current.color.fromSps} savedPicture=$savedPicture")
         fun begin(surface: Surface) {
             if (token != epoch || !active) return
-            player.start(run.current, VideoColorOverride(range, standard), surface) { message ->
+            player.start(run.current, VideoColorOverride(range, standard, fromSps = run.current.color.fromSps), surface) { message ->
                 if (token != epoch || !active) return@start
                 log(message)
                 if (message.contains("first frame rendered")) run.rendered = true
@@ -346,6 +346,7 @@ internal class ColorTestPage(private val activity: Activity, private val palette
                 put("asset", run.current.asset); put("range", range ?: JSONObject.NULL)
                 put("standard", standard ?: JSONObject.NULL); put("savedPicture", savedPicture)
                 put("softwareRequired", run.current.forceSoftware)
+                put("fromSps", run.current.color.fromSps)
                 put("actualView", if (run.current.surface) "SurfaceView" else "TextureView")
             }
             val afterCapture = player.evidence()
@@ -359,7 +360,7 @@ internal class ColorTestPage(private val activity: Activity, private val palette
                 evidence.getJSONArray("missing").put("capture_context_changed")
             }
             if (run.record(verdict, range, standard, savedPicture, captureName, evidence.toString())) {
-                log("OBSERVATION ${run.index + 1}: $verdict; range=$range standard=$standard savedPicture=$savedPicture")
+                log("OBSERVATION ${run.index + 1}: $verdict; range=$range standard=$standard fromSps=${run.current.color.fromSps} savedPicture=$savedPicture")
                 persist()
                 val retained = observationCaptures().toSet()
                 captureDirectory().listFiles()?.filter { it.name.startsWith("observation-") && it.name !in retained }?.forEach { it.delete() }

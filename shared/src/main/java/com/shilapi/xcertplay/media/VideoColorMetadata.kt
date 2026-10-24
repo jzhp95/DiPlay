@@ -8,6 +8,23 @@ object VideoColorMetadata {
     data class Description(val status: Status, val fullRange: Boolean? = null,
         val primaries: Int? = null, val transfer: Int? = null, val matrix: Int? = null,
         val detail: String = "")
+    /** Conservative ISO VUI to Android hints. Unknown declarations are never replaced with defaults. */
+    fun androidHints(description: Description): Map<String, Int> = buildMap {
+        if (description.status != Status.PARSED) return@buildMap
+        description.fullRange?.let { put("color-range", if (it) 1 else 2) }
+        // Android color-standard encodes primaries AND matrix (AOSP ColorUtils.sStandards).
+        // Other combinations, including BT.2020 constant luminance, remain in the SPS only.
+        when (description.primaries to description.matrix) {
+            1 to 1 -> 1
+            5 to 5, 5 to 6 -> 2
+            6 to 5, 6 to 6 -> 4
+            9 to 9 -> 6
+            else -> null
+        }?.let { put("color-standard", it) }
+        when (description.transfer) { 1, 6, 14, 15 -> 3; 13 -> 2; 8 -> 1; 16 -> 6; 18 -> 7; else -> null }
+            ?.let { put("color-transfer", it) }
+    }
+
     fun parse(codec: VideoCodec, csd: ByteArray): Description = try {
         require(csd.size in 7..262144) { "configuration size" }
         if (codec == VideoCodec.H264) {

@@ -27,4 +27,19 @@ class ColorProbeEvidenceTest {
         assertFalse(ColorProbeEvidence.complete(report))
         assertTrue("API28 unrecognized codec names are unknown, not proof of hardware", report.isNull("selected_decoder_software"))
     }
+
+    @Test fun spsRequestIsReportedSeparatelyFromWhatTheDecoderActuallyOutputs() {
+        val bytes = RuntimeEnvironment.getApplication().assets.open("color-test/h264_full.csd").use { it.readBytes() }
+        val hash = videoConfigurationHash(bytes)
+        val output = VideoDecoderColorEvidence(hash, "codec", false, mapOf("color-range" to 2,
+            "color-standard" to 1, "color-transfer" to 3), generation = 1, active = true, firstFrameRendered = true)
+        val source = VideoSourceColorEvidence("H264", bytes, VideoColorMetadata.parse(VideoCodec.H264, bytes), output, hash)
+        val report = ColorProbeEvidence.capture(source, true, false, listOf("observation.png"), "test",
+            JSONObject().put("fromSps", true))
+        assertEquals(1, report.getJSONObject("requested_color_format").getInt("color-range"))
+        assertEquals(2, report.getJSONObject("output_format").getInt("color-range"))
+        assertFalse(report.getJSONObject("comparison").getJSONObject("color-range").getBoolean("matches"))
+        val normal = ColorProbeEvidence.capture(source, true, false, listOf("observation.png"), "test", JSONObject())
+        assertEquals(0, normal.getJSONObject("requested_color_format").length())
+    }
 }

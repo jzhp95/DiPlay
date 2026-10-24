@@ -42,8 +42,11 @@ internal class ColorTestRun {
             hardwareCases.forEach { add(it.copy(title = "软件解码 · ${it.title}", forceSoftware = true)) }
             ColorMainProbeRegistry.profiles.forEach { profile ->
                 add(Case(profile.title, null, profile.direct == true || profile.smooth == true,
-                    VideoColorOverride(profile.range), profile.software, profile.id))
+                    VideoColorOverride(profile.range, fromSps = profile.fromSps), profile.software, profile.id))
             }
+            // Append after the existing cases so persisted observations retain their original identity.
+            hardwareCases.forEach { add(it.copy(title = "SPS 颜色信息 · ${it.title}",
+                color = VideoColorOverride(fromSps = true))) }
         }
     }
 }

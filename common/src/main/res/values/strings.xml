@@ -878,4 +878,6 @@
     <string name="home_wireless_connection">无线连接</string>
     <string name="home_wired_connection">有线连接</string>
     <string name="home_hotspot">热点</string>
+    <string name="settings_native_hfp_calls">保留原车蓝牙电话（实验性）</string>
+    <string name="settings_native_hfp_calls_description">默认开启。保留原车电话和接听键，原车响铃时避免重复 CarPlay 铃声。请保持原车蓝牙连接；音乐、导航和通话回退仍可使用 CarPlay。实际通话路由由车机和 iPhone 决定。下次连接 CarPlay 时生效。</string>
 </resources>

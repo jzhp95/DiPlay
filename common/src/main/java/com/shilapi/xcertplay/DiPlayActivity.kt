@@ -1588,6 +1588,11 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                 AirPlayPersistence.saveLowLatencyDecoder(this, it)
                 markReconnectNeeded()
             }
+            toggle(card, getString(R.string.settings_native_hfp_calls), getString(R.string.settings_native_hfp_calls_description),
+                AirPlayPersistence.loadNativeHfpCalls(this)) {
+                AirPlayPersistence.saveNativeHfpCalls(this, it)
+                markReconnectNeeded()
+            }
             toggle(card, getString(R.string.call_echo_cancellation), getString(R.string.call_echo_cancellation_description),
                 AirPlayPersistence.loadCallEchoCancellation(this)) {
                 AirPlayPersistence.saveCallEchoCancellation(this, it)
@@ -3412,7 +3417,9 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
 
     private fun section(parent: LinearLayout, title: String, icon: Int? = null, build: (LinearLayout) -> Unit) {
         searchIndexSink?.add(title)
-        val openGroup = page == "settings" && settingsCategory != SettingsCategory.OVERVIEW
+        // About contains plain text, so it needs the section card rather than row-owned backgrounds.
+        val openGroup = page == "settings" && settingsCategory != SettingsCategory.OVERVIEW &&
+            settingsCategory != SettingsCategory.ABOUT
         val card = if (openGroup) column() else card()
         val heading = row().apply { gravity = Gravity.CENTER_VERTICAL; setPadding(0, 0, 0, dp(CONTROL_GAP_DP)) }
         if (icon != null && !openGroup) heading.addView(ImageView(this).apply {

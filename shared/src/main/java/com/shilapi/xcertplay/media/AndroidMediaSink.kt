@@ -219,9 +219,11 @@ class AndroidMediaSink(
     private val mtkDecoderTuningEnabled: Boolean = false,
     private val videoColorOverride: VideoColorOverride = VideoColorOverride(),
     private val forceSoftwareVideoDecoder: Boolean = false,
+    private val nativeHfpCalls: Boolean = false,
 ) : MediaSink {
     // Each downlink publishes its own reference; a mic must match that stream and sample rate.
     private val callEchoReferences = ConcurrentHashMap<AudioStreamId, EchoReference>()
+    private val nativeHfpRing = NativeHfpRingPolicy(nativeHfpCalls)
     private val appContext = context?.applicationContext
     private val audioManager = appContext?.getSystemService(AudioManager::class.java)
     private val audioFocusCoordinator = AudioFocusCoordinator(
@@ -557,20 +559,36 @@ class AndroidMediaSink(
     }
 
     override fun onAudioStarted(id: AudioStreamId, format: AudioFormat, firstSample: Int) {
+        if (suppressNativeHfpRing(id)) return
         audioRenderer(id, format).start()
         if (format.audioType == "media") updateMediaAudio(id, true)
     }
 
     override fun onAudioRtp(id: AudioStreamId, format: AudioFormat, rtp: ByteArray, sample: Int) {
+        if (suppressNativeHfpRing(id)) return
         audioRenderer(id, format).submit(rtp, sample)
     }
 
     override fun onAudioStopped(id: AudioStreamId) {
+        nativeHfpRing.stop(id)
         synchronized(this) {
             audioRenderers.remove(id)?.close()
             callEchoReferences.remove(id)
         }
         updateMediaAudio(id, false)
+    }
+
+    private fun suppressNativeHfpRing(id: AudioStreamId): Boolean {
+        if (!nativeHfpCalls || id.type != 100 || !id.audioType.equals("alert", ignoreCase = true)) return false
+        val alreadySuppressed = nativeHfpRing.contains(id)
+        val ringing = !alreadySuppressed &&
+            runCatching { audioManager?.mode == AudioManager.MODE_RINGTONE }.getOrDefault(false)
+        if (!nativeHfpRing.suppress(id, ringing)) return false
+        synchronized(this) { audioRenderers.remove(id)?.close() }
+        if (!alreadySuppressed) runCatching {
+            onAudioDiagnostic("Audio: 原车 HFP 电话策略：系统正在响铃，抑制重复 CarPlay 铃声；通话音频保留回退")
+        }
+        return true
     }
 
     private fun updateMediaAudio(id: AudioStreamId, active: Boolean) {
@@ -670,6 +688,7 @@ class AndroidMediaSink(
     }
 
     fun close() {
+        nativeHfpRing.clear()
         synchronized(videoOwnershipLock) {
             videoClosed = true
             videoDecoders.entries.toList().forEach { (type, decoder) -> retire(type, decoder) }
@@ -967,6 +986,7 @@ private class VideoDecoder(
     private var outputSurface: Surface? = surface
     private var parking: ParkingOutput? = null
     private var lastConfig: VideoJob.Config? = null
+    private var sourceColor: VideoColorMetadata.Description? = null
     @Volatile private var renderedFrameLogged = false
     // The operating rate still asked for, dropped for this stream once a decoder refuses it; and the rate
     // the current codec was configured with.
@@ -1219,6 +1239,12 @@ private class VideoDecoder(
         val surface = outputSurface ?: return
         val codec = config.codec
         val codecData = config.codecData
+        sourceColor = if (colorOverride.fromSps) VideoColorMetadata.parse(codec, codecData) else null
+        if (colorOverride.fromSps) {
+            val description = sourceColor
+            report("SPS color request status=${description?.status} hints=${description?.let(VideoColorMetadata::androidHints)} " +
+                "manualRange=${colorOverride.range} manualStandard=${colorOverride.standard}")
+        }
         val mime = if (codec == VideoCodec.H265) MediaFormat.MIMETYPE_VIDEO_HEVC
         else MediaFormat.MIMETYPE_VIDEO_AVC
         val csd = if (codec == VideoCodec.H265) {
@@ -1331,7 +1357,7 @@ private class VideoDecoder(
         mtkMode: MtkDecoderMode,
     ): MediaFormat =
         MediaFormat.createVideoFormat(mime, width, height).apply {
-            colorOverride.applyTo(this)
+            colorOverride.applyTo(this, sourceColor)
             if (attempt.tuned) {
                 setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, MAX_INPUT_SIZE)
                 setInteger(MediaFormat.KEY_PRIORITY, 0)
