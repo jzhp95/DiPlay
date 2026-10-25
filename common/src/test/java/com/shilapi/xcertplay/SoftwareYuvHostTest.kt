@@ -55,6 +55,21 @@ class SoftwareYuvHostTest {
         }
     }
 
+    @Test fun explicitYuvTrialsOverrideOnlyTheTemporarySinkAndKeepDailyPreferences() = withHost { activity ->
+        AirPlayPersistence.saveSoftwareYuvEnabled(activity, false)
+        val index = ColorTestRun.cases.indexOfFirst { it.mainProfile == "yuv-limited601" }
+        val request = ColorMainProbeRegistry.begin(index, VideoColorOverride())
+        try {
+            ReflectionHelpers.setField(activity, "colorMainProbe", request)
+            build(activity)
+            withSink(activity) { assertEquals(SoftwareYuvConfig(2, 2), it.mainScreenSoftwareYuv) }
+            assertFalse(AirPlayPersistence.loadSoftwareYuvEnabled(activity))
+        } finally {
+            field<ColorMainProbeOverlay?>(activity, "colorMainOverlay")?.close()
+            ColorMainProbeRegistry.finish(request.token); ColorMainProbeRegistry.teardownFinished(request.token)
+        }
+    }
+
     @Test fun changingBetweenTwoSoftwareModesWaitsForReconnectEvenAfterReopeningTheHost() = withHost { activity ->
         val controller = mock(CarPlayController::class.java)
         `when`(controller.nowPlayingSnapshot()).thenReturn(CarPlayNowPlaying())

@@ -34,4 +34,13 @@
     <string name="video_adapt_not_ready">等待真实 CarPlay 主屏显示，准备好后再开始。</string>
     <string name="video_adapt_interrupted">本组已中断或输出发生变化，结果已标记；请重新采样。</string>
     <string name="video_adapt_phase_saved">本段已保存，可继续另一段，或结束返回测试页。</string>
+    <string name="video_auto_start">一键自动测试视频与颜色</string>
+    <string name="video_auto_stop">停止整套自动测试</string>
+    <string name="video_auto_description">自动读取设备信息、运行全部标准片段和主屏输出路径、采样截图并保存整包到 Download/Apple CarPlay。会多次重连 CarPlay，请保持 iPhone 已连接并在停车时运行。颜色观感需人工分析，程序不会判定面板颜色正常。</string>
+    <string name="video_auto_main_progress">自动测试 %1$d/%2$d：%3$s</string>
+    <string name="video_auto_storage_needed">需要允许存储权限，才能将整包报告保存到 Download。允许后只需点一次运行。</string>
+    <string name="video_auto_running">自动测试正在运行，请等待；可随时停止。</string>
+    <string name="video_auto_private_saved">公共下载目录不可写，报告已保留在应用目录：%1$s。请用分享入口取出，或允许存储后重新保存。</string>
+    <string name="video_auto_saved">自动报告已保存：%1$s</string>
+    <string name="video_auto_storage_denied">未允许公共存储，将继续测试并保留应用副本；允许存储后可重新保存到 Download，也可使用分享。</string>
 </resources>

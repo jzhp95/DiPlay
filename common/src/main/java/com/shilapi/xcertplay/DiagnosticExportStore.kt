@@ -55,6 +55,50 @@ internal object DiagnosticExportStore {
         return saveInDirectory(context, File(context.filesDir, "diagnostic-reports"), fileName, report, savedInApp = true)
     }
 
+    /** Keep the private source as a shareable fallback; public files are never pruned. */
+    fun saveFileWithoutPicker(context: Context, source: File, mime: String): SavedReport {
+        require(source.isFile && source.length() > 0) { "Report file is empty" }
+        val fallback = { FileProvider.getUriForFile(context, "${context.packageName}.diagnostic-reports", source) }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            var created: Uri? = null
+            try {
+                val resolver = context.contentResolver
+                val values = ContentValues().apply {
+                    put(MediaStore.Downloads.DISPLAY_NAME, source.name)
+                    put(MediaStore.Downloads.MIME_TYPE, mime)
+                    put(MediaStore.Downloads.RELATIVE_PATH, "${Environment.DIRECTORY_DOWNLOADS}/Apple CarPlay")
+                    put(MediaStore.Downloads.IS_PENDING, 1)
+                }
+                val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                    ?: throw IOException("Downloads could not create the archive")
+                created = uri
+                val stream = resolver.openOutputStream(uri, "w") ?: throw IOException("Downloads is not writable")
+                stream.use { out -> source.inputStream().use { it.copyTo(out) } }
+                check(resolver.update(uri, ContentValues().apply { put(MediaStore.Downloads.IS_PENDING, 0) }, null, null) == 1)
+                return SavedReport(uri, savedPath = "Download/Apple CarPlay/${source.name}")
+            } catch (error: Exception) {
+                created?.let { runCatching { context.contentResolver.delete(it, null, null) } }
+            }
+        }
+        if (canWritePublicDownloads(context)) {
+            var target: File? = null
+            try {
+                val directory = publicDownloadsDirectory()
+                check(directory.isDirectory || directory.mkdirs())
+                val destination = File(directory, source.name)
+                val published = if (destination.exists()) File.createTempFile("video-report-", ".zip", directory) else destination
+                target = published
+                source.inputStream().use { input -> published.outputStream().use { input.copyTo(it) } }
+                check(published.length() == source.length()) { "Archive copy incomplete" }
+                runCatching { MediaScannerConnection.scanFile(context.applicationContext, arrayOf(published.absolutePath), arrayOf(mime), null) }
+                val uri = runCatching { FileProvider.getUriForFile(context, "${context.packageName}.diagnostic-reports", published) }
+                    .getOrElse { fallback() }
+                return SavedReport(uri, savedPath = published.absolutePath)
+            } catch (error: Exception) { target?.delete() }
+        }
+        return SavedReport(fallback(), savedInApp = true, savedPath = source.absolutePath)
+    }
+
     private fun saveInDirectory(
         context: Context,
         directory: File,

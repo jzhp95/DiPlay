@@ -33,7 +33,8 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
 /** All color experiments are local to this page. Opening it never starts decoding or changes settings. */
-internal class ColorTestPage(private val activity: Activity, private val palette: DiPlayPalette) {
+internal class ColorTestPage(private val activity: Activity, private val palette: DiPlayPalette,
+    private val requestAutomatic: () -> Unit = {}) {
     val run = ColorTestRun()
     private val prefs = activity.getSharedPreferences(ColorMainProbeRegistry.PREFS, Activity.MODE_PRIVATE)
     private val player = ColorTestPlayer(activity)
@@ -42,6 +43,21 @@ internal class ColorTestPage(private val activity: Activity, private val palette
     private val exportWorker = Executors.newSingleThreadExecutor()
     private val lines = prefs.getString("log", "")!!.lines().filter { it.isNotBlank() }.toMutableList()
     private val caseLines = mutableListOf<String>()
+    private var autoCaseId: String? = null
+    private var autoCapture: Runnable? = null
+    private var autoDeadline: Runnable? = null
+    private var automaticExportId: String? = null
+    private val controls = mutableListOf<Button>()
+    private lateinit var automaticButton: Button
+    private lateinit var deviceDetails: TextView
+    private val autoPoll = object : Runnable {
+        override fun run() {
+            if (!visible || disposed) return
+            consumeMainResult()
+            resumeAutomatic()
+            if (AutomaticVideoSuite.active(activity) || AutomaticVideoSuite.read(activity).optBoolean("cleanupPending")) handler.postDelayed(this, 500)
+        }
+    }
     private var active = false
     private var visible = false
     private var disposed = false
@@ -92,10 +108,16 @@ internal class ColorTestPage(private val activity: Activity, private val palette
         fun action(id: Int, primary: Boolean = false, callback: () -> Unit) = Button(activity).apply {
             setText(id); FlymeAutoStyle.button(this, palette, primary)
             setOnClickListener { callback() }
+            controls.add(this)
             content.addView(this, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = padding })
         }
         label(R.string.color_test_title, FlymeAutoStyle.TextRole.PAGE_TITLE)
         label(R.string.color_test_description, FlymeAutoStyle.TextRole.SECONDARY)
+        label(R.string.video_auto_description, FlymeAutoStyle.TextRole.SECONDARY)
+        automaticButton = action(R.string.video_auto_start, true) {
+            if (AutomaticVideoSuite.active(activity)) stopAutomatic("user_cancelled") else requestAutomatic()
+        }
+        deviceDetails = label(R.string.video_adapt_idle, FlymeAutoStyle.TextRole.SECONDARY).apply { setTextIsSelectable(true) }
         progress = label(R.string.color_test_ready)
         coverage = label(R.string.color_evidence_pending, FlymeAutoStyle.TextRole.SECONDARY)
         start = action(R.string.color_test_start, true) {
@@ -168,7 +190,16 @@ internal class ColorTestPage(private val activity: Activity, private val palette
 
     fun setVisible(value: Boolean) {
         visible = value
-        if (!value) { handler.removeCallbacks(pendingProbePoll); stop() } else consumeMainResult()
+        handler.removeCallbacks(autoPoll)
+        if (!value) {
+            handler.removeCallbacks(pendingProbePoll)
+            if (AutomaticVideoSuite.active(activity) && prefs.getString("pending_token", null) == null)
+                stopAutomatic("test_page_backgrounded")
+            stop()
+        } else {
+            consumeMainResult(); resumeAutomatic()
+            if (AutomaticVideoSuite.active(activity) || AutomaticVideoSuite.read(activity).optBoolean("cleanupPending")) handler.postDelayed(autoPoll, 500)
+        }
     }
     private fun consumeMainResult() {
         val token = prefs.getString("pending_token", null) ?: return
@@ -211,6 +242,12 @@ internal class ColorTestPage(private val activity: Activity, private val palette
         }
         persist()
         prefs.edit().remove("pending_token").remove("pending_result").remove("pending_index").apply()
+        if (evidence.optString("auto_run_id").isNotEmpty()) {
+            if (evidence.optBoolean("teardown_interrupted") || !data.optBoolean("teardown_confirmed")) {
+                stopAutomatic("main_connection_teardown_unconfirmed")
+            } else automaticRecorded(index, evidence, if (accepted) verdict else "无法显示")
+            return
+        }
         if (accepted && data.optBoolean("continue") && !evidence.optBoolean("capture_context_changed") && index < ColorTestRun.cases.lastIndex) {
             run.select(index + 1); range = run.current.color.range; standard = null; savedPicture = false
             persist(); active = true
@@ -224,7 +261,7 @@ internal class ColorTestPage(private val activity: Activity, private val palette
         if (prefs.getString("pending_token", null) != null) {
             status.setText(R.string.color_main_closing); return
         }
-        val request = ColorMainProbeRegistry.begin(run.index, run.current.color)
+        val request = ColorMainProbeRegistry.begin(run.index, run.current.color, autoCaseId)
         prefs.edit().putString("pending_token", request.token).putInt("pending_index", run.index)
             .remove("pending_result").apply()
         // Finish an existing host before starting a temporary host; never race singleTask recreation with its old shutdown.
@@ -242,19 +279,29 @@ internal class ColorTestPage(private val activity: Activity, private val palette
         }
     }
     fun stop() {
+        autoCapture?.let(handler::removeCallbacks); autoCapture = null
+        autoDeadline?.let(handler::removeCallbacks); autoDeadline = null
         epoch++; active = false; capturing = false; run.rendered = false
         player.stop(); preview.removeAllViews(); texture = null; surfaceView = null
         wrapper?.let { old -> player.stop { old.release() } }; wrapper = null
         if (::status.isInitialized) status.setText(R.string.color_test_stopped)
         update()
     }
-    fun close() {
+    fun close(keepAutomation: Boolean = false) {
         if (disposed) return
-        stop(); disposed = true; player.close(); exportWorker.shutdown()
+        if (AutomaticVideoSuite.active(activity) && prefs.getString("pending_token", null) == null) {
+            if (!keepAutomation) stopAutomatic("test_page_destroyed")
+            else releaseAutomaticPlayer(AutomaticVideoSuite.read(activity).optString("id")) {}
+        }
+        stop(); disposed = true; handler.removeCallbacksAndMessages(null); player.close(); exportWorker.shutdown()
     }
     private fun playCurrent() {
         if (!active || !visible || disposed) return
+        autoCapture?.let(handler::removeCallbacks); autoCapture = null
+        autoDeadline?.let(handler::removeCallbacks); autoDeadline = null
         val token = ++epoch
+        val suite = AutomaticVideoSuite.read(activity)
+        autoCaseId = suite.optString("id").takeIf { AutomaticVideoSuite.active(activity) && suite.optInt("index", -1) == run.index }
         caseLines.clear()
         run.rendered = false; capturing = false
         player.stop()
@@ -264,13 +311,30 @@ internal class ColorTestPage(private val activity: Activity, private val palette
         if (run.current.mainProfile != null) {
             launchMainProbe(); update(); return
         }
+        if (autoCaseId != null) {
+            autoDeadline = Runnable {
+                if (token == epoch && active && AutomaticVideoSuite.active(activity)) {
+                    capturing = false; epoch++
+                    log("automatic case deadline: output/capture did not finish within 15s")
+                    record("无法显示")
+                }
+            }.also { handler.postDelayed(it, 15_000) }
+        }
         log("CASE ${run.index + 1}: ${run.current.title}; range=$range standard=$standard fromSps=${run.current.color.fromSps} savedPicture=$savedPicture")
         fun begin(surface: Surface) {
             if (token != epoch || !active) return
             player.start(run.current, VideoColorOverride(range, standard, fromSps = run.current.color.fromSps), surface) { message ->
                 if (token != epoch || !active) return@start
                 log(message)
-                if (message.contains("first frame rendered")) run.rendered = true
+                if (message.contains("first frame rendered")) {
+                    run.rendered = true
+                    if (autoCaseId != null && autoCapture == null) {
+                        autoCapture = Runnable {
+                            if (token == epoch && active && !capturing)
+                                record(if (run.rendered) "自动采集（未人工判色）" else "无法显示")
+                        }.also { handler.postDelayed(it, 3_000) }
+                    }
+                }
                 if (message.startsWith("错误：") || message.contains("configuration failed")) run.rendered = false
                 when {
                     message.contains("first frame rendered") -> status.setText(R.string.color_test_rendered)
@@ -359,11 +423,17 @@ internal class ColorTestPage(private val activity: Activity, private val palette
                     beforeCapture?.output?.firstFrameRendered == true, run.current.forceSoftware, emptyList(), "before_capture", requested))
                 evidence.getJSONArray("missing").put("capture_context_changed")
             }
+            autoCaseId?.let { evidence.put("auto_run_id", it).put("automatic", true)
+                .put("visual_verdict", "not_automatically_measured") }
             if (run.record(verdict, range, standard, savedPicture, captureName, evidence.toString())) {
                 log("OBSERVATION ${run.index + 1}: $verdict; range=$range standard=$standard fromSps=${run.current.color.fromSps} savedPicture=$savedPicture")
                 persist()
                 val retained = observationCaptures().toSet()
                 captureDirectory().listFiles()?.filter { it.name.startsWith("observation-") && it.name !in retained }?.forEach { it.delete() }
+                if (autoCaseId != null) {
+                    automaticRecorded(run.index, evidence, verdict)
+                    return
+                }
                 if (evidence.optBoolean("capture_context_changed")) {
                     stop(); status.setText(R.string.color_main_interrupted)
                 } else if (run.index < ColorTestRun.cases.lastIndex) {
@@ -411,6 +481,7 @@ internal class ColorTestPage(private val activity: Activity, private val palette
     }
     private fun update() {
         if (!::progress.isInitialized) return
+        controls.forEach { it.isEnabled = !exporting }
         progress.text = activity.getString(R.string.color_test_progress, run.index + 1, ColorTestRun.cases.size,
             run.current.title, run.results.size)
         start.setText(if (active) R.string.color_test_stop else R.string.color_test_start)
@@ -423,6 +494,12 @@ internal class ColorTestPage(private val activity: Activity, private val palette
         pictureButton.isEnabled = !run.current.surface && run.current.mainProfile == null
         rangeButton.isEnabled = run.current.mainProfile == null && !pendingMain
         matrixButton.isEnabled = run.current.mainProfile == null && !pendingMain
+        val suiteActive = AutomaticVideoSuite.active(activity)
+        if (suiteActive) controls.forEach { it.isEnabled = false }
+        automaticButton.isEnabled = !exporting
+        automaticButton.setText(if (suiteActive) R.string.video_auto_stop else R.string.video_auto_start)
+        deviceDetails.text = VideoAdaptationSummary.device(VideoAdaptationStore.read(activity).optJSONObject("device")) + "\n" +
+            VideoAdaptationSummary.latest(AutomaticVideoSuite.read(activity))
         val states = ColorTestRun.cases.indices.map(::coverageState)
         coverage.text = activity.getString(R.string.color_evidence_summary, states.count { it == "齐全" },
             ColorTestRun.cases.size, states.count { it == "未测试" }, states.count { it.startsWith("缺") }, states.count { it == "不支持" }, states.count { it == "平台未报告" })
@@ -473,6 +550,108 @@ internal class ColorTestPage(private val activity: Activity, private val palette
         run.results.forEach { (i, result) -> editor.putString("result_$i", result) }; editor.apply()
     }
     private fun captureDirectory() = ColorProbeEvidence.directory(activity)
+    fun startAutomatic() {
+        if (disposed || exporting || capturing || AutomaticVideoSuite.active(activity)) return
+        if (AutomaticVideoCleanup.blocked()) { status.setText(R.string.color_main_closing); return }
+        if (VideoAdaptationRegistry.current() != null) { status.setText(R.string.video_adapt_conflict); return }
+        stop()
+        val pending = prefs.getString("pending_token", null)
+        if (pending != null && (ColorMainProbeRegistry.lookup(pending) != null || ColorMainProbeRegistry.isClosing(pending))) {
+            status.setText(R.string.color_main_closing); return
+        }
+        prefs.edit().remove("pending_token").remove("pending_result").remove("pending_index").apply()
+        val id = AutomaticVideoSuite.begin(activity)
+        val screen = runCatching { VideoAdaptationDevice.screen(activity) }.getOrElse {
+            stopAutomatic("screen_query_failed"); return
+        }
+        val context = activity.applicationContext
+        status.setText(R.string.video_adapt_busy)
+        exportWorker.execute {
+            val result = runCatching { VideoAdaptationDevice.collect(context, screen) }
+            result.onSuccess { device ->
+                VideoAdaptationStore.update(context) { it.put("device", device) }
+                AutomaticVideoSuite.ready(context, id)
+            }.onFailure { AutomaticVideoSuite.stop(context, "device_query_failed:${it.javaClass.simpleName}") }
+            handler.post { if (!disposed) { resumeAutomatic(); update() } }
+        }
+        handler.removeCallbacks(autoPoll); handler.postDelayed(autoPoll, 500)
+        update()
+    }
+    private fun resumeAutomatic() {
+        if (!visible || disposed || exporting || capturing) return
+        val state = AutomaticVideoSuite.read(activity)
+        if (state.optBoolean("cleanupPending")) return
+        if (!AutomaticVideoSuite.active(activity)) {
+            if (state.optString("id").isNotEmpty() && !state.has("exportPath")) saveAutomaticReport()
+            return
+        }
+        if (!state.optBoolean("ready") || active || prefs.getString("pending_token", null) != null) return
+        val next = state.optInt("index", -1)
+        if (next !in ColorTestRun.cases.indices) { stopAutomatic("invalid_case_index"); return }
+        run.select(next); range = run.current.color.range; standard = null; savedPicture = false
+        active = true; playCurrent()
+    }
+    private fun automaticRecorded(index: Int, evidence: JSONObject, verdict: String) {
+        autoDeadline?.let(handler::removeCallbacks); autoDeadline = null
+        autoCapture?.let(handler::removeCallbacks); autoCapture = null
+        val id = evidence.optString("auto_run_id")
+        if (id != AutomaticVideoSuite.read(activity).optString("id")) return
+        if (!AutomaticVideoSuite.record(activity, id, index, evidence, verdict)) {
+            stop(); saveAutomaticReport(); return
+        }
+        releaseAutomaticPlayer(id) { if (!disposed) { resumeAutomatic(); update() } }
+    }
+    private fun releaseAutomaticPlayer(id: String, done: () -> Unit) {
+        if (id.isEmpty() || AutomaticVideoCleanup.blocked()) { stop(); return }
+        val context = activity.applicationContext
+        // Page reconstruction and cancellation must obey the same cross-worker barrier as advancement.
+        AutomaticVideoSuite.cleanup(context, id, true, false)
+        stop()
+        AutomaticVideoCleanup.await(context, id, player::afterCleanup, done)
+    }
+    private fun stopAutomatic(reason: String) {
+        val id = AutomaticVideoSuite.read(activity).optString("id")
+        AutomaticVideoSuite.stop(activity, reason)
+        if (prefs.getString("pending_token", null) == null) {
+            releaseAutomaticPlayer(id) {}
+            saveAutomaticReport()
+        } else stop()
+    }
+    private fun saveAutomaticReport() {
+        val state = AutomaticVideoSuite.read(activity)
+        val id = state.optString("id")
+        if (id.isEmpty() || automaticExportId == id || exporting || disposed) return
+        automaticExportId = id; exporting = true; update()
+        val value = VideoAdaptationStore.read(activity).put("automaticSuite", state)
+        value.put("manualAdaptationSamplesReference", value.remove("samples") ?: JSONArray())
+        value.put("separateColorTestHistory", JSONArray().apply {
+            val history = historyJson()
+            for (i in 0 until history.length()) {
+                val row = history.getJSONObject(i)
+                if (row.optJSONObject("evidence")?.optString("auto_run_id") == id) put(row)
+            }
+        })
+        val frozen = JSONObject(value.toString())
+        val context = activity.applicationContext
+        exportWorker.execute {
+            val result = runCatching {
+                val zip = VideoAdaptationExport.zip(context, frozen)
+                val saved = DiagnosticExportStore.saveFileWithoutPicker(context, zip, "application/zip")
+                AutomaticVideoSuite.exported(context, id, saved.savedPath ?: zip.absolutePath, !saved.savedInApp)
+                saved
+            }
+            handler.post {
+                exporting = false
+                if (disposed) return@post
+                result.onSuccess { saved ->
+                    status.text = activity.getString(if (saved.savedInApp) R.string.video_auto_private_saved else R.string.video_auto_saved,
+                        saved.savedPath ?: "Download/Apple CarPlay")
+                }.onFailure { status.text = activity.getString(R.string.video_adapt_failed, it.javaClass.simpleName) }
+                update()
+            }
+        }
+    }
+
     private fun export() {
         if (exporting || disposed || capturing) return
         if (prefs.getString("pending_token", null) != null) { status.setText(R.string.color_main_closing); return }
@@ -509,8 +688,8 @@ internal class ColorTestPage(private val activity: Activity, private val palette
                         output.putNextEntry(ZipEntry(file.name)); file.inputStream().use { it.copyTo(output) }; output.closeEntry()
                     }
                 }
-                val uri = FileProvider.getUriForFile(activity, "${activity.packageName}.diagnostic-reports", zip)
-                Triple(saved.savedPath, zip.absolutePath, uri)
+                val published = DiagnosticExportStore.saveFileWithoutPicker(activity, zip, "application/zip")
+                Triple(saved.savedPath, published.savedPath ?: zip.absolutePath, published.uri)
             }
             handler.post {
                 exporting = false

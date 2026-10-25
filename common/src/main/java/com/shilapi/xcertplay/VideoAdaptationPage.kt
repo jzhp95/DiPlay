@@ -18,7 +18,8 @@ import java.util.concurrent.Executors
 
 /** Opening the tab is read-only; enumeration, collection and sharing require explicit button actions. */
 internal class VideoAdaptationPage(private val activity: Activity, private val palette: DiPlayPalette,
-    private val openColors: () -> Unit) {
+    private val openColors: () -> Unit, private val startAutomatic: () -> Unit = {},
+    private val requestStorage: () -> Unit = {}) {
     private val handler = Handler(Looper.getMainLooper())
     private val worker = Executors.newSingleThreadExecutor()
     private var disposed = false
@@ -52,6 +53,8 @@ internal class VideoAdaptationPage(private val activity: Activity, private val p
         }
         label(R.string.video_adapt_title, FlymeAutoStyle.TextRole.PAGE_TITLE)
         label(R.string.video_adapt_description, FlymeAutoStyle.TextRole.SECONDARY)
+        label(R.string.video_auto_description, FlymeAutoStyle.TextRole.SECONDARY)
+        action(R.string.video_auto_start, true) { savePhone(); startAutomatic() }
         label(R.string.video_adapt_guide, FlymeAutoStyle.TextRole.SECONDARY)
         val phone = VideoAdaptationStore.read(activity).optJSONObject("phone")
         model = edit(R.string.video_adapt_phone_model, phone?.optString("model").orEmpty())
@@ -66,7 +69,7 @@ internal class VideoAdaptationPage(private val activity: Activity, private val p
         }
         action(R.string.video_adapt_modes) { savePhone(); openColors() }
         label(R.string.video_adapt_modes_hint, FlymeAutoStyle.TextRole.SECONDARY)
-        action(R.string.video_adapt_export, true, ::export)
+        action(R.string.video_adapt_export, true) { export() }
         action(R.string.video_adapt_clear) {
             if (VideoAdaptationRegistry.current() != null) { status.setText(R.string.video_adapt_active); return@action }
             activity.appDialogBuilder().setTitle(R.string.video_adapt_clear)
@@ -154,6 +157,20 @@ internal class VideoAdaptationPage(private val activity: Activity, private val p
         val rows = value.optJSONArray("samples") ?: JSONArray()
         val missing = VideoAdaptationStore.gaps(value)
         details.text = buildString {
+            appendLine(VideoAdaptationSummary.device(value.optJSONObject("device")))
+            val suite = AutomaticVideoSuite.read(activity)
+            appendLine(VideoAdaptationSummary.latest(suite))
+            if (suite.optString("id").isNotEmpty()) {
+                appendLine("自动测试：${suite.optString("status")} · ${suite.optInt("index")}/${suite.optInt("total")}")
+                if (suite.has("exportPath")) appendLine("报告：${suite.optString("exportPath")}")
+                val autoRows = suite.optJSONArray("results")
+                val latest = autoRows?.optJSONObject(autoRows.length() - 1)?.optJSONObject("evidence")
+                if (latest != null) {
+                    appendLine("最新解码器：${latest.opt("selected_decoder")}")
+                    appendLine("最新输出格式：${latest.opt("output_format")}")
+                    appendLine("主屏采样：${latest.optJSONObject("automatic_window")?.optJSONObject("summary")}")
+                }
+            }
             appendLine(activity.getString(R.string.video_adapt_records, rows.length()))
             appendLine(if (missing.isEmpty()) activity.getString(R.string.video_adapt_basic_ready)
                 else activity.getString(R.string.video_adapt_missing, missing.joinToString("；")))
@@ -168,11 +185,14 @@ internal class VideoAdaptationPage(private val activity: Activity, private val p
             }
         }
     }
-    private fun export() {
+    fun continueExport(allowPrivate: Boolean = false) { if (!disposed) export(allowPrivate) }
+    private fun export(allowPrivate: Boolean = false) {
+        if (!allowPrivate && DiagnosticExportStore.needsStoragePermission(activity)) { requestStorage(); return }
         if (VideoAdaptationRegistry.current() != null) { status.setText(R.string.video_adapt_active); return }
         savePhone()
         val value = VideoAdaptationStore.read(activity).put("schema", 1).put("exportedAt", System.currentTimeMillis())
         val old = activity.getSharedPreferences(ColorMainProbeRegistry.PREFS, Activity.MODE_PRIVATE)
+        value.put("automaticSuite", AutomaticVideoSuite.read(activity))
         value.put("separateColorTestHistory", runCatching { JSONArray(old.getString("history", "[]")) }.getOrDefault(JSONArray()))
         val frozen = JSONObject(value.toString())
         val context = activity.applicationContext
@@ -180,15 +200,17 @@ internal class VideoAdaptationPage(private val activity: Activity, private val p
         worker.execute {
             val result = runCatching {
                 DiagnosticExportStore.saveWithoutPicker(context, "video-adaptation-${System.currentTimeMillis()}.txt", VideoAdaptationExport.report(frozen))
-                VideoAdaptationExport.zip(context, frozen)
+                val file = VideoAdaptationExport.zip(context, frozen)
+                DiagnosticExportStore.saveFileWithoutPicker(context, file, "application/zip")
             }
             handler.post {
                 if (disposed) return@post
                 busy = false; refresh()
-                result.onSuccess { file ->
-                    status.text = activity.getString(R.string.video_adapt_export_saved, file.absolutePath)
+                result.onSuccess { saved ->
+                    status.text = activity.getString(if (saved.savedInApp) R.string.video_auto_private_saved else R.string.video_adapt_export_saved,
+                        saved.savedPath ?: "Download/Apple CarPlay")
                     runCatching {
-                        val uri = FileProvider.getUriForFile(activity, "${activity.packageName}.diagnostic-reports", file)
+                        val uri = saved.uri
                         activity.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("application/zip")
                             .putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                             .apply { clipData = ClipData.newRawUri("video-adaptation", uri) }, activity.getString(R.string.video_adapt_export)))

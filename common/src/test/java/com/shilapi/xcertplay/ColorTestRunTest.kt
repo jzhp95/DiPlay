@@ -9,7 +9,7 @@ class ColorTestRunTest {
         val local = cases.filter { it.asset != null }
         assertEquals(24, local.size)
         assertEquals(24, local.map { listOf(it.asset, it.surface, it.forceSoftware, it.color.fromSps) }.distinct().size)
-        assertEquals(12, cases.count { it.mainProfile != null })
+        assertEquals(16, cases.count { it.mainProfile != null })
     }
     @Test fun unrenderedAndFailedCasesCannotBeReportedAsNormal() {
         val run = ColorTestRun()
@@ -52,8 +52,10 @@ class ColorTestRunTest {
 
     @Test fun spsComparisonsAppendWithoutChangingExistingCaseIndices() {
         val cases = ColorTestRun.cases
-        assertEquals(36, cases.size)
+        assertEquals(40, cases.size)
         assertEquals("current", cases[16].mainProfile)
+        assertEquals("yuv-auto", cases[36].mainProfile)
+        assertTrue(cases.takeLast(4).all { it.forceSoftware && it.mainProfile!!.startsWith("yuv-") })
         assertEquals("software-direct", cases[25].mainProfile)
         assertTrue(cases.take(26).none { it.color.fromSps })
         val sps = cases.filter { it.color.fromSps }

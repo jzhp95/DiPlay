@@ -40,13 +40,16 @@ internal class ColorTestRun {
                 }
             val hardwareCases = toList()
             hardwareCases.forEach { add(it.copy(title = "软件解码 · ${it.title}", forceSoftware = true)) }
-            ColorMainProbeRegistry.profiles.forEach { profile ->
+            ColorMainProbeRegistry.profiles.filter { it.yuv == null }.forEach { profile ->
                 add(Case(profile.title, null, profile.direct == true || profile.smooth == true,
                     VideoColorOverride(profile.range, fromSps = profile.fromSps), profile.software, profile.id))
             }
             // Append after the existing cases so persisted observations retain their original identity.
             hardwareCases.forEach { add(it.copy(title = "SPS 颜色信息 · ${it.title}",
                 color = VideoColorOverride(fromSps = true))) }
+            ColorMainProbeRegistry.profiles.filter { it.yuv != null }.forEach { profile ->
+                add(Case(profile.title, null, true, forceSoftware = true, mainProfile = profile.id))
+            }
         }
     }
 }

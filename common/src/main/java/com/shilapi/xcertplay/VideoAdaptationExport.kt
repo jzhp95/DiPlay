@@ -10,7 +10,12 @@ import java.util.zip.ZipOutputStream
 internal object VideoAdaptationExport {
     fun report(value: JSONObject): String = buildString {
         appendLine("DiPlay 车机视频适配采集")
-        appendLine("缺项：" + VideoAdaptationStore.gaps(value).joinToString("；").ifEmpty { "静止与动态基本采样已具备；仍需人工分析" })
+        val auto = value.optJSONObject("automaticSuite")
+        if (auto != null && auto.optString("id").isNotEmpty()) {
+            appendLine("自动套件：${auto.optString("status")}；已执行 ${auto.optInt("index")}/${auto.optInt("total")}")
+            appendLine("自动结果是技术证据；面板颜色未自动判定，真实地图运动未自动控制或验证。")
+        }
+        appendLine("手工采样参考缺项：" + VideoAdaptationStore.gaps(value).joinToString("；").ifEmpty { "静止与动态基本采样已具备；仍需人工分析" })
         appendLine("码率是接收视频负载平均值，不是 Wi-Fi 带宽；静止画面低码率不表示故障。")
         appendLine("显示帧数是提交给输出的帧数，不等于面板实测；接收/显示差不能直接视为丢帧。")
         appendLine("CPU为本应用时间占单核的比例，多核可超过100%；电池温度不等于芯片温度。")

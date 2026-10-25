@@ -33,6 +33,7 @@ class WheelTestActivity : Activity(), AppAppearanceOwner {
     private lateinit var uidViews: UidTestLayout.Views
     private var colorPage: ColorTestPage? = null
     private var videoPage: VideoAdaptationPage? = null
+    private var pendingStorageAction: String? = null
     private var selectedPage = DiagnosticsTestLayout.Page.WHEEL
     private val appearanceHandler = Handler(Looper.getMainLooper())
     private val appearancePoll = object : Runnable {
@@ -58,6 +59,7 @@ class WheelTestActivity : Activity(), AppAppearanceOwner {
         } ?: intent.getStringExtra("diagnostics_page")?.let { name ->
             DiagnosticsTestLayout.Page.entries.firstOrNull { it.name == name }
         } ?: DiagnosticsTestLayout.Page.WHEEL
+        pendingStorageAction = savedInstanceState?.getString("video_storage_action")
         renderAppearance()
     }
 
@@ -70,7 +72,7 @@ class WheelTestActivity : Activity(), AppAppearanceOwner {
     }
 
     private fun renderAppearance() {
-        colorPage?.close()
+        colorPage?.close(keepAutomation = true)
         colorPage = null
         videoPage?.close(); videoPage = null
         val scrollY = if (::views.isInitialized) views.root.scrollY else 0
@@ -96,8 +98,9 @@ class WheelTestActivity : Activity(), AppAppearanceOwner {
         }
         uidLayout = UidTestLayout(this, palette)
         uidViews = uidLayout.build()
-        colorPage = ColorTestPage(this, palette)
-        videoPage = VideoAdaptationPage(this, palette) { selectPage(DiagnosticsTestLayout.Page.COLOR) }
+        colorPage = ColorTestPage(this, palette, ::requestAutomaticVideo)
+        videoPage = VideoAdaptationPage(this, palette, { selectPage(DiagnosticsTestLayout.Page.COLOR) },
+            startAutomatic = ::requestAutomaticVideo, requestStorage = { requestVideoStorage("export") })
         diagnosticsViews = DiagnosticsTestLayout(this, palette).build(views.root, mfiViews.root, selectedPage, ::selectPage, ::finish, uidViews.root, colorPage!!.root, videoPage!!.root)
         ViewCompat.setOnApplyWindowInsetsListener(diagnosticsViews.root) { view, insets ->
             val safe = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
@@ -148,12 +151,41 @@ class WheelTestActivity : Activity(), AppAppearanceOwner {
         if (page == DiagnosticsTestLayout.Page.UID) uidLayout.show(uidViews, UidDiagnostic.read(this))
     }
 
+    private fun requestAutomaticVideo() {
+        if (DiagnosticExportStore.needsStoragePermission(this)) { requestVideoStorage("auto"); return }
+        beginAutomaticVideo()
+    }
+    private fun beginAutomaticVideo() {
+        selectPage(DiagnosticsTestLayout.Page.COLOR)
+        colorPage?.startAutomatic()
+    }
+    private fun requestVideoStorage(action: String) {
+        pendingStorageAction = action
+        runCatching { requestPermissions(arrayOf(android.Manifest.permission.WRITE_EXTERNAL_STORAGE), VIDEO_STORAGE_REQUEST) }
+            .onFailure {
+                pendingStorageAction = null
+                Toast.makeText(this, R.string.video_auto_storage_denied, Toast.LENGTH_LONG).show()
+                if (action == "auto") beginAutomaticVideo() else if (action == "export") videoPage?.continueExport(allowPrivate = true)
+            }
+    }
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode != VIDEO_STORAGE_REQUEST) return
+        val action = pendingStorageAction; pendingStorageAction = null
+        val denied = DiagnosticExportStore.needsStoragePermission(this)
+        if (denied) Toast.makeText(this, R.string.video_auto_storage_denied, Toast.LENGTH_LONG).show()
+        if (action == "auto") beginAutomaticVideo()
+        else if (action == "export") videoPage?.continueExport(allowPrivate = denied)
+    }
+    private companion object { const val VIDEO_STORAGE_REQUEST = 4107 }
+
     private fun showMfiState(state: MfiTestController.State) {
         if (::mfiViews.isInitialized) mfiLayout.show(mfiViews, state)
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putString("diagnostics_page", selectedPage.name)
+        outState.putString("video_storage_action", pendingStorageAction)
         super.onSaveInstanceState(outState)
     }
 
@@ -254,7 +286,7 @@ class WheelTestActivity : Activity(), AppAppearanceOwner {
 
     override fun onDestroy() {
         videoPage?.close(); videoPage = null
-        colorPage?.close()
+        colorPage?.close(keepAutomation = isChangingConfigurations)
         colorPage = null
         if (::controller.isInitialized) controller.close()
         if (::mfiController.isInitialized) mfiController.close()

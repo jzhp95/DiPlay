@@ -405,6 +405,7 @@ class CarPlayHostActivity : ComponentActivity() {
     // Smooth video (a setting): SurfaceView output with frames released at the iPhone's frame time.
     private var colorMainProbe: ColorMainProbeRegistry.Request? = null
     private var colorMainOverlay: ColorMainProbeOverlay? = null
+    private var automaticColorProbe: AutomaticColorMainProbe? = null
     private var videoAdaptationOverlay: VideoAdaptationOverlay? = null
     private var videoAdaptationTouchMoves = 0L
     private var colorMainFinishing = false
@@ -1104,6 +1105,7 @@ class CarPlayHostActivity : ComponentActivity() {
         val probe = ColorMainProbeRegistry.lookup(intent.getStringExtra(ColorMainProbeRegistry.EXTRA_TOKEN))
         if (probe != null) {
             colorMainOverlay?.close(); colorMainOverlay = null
+        automaticColorProbe?.close(); automaticColorProbe = null
             colorMainProbe = null
             shutdown(false, "prepare explicit main-screen color test") { if (!isDestroyed) recreate() }
             return
@@ -1516,6 +1518,7 @@ class CarPlayHostActivity : ComponentActivity() {
         if (colorMainProbe != null && !colorMainFinishing && !isChangingConfigurations)
             finishColorMainProbe("无法显示", colorMainEvidence(emptyList()).put("startup_error", "destroyed_without_result"), false, returnToTests = false)
         colorMainOverlay?.close(); colorMainOverlay = null
+        automaticColorProbe?.close(); automaticColorProbe = null
         mainHandler.removeCallbacks(hideTemporarySystemBars)
         discardLastPicture()
         if (pictureCopyThreadStarted) pictureCopyThread.quitSafely()
@@ -1576,7 +1579,7 @@ class CarPlayHostActivity : ComponentActivity() {
         val profile = colorMainProbe?.profile
         // Explicit trials remain independent; "current" must include the driver's daily mode.
         softwareDirectVideoOutput = savedOutput.software && (profile == null || profile.id == "current")
-        softwareYuvConfig = savedOutput.yuv.takeIf { profile == null || profile.id == "current" }
+        softwareYuvConfig = profile?.yuv ?: savedOutput.yuv.takeIf { profile == null || profile.id == "current" }
         val probeOutput = profile?.resolve(savedOutput.smooth, savedOutput.direct)
         smoothVideo = probeOutput?.first ?: savedOutput.smooth
         directVideoOutput = probeOutput?.second ?: savedOutput.direct
@@ -1782,6 +1785,12 @@ class CarPlayHostActivity : ComponentActivity() {
         connectionPanel = viewport
         updateDebugOverlays()
         colorMainProbe?.let { request ->
+            if (request.autoRunId != null) {
+                automaticColorProbe = AutomaticColorMainProbe(this, request, ::videoAdaptationSample,
+                    { if (fallbackVideoView != null) null to fallbackVideoView else (videoView as? TextureView) to null },
+                    ::colorMainEvidence) { verdict, data, next -> finishColorMainProbe(verdict, data, next) }
+                root.addView(automaticColorProbe!!.root, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM))
+            } else {
             colorMainOverlay = ColorMainProbeOverlay(this, request,
                 ready = { sink?.videoColorOutput()?.let { it.active && it.firstFrameRendered } == true },
                 connection = { stageStatusView?.text?.toString().orEmpty() },
@@ -1789,6 +1798,7 @@ class CarPlayHostActivity : ComponentActivity() {
                 evidence = ::colorMainEvidence,
                 completed = { verdict, data, next -> finishColorMainProbe(verdict, data, next) })
             root.addView(colorMainOverlay!!.root, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM))
+            }
         }
         return root
     }
@@ -5772,8 +5782,14 @@ class CarPlayHostActivity : ComponentActivity() {
         returnToTests: Boolean = true) {
         val request = colorMainProbe ?: return
         if (colorMainFinishing) return
+        request.autoRunId?.let { id ->
+            evidence.put("auto_run_id", id).put("automatic", true)
+            if (evidence.optBoolean("interrupted") || evidence.optString("startup_error") == "destroyed_without_result")
+                AutomaticVideoSuite.stop(this, "main_host_interrupted")
+        }
         colorMainFinishing = true
         colorMainOverlay?.close(); colorMainOverlay = null
+        automaticColorProbe?.close(); automaticColorProbe = null
         colorMainProbe = null
         intent.removeExtra(ColorMainProbeRegistry.EXTRA_TOKEN)
         if (ColorMainProbeRegistry.finish(request.token) != null) {
