@@ -15,6 +15,27 @@ import org.robolectric.annotation.Config
 class AutomaticVideoSuiteTest {
     private val context get() = RuntimeEnvironment.getApplication()
     @Before @After fun clear() { AutomaticVideoSuite.stop(context, "test_cleanup"); context.getSharedPreferences("automatic_video_suite_v1", 0).edit().clear().commit() }
+    @Test fun focusedSequenceRunsOnlyTheRelevantCasesAndPreservesTheirIdentity() {
+        val id = AutomaticVideoSuite.begin(context, focused = true)
+        for (index in listOf(0, 2, 41, 42, 17, 25, 40)) {
+            assertEquals(index, AutomaticVideoSuite.read(context).getInt("index"))
+            assertTrue(AutomaticVideoSuite.record(context, id, index, JSONObject(), "collected"))
+        }
+        val state = AutomaticVideoSuite.read(context)
+        assertEquals(7, state.getJSONArray("results").length())
+        assertEquals("completed", state.getString("status"))
+    }
+    @Test fun unconfirmedFinalTeardownStillKeepsTheLastEvidenceAndNeverMarksCompleted() {
+        val id = AutomaticVideoSuite.begin(context, focused = true)
+        for (index in listOf(0, 2, 41, 42, 17, 25))
+            AutomaticVideoSuite.record(context, id, index, JSONObject(), "collected")
+        assertTrue(AutomaticVideoSuite.record(context, id, 40,
+            JSONObject().put("teardown_interrupted", true), "collected", canContinue = false))
+        val state = AutomaticVideoSuite.read(context)
+        assertEquals(7, state.getJSONArray("results").length())
+        assertEquals("interrupted", state.getString("status"))
+        assertFalse(AutomaticVideoSuite.active(context))
+    }
     @Test fun everyCaseRunsOnceAndFailuresStillAdvanceWithoutAColorPassClaim() {
         val id = AutomaticVideoSuite.begin(context)
         for (index in ColorTestRun.cases.indices) {
@@ -24,7 +45,7 @@ class AutomaticVideoSuiteTest {
         }
         val state = AutomaticVideoSuite.read(context)
         assertEquals("completed", state.getString("status"))
-        assertEquals(40, state.getJSONArray("results").length())
+        assertEquals(43, state.getJSONArray("results").length())
         assertEquals("not_automatically_measured", state.getString("visualColorVerdict"))
         assertFalse(AutomaticVideoSuite.active(context))
     }

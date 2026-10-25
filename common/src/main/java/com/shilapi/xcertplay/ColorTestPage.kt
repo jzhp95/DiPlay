@@ -244,7 +244,10 @@ internal class ColorTestPage(private val activity: Activity, private val palette
         prefs.edit().remove("pending_token").remove("pending_result").remove("pending_index").apply()
         if (evidence.optString("auto_run_id").isNotEmpty()) {
             if (evidence.optBoolean("teardown_interrupted") || !data.optBoolean("teardown_confirmed")) {
-                stopAutomatic("main_connection_teardown_unconfirmed")
+                if (AutomaticVideoSuite.record(activity, evidence.optString("auto_run_id"), index, evidence,
+                        if (accepted) verdict else "无法显示", canContinue = false)) {
+                    stop(); saveAutomaticReport()
+                }
             } else automaticRecorded(index, evidence, if (accepted) verdict else "无法显示")
             return
         }
@@ -297,6 +300,12 @@ internal class ColorTestPage(private val activity: Activity, private val palette
     }
     private fun playCurrent() {
         if (!active || !visible || disposed) return
+        if (MainProbeTeardown.blocked()) {
+            active = false
+            status.setText(R.string.color_main_closing)
+            update()
+            return
+        }
         autoCapture?.let(handler::removeCallbacks); autoCapture = null
         autoDeadline?.let(handler::removeCallbacks); autoDeadline = null
         val token = ++epoch
@@ -410,6 +419,7 @@ internal class ColorTestPage(private val activity: Activity, private val palette
                 put("asset", run.current.asset); put("range", range ?: JSONObject.NULL)
                 put("standard", standard ?: JSONObject.NULL); put("savedPicture", savedPicture)
                 put("softwareRequired", run.current.forceSoftware)
+                put("hardwareYuv", run.current.hardwareYuv)
                 put("fromSps", run.current.color.fromSps)
                 put("actualView", if (run.current.surface) "SurfaceView" else "TextureView")
             }
@@ -552,7 +562,7 @@ internal class ColorTestPage(private val activity: Activity, private val palette
     private fun captureDirectory() = ColorProbeEvidence.directory(activity)
     fun startAutomatic() {
         if (disposed || exporting || capturing || AutomaticVideoSuite.active(activity)) return
-        if (AutomaticVideoCleanup.blocked()) { status.setText(R.string.color_main_closing); return }
+        if (AutomaticVideoCleanup.blocked() || MainProbeTeardown.blocked()) { status.setText(R.string.color_main_closing); return }
         if (VideoAdaptationRegistry.current() != null) { status.setText(R.string.video_adapt_conflict); return }
         stop()
         val pending = prefs.getString("pending_token", null)
@@ -560,7 +570,7 @@ internal class ColorTestPage(private val activity: Activity, private val palette
             status.setText(R.string.color_main_closing); return
         }
         prefs.edit().remove("pending_token").remove("pending_result").remove("pending_index").apply()
-        val id = AutomaticVideoSuite.begin(activity)
+        val id = AutomaticVideoSuite.begin(activity, focused = true)
         val screen = runCatching { VideoAdaptationDevice.screen(activity) }.getOrElse {
             stopAutomatic("screen_query_failed"); return
         }

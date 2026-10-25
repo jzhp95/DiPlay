@@ -53,6 +53,21 @@ internal object ColorProbeEvidence {
             put("decoder_active", output?.active ?: false)
             put("output_configuration_sha256", output?.configurationHash ?: JSONObject.NULL)
             put("output_format_description", output?.formatDescription ?: JSONObject.NULL)
+            val rawHardware = output?.format?.get("hardware-yuv") == 1
+            val hardwareFallback = output?.format?.get("hardware-yuv-fallback") == 1
+            put("actual_output_path", when {
+                output?.active != true || output.format.isEmpty() -> "unavailable"
+                rawHardware -> "mtk_yuv_app_rgb"
+                hardwareFallback -> "surface_fallback_from_mtk_yuv"
+                output?.format?.get("software-yuv") == 1 -> "software_yuv_app_rgb"
+                output?.format?.get("independent-output") == 1 -> "surface_independent_output"
+                else -> "surface_worker_output"
+            })
+            if (requested.optBoolean("hardwareYuv") && !rawHardware) {
+                missing.add(if (hardwareFallback) "hardware_yuv_fell_back" else "hardware_yuv_not_active")
+                put("missing", JSONArray(missing))
+                put("experimental_path_succeeded", false)
+            } else if (requested.optBoolean("hardwareYuv")) put("experimental_path_succeeded", currentRendered)
             put("platform_unreported", JSONArray(missing.filter { it.startsWith("output_color-") }))
             put("output_format", JSONObject().apply { output?.format?.forEach { (key, value) -> put(key, value ?: JSONObject.NULL) } })
             put("comparison", JSONObject().apply {

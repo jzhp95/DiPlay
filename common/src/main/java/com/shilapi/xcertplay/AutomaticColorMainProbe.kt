@@ -68,12 +68,19 @@ internal class AutomaticColorMainProbe(private val activity: Activity, private v
                 }
             }
             val summary = window?.result()?.optJSONObject("summary")
-            status.text = activity.getString(R.string.video_auto_main_progress, request.index + 1, ColorTestRun.cases.size,
+            val route = next?.evidence?.optString("actual_output_path").orEmpty()
+            val stages = summary?.optJSONObject("pipeline")
+            fun stage(key: String): String = if (stages == null || stages.isNull(key)) "—"
+                else String.format(Locale.US, "%.1f", stages.optDouble(key))
+            status.text = activity.getString(R.string.video_auto_main_progress, state.optInt("position", request.index) + 1, state.optInt("total", ColorTestRun.cases.size),
                 request.profile.title) + "\n" + if (next == null) activity.getString(R.string.video_adapt_not_ready)
                 else String.format(Locale.US, "%.0f kbps · %.1f fps · %.1f ms",
                     summary?.optDouble("payloadKbps", 0.0) ?: 0.0,
                     summary?.optDouble("submittedToDisplayFps", 0.0) ?: 0.0,
-                    summary?.optDouble("queueToOutputMillis", 0.0) ?: 0.0)
+                    summary?.optDouble("queueToOutputMillis", 0.0) ?: 0.0) + "\n" +
+                        next?.evidence?.optString("selected_decoder").orEmpty() + "\n" + route + "\n" +
+                        "应用等待 ${stage("applicationWaitMillis")} ms · 取帧 ${stage("codecQueueToDequeueMillis")} ms\n" +
+                        "YUV 复制 ${stage("yuvCopyMillis")} ms · 绘制 ${stage("yuvDrawAndSwapMillis")} ms"
             if (next != null && next.nanos - firstNanos >= VideoAdaptationWindow.DURATION_NS) capture(next.key)
             else handler.postDelayed(this, 1000)
         }

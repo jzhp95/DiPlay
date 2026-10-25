@@ -18,6 +18,27 @@ import org.robolectric.util.ReflectionHelpers
 @Config(sdk = [28])
 @LooperMode(LooperMode.Mode.PAUSED)
 class SoftwareYuvHostTest {
+    @Test fun hardwareYuvOverridesSoftwareForNewSessionsButExplicitTrialsStayIndependent() = withHost { activity ->
+        AirPlayPersistence.saveHardwareYuvEnabled(activity, true)
+        AirPlayPersistence.saveSoftwareYuvEnabled(activity, true)
+        build(activity)
+        assertTrue(field(activity, "hardwareYuvVideoOutput"))
+        assertFalse(field(activity, "softwareDirectVideoOutput"))
+        assertNull(field<SoftwareYuvConfig?>(activity, "softwareYuvConfig"))
+        withSink(activity) { assertTrue(it.mainScreenHardwareYuv); assertFalse(it.mainScreenSoftwareDecoder) }
+        val index = ColorTestRun.cases.indexOfFirst { it.mainProfile == "software-direct" }
+        val request = ColorMainProbeRegistry.begin(index, VideoColorOverride())
+        try {
+            ReflectionHelpers.setField(activity, "colorMainProbe", request)
+            build(activity)
+            withSink(activity) { assertFalse(it.mainScreenHardwareYuv) }
+            assertTrue(AirPlayPersistence.loadHardwareYuvEnabled(activity))
+        } finally {
+            field<ColorMainProbeOverlay?>(activity, "colorMainOverlay")?.close()
+            ColorMainProbeRegistry.finish(request.token); ColorMainProbeRegistry.teardownFinished(request.token)
+        }
+    }
+
     @Test fun experimentalYuvOverridesDirectWithoutOverwritingThePreviousMode() = withHost { activity ->
         assertFalse(AirPlayPersistence.loadSoftwareYuvEnabled(activity))
         AirPlayPersistence.saveSoftwareDirectVideoOutput(activity, true)

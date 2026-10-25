@@ -28,3 +28,13 @@ fun softwareYuvDecoderName(mime: String): String? = runCatching {
     }.map { it.name }.toSet()
     diagnosticSoftwareDecoderName(diagnosticSoftwareCandidates().filter { it.name in capable }, mime)
 }.getOrNull()
+
+/** Explicit MTK selection: advertised flexible YUV is only eligibility, not proof of usable Images. */
+fun mtkYuvDecoderName(mime: String): String? = runCatching {
+    MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos.firstOrNull { info ->
+        !info.isEncoder && info.name.startsWith("OMX.MTK.VIDEO.DECODER.", true) &&
+            info.supportedTypes.any { it.equals(mime, true) } &&
+            android.media.MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Flexible in
+                info.getCapabilitiesForType(mime).colorFormats
+    }?.name
+}.getOrNull()

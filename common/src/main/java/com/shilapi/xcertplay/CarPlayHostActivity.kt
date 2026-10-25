@@ -416,6 +416,9 @@ class CarPlayHostActivity : ComponentActivity() {
     private var softwareDirectVideoOutput = false
     private var softwareYuvConfig: com.shilapi.xcertplay.media.SoftwareYuvConfig? = null
     private var softwareYuvFailureShown = false
+    private var hardwareYuvVideoOutput = false
+    private var hardwareYuvFailureShown = false
+    private var colorMainTeardown = org.json.JSONObject()
     // Diagnostics setting: a game-style FPS counter over the picture.
     private var fpsCounter: FpsCounterOverlay? = null
     // Sinks whose sessions are being torn down; their decoders may still render to the current surface
@@ -1562,6 +1565,7 @@ class CarPlayHostActivity : ComponentActivity() {
         AirPlayPersistence.loadSmoothVideo(this),
         AirPlayPersistence.loadDirectVideoOutput(this),
         AirPlayPersistence.loadSoftwareYuvColor(this).takeIf { AirPlayPersistence.loadSoftwareYuvEnabled(this) },
+        hardwareYuv = AirPlayPersistence.loadHardwareYuvEnabled(this),
     )
 
     private fun buildContentView(): View {
@@ -1569,17 +1573,20 @@ class CarPlayHostActivity : ComponentActivity() {
         val retained = CarPlayBackgroundSession.snapshot()?.takeIf {
             colorMainProbe == null && PendingReconnect.isPending(it.controller) &&
                 (it.sink.mainScreenSoftwareDecoder != desiredOutput.software ||
-                    it.sink.mainScreenSoftwareYuv != desiredOutput.yuv)
+                    it.sink.mainScreenSoftwareYuv != desiredOutput.yuv ||
+                    it.sink.mainScreenHardwareYuv != desiredOutput.hardwareYuv)
         }
         // Saving the mode must not stop a retained session merely because its Activity was recreated.
         val savedOutput = retained?.let {
             carPlayVideoOutput(it.sink.mainScreenSoftwareDecoder, it.sink.videoPacingEnabled,
-                AirPlayPersistence.loadDirectVideoOutput(this), it.sink.mainScreenSoftwareYuv)
+                AirPlayPersistence.loadDirectVideoOutput(this), it.sink.mainScreenSoftwareYuv, it.sink.mainScreenHardwareYuv)
         } ?: desiredOutput
         val profile = colorMainProbe?.profile
         // Explicit trials remain independent; "current" must include the driver's daily mode.
         softwareDirectVideoOutput = savedOutput.software && (profile == null || profile.id == "current")
         softwareYuvConfig = profile?.yuv ?: savedOutput.yuv.takeIf { profile == null || profile.id == "current" }
+        hardwareYuvVideoOutput = profile?.hardwareYuv == true ||
+            (savedOutput.hardwareYuv && (profile == null || profile.id == "current"))
         val probeOutput = profile?.resolve(savedOutput.smooth, savedOutput.direct)
         smoothVideo = probeOutput?.first ?: savedOutput.smooth
         directVideoOutput = probeOutput?.second ?: savedOutput.direct
@@ -4795,14 +4802,16 @@ class CarPlayHostActivity : ComponentActivity() {
         // Capture this session's log: late decoder shutdown must not write into a new session.
         val diagnosticLog = sessionLog
         softwareYuvFailureShown = false
+        hardwareYuvFailureShown = false
         return AndroidMediaSink(
             surface = null,
             videoWidth = videoWidth,
             videoHeight = videoHeight,
-            preferSoftwareHevcDecoder = hevcSoftwareDecoderEnabled,
+            preferSoftwareHevcDecoder = hevcSoftwareDecoderEnabled && !hardwareYuvVideoOutput,
             forceSoftwareVideoDecoder = colorMainProbe?.profile?.software == true,
             mainScreenSoftwareDecoder = softwareDirectVideoOutput,
             mainScreenSoftwareYuv = softwareYuvConfig,
+            mainScreenHardwareYuv = hardwareYuvVideoOutput,
             videoColorOverride = colorMainProbe?.color ?: com.shilapi.xcertplay.media.VideoColorOverride(),
             nativeHfpCalls = AirPlayPersistence.loadNativeHfpCalls(this),
             advancedAudioChannelMapping = advancedAudioChannelMapping,
@@ -4965,6 +4974,11 @@ class CarPlayHostActivity : ComponentActivity() {
                         return@runOnUiThread
                     }
                     DisplayDiagnosticSnapshot.record(this@CarPlayHostActivity, displayDiagnosticAttempt, message)
+                    if (hardwareYuvVideoOutput && !hardwareYuvFailureShown && message.contains("hardware-yuv unavailable:")) {
+                        hardwareYuvFailureShown = true
+                        android.widget.Toast.makeText(this@CarPlayHostActivity, R.string.settings_hardware_yuv_failed,
+                            android.widget.Toast.LENGTH_LONG).show()
+                    }
                     if (softwareYuvConfig != null && !softwareYuvFailureShown &&
                         message.contains("software-yuv unavailable:")) {
                         softwareYuvFailureShown = true
@@ -5056,7 +5070,8 @@ class CarPlayHostActivity : ComponentActivity() {
         // retry, and the next start matches this view.
         if (!backgroundSessionMatchesView(snapshot.sink.videoPacingEnabled, smoothVideo) ||
             snapshot.sink.mainScreenSoftwareDecoder != softwareDirectVideoOutput ||
-            snapshot.sink.mainScreenSoftwareYuv != softwareYuvConfig) {
+            snapshot.sink.mainScreenSoftwareYuv != softwareYuvConfig ||
+            snapshot.sink.mainScreenHardwareYuv != hardwareYuvVideoOutput) {
             appendLog("Background session video output differs from this view " +
                 "(software=${snapshot.sink.mainScreenSoftwareDecoder}/$softwareDirectVideoOutput); " +
                 "stopping it instead of adopting it")
@@ -5521,7 +5536,7 @@ class CarPlayHostActivity : ComponentActivity() {
         val savedOutput = savedVideoOutput()
         if (colorMainProbe == null && controller == null && (savedOutput.smooth != smoothVideo ||
                 savedOutput.direct != directVideoOutput || savedOutput.software != softwareDirectVideoOutput ||
-                savedOutput.yuv != softwareYuvConfig)) {
+                savedOutput.yuv != softwareYuvConfig || savedOutput.hardwareYuv != hardwareYuvVideoOutput)) {
             appendLog("Video output setting changed; rebuilding the video view")
             // No session runs here, but a restart keeps this host as the session owner; the new instance
             // must be able to start its own.
@@ -5747,6 +5762,7 @@ class CarPlayHostActivity : ComponentActivity() {
             put("softwareRequired", request?.profile?.software == true || softwareDirectVideoOutput)
             put("softwareDirectCompatibility", softwareDirectVideoOutput && softwareYuvConfig == null)
             put("softwareYuv", softwareYuvConfig != null)
+            put("hardwareYuv", hardwareYuvVideoOutput)
             put("softwareYuvRange", softwareYuvConfig?.range ?: org.json.JSONObject.NULL)
             put("softwareYuvMatrix", softwareYuvConfig?.matrix ?: org.json.JSONObject.NULL)
             put("range", request?.color?.range ?: org.json.JSONObject.NULL)
@@ -5814,6 +5830,7 @@ class CarPlayHostActivity : ComponentActivity() {
                 val data = runCatching { org.json.JSONObject(prefs.getString("pending_result", "{}") ?: "{}") }.getOrDefault(org.json.JSONObject())
                 val confirmed = (closingController?.awaitClosed(0) ?: true) && (closingSink?.awaitVideoReleased(0) ?: true)
                 data.put("teardown_complete", true).put("teardown_confirmed", confirmed)
+                data.optJSONObject("evidence")?.put("teardown", colorMainTeardown)
                 if (!confirmed) {
                     data.put("continue", false)
                     data.optJSONObject("evidence")?.apply {
@@ -6017,8 +6034,21 @@ class CarPlayHostActivity : ComponentActivity() {
         Log.i(TAG, "shutdown reason=$reason terminateProcess=$terminateProcess")
         teardownExecutor.execute {
             oldController?.close()
-            val clean = oldController?.awaitClosed(CONTROLLER_CLOSE_TIMEOUT_MILLIS) ?: true
-            oldSink?.let(::closeRetiringSink)
+            val clean = if (colorMainFinishing) {
+                oldSink?.close()
+                oldSink?.whenVideoReleased { retiringSinks.remove(oldSink) }
+                colorMainTeardown = MainProbeTeardown.await(
+                    { timeout -> oldController?.awaitClosed(timeout) ?: true },
+                    { timeout -> oldSink?.awaitVideoReleased(timeout) ?: true })
+                if (!colorMainTeardown.optBoolean("confirmed")) MainProbeTeardown.retain {
+                    (oldController?.awaitClosed(0) ?: true) && (oldSink?.awaitVideoReleased(0) ?: true)
+                }
+                colorMainTeardown.optBoolean("controllerReleased")
+            } else {
+                val released = oldController?.awaitClosed(CONTROLLER_CLOSE_TIMEOUT_MILLIS) ?: true
+                oldSink?.let(::closeRetiringSink)
+                released
+            }
             airPlayCommandExecutor.shutdown()
             if (terminateProcess) {
                 applicationContext.stopService(Intent(applicationContext, CarPlayVpnService::class.java))

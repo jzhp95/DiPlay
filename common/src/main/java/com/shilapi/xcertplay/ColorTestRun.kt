@@ -5,7 +5,7 @@ import com.shilapi.xcertplay.media.VideoColorOverride
 /** Results describe observations, never an automatic claim about a physical display. */
 internal class ColorTestRun {
     data class Case(val title: String, val asset: String?, val surface: Boolean,
-        val color: VideoColorOverride = VideoColorOverride(), val forceSoftware: Boolean = false, val mainProfile: String? = null)
+        val color: VideoColorOverride = VideoColorOverride(), val forceSoftware: Boolean = false, val mainProfile: String? = null, val hardwareYuv: Boolean = false)
     var index = 0
         private set
     var rendered = false
@@ -40,7 +40,7 @@ internal class ColorTestRun {
                 }
             val hardwareCases = toList()
             hardwareCases.forEach { add(it.copy(title = "软件解码 · ${it.title}", forceSoftware = true)) }
-            ColorMainProbeRegistry.profiles.filter { it.yuv == null }.forEach { profile ->
+            ColorMainProbeRegistry.profiles.filter { it.yuv == null && !it.hardwareYuv }.forEach { profile ->
                 add(Case(profile.title, null, profile.direct == true || profile.smooth == true,
                     VideoColorOverride(profile.range, fromSps = profile.fromSps), profile.software, profile.id))
             }
@@ -50,6 +50,10 @@ internal class ColorTestRun {
             ColorMainProbeRegistry.profiles.filter { it.yuv != null }.forEach { profile ->
                 add(Case(profile.title, null, true, forceSoftware = true, mainProfile = profile.id))
             }
+            add(Case("正式主屏 · MTK 硬解颜色转换", null, true, mainProfile = "hardware-yuv", hardwareYuv = true))
+            for (range in listOf("full", "limited")) add(Case(
+                "MTK 硬解颜色转换 · H264 · ${if (range == "full") "全范围" else "有限范围"}",
+                "h264_$range", true, hardwareYuv = true))
         }
     }
 }

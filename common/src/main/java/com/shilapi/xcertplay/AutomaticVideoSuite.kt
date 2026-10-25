@@ -24,24 +24,30 @@ internal object AutomaticVideoSuite {
         }
         return status == "running"
     }
-    @Synchronized fun begin(c: Context): String {
-        check(!active(c) && !AutomaticVideoCleanup.blocked())
+    @Synchronized fun begin(c: Context, focused: Boolean = false): String {
+        check(!active(c) && !AutomaticVideoCleanup.blocked() && !MainProbeTeardown.blocked())
+        val sequence = if (focused) listOf(0, 2, 41, 42, 17, 25, 40) else ColorTestRun.cases.indices.toList()
         val id = UUID.randomUUID().toString(); lease = id
-        save(c, JSONObject().put("id", id).put("status", "running").put("index", 0)
+        save(c, JSONObject().put("id", id).put("status", "running").put("index", sequence.first()).put("position", 0).put("sequence", JSONArray(sequence)).put("focused", focused)
             .put("startedAt", System.currentTimeMillis()).put("results", JSONArray())
-            .put("total", ColorTestRun.cases.size).put("visualColorVerdict", "not_automatically_measured")
+            .put("total", sequence.size).put("visualColorVerdict", "not_automatically_measured")
             .put("realMapMotion", "not_automatically_controlled_or_verified"))
         return id
     }
-    @Synchronized fun record(c: Context, id: String, index: Int, evidence: JSONObject, verdict: String): Boolean {
+    @Synchronized fun record(c: Context, id: String, index: Int, evidence: JSONObject, verdict: String, canContinue: Boolean = true): Boolean {
         if (!active(c)) return false
         val value = read(c)
-        if (id != lease || value.optInt("index", -1) != index) return false
+        if (id != lease || value.optString("id") != id || value.optInt("index", -1) != index) return false
         val results = value.getJSONArray("results")
         results.put(JSONObject().put("index", index).put("title", ColorTestRun.cases[index].title)
             .put("verdict", verdict).put("evidence", JSONObject(evidence.toString())).put("time", System.currentTimeMillis()))
-        value.put("index", index + 1)
-        if (index + 1 >= ColorTestRun.cases.size) value.put("status", "completed").put("endedAt", System.currentTimeMillis())
+        val position = value.optInt("position", index) + 1
+        val sequence = value.optJSONArray("sequence")
+        val total = sequence?.length() ?: ColorTestRun.cases.size
+        value.put("position", position).put("index", sequence?.optInt(position, -1) ?: (index + 1))
+        if (!canContinue) value.put("status", "interrupted").put("reason", "main_connection_teardown_unconfirmed")
+            .put("endedAt", System.currentTimeMillis())
+        else if (position >= total) value.put("status", "completed").put("endedAt", System.currentTimeMillis())
         save(c, value); return true
     }
     @Synchronized fun stop(c: Context, reason: String) {

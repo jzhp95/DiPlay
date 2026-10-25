@@ -16,6 +16,18 @@ class VideoAdaptationRunTest {
         VideoAdaptationSample(key, 1_000_000_000L + seconds * 1_000_000_000L,
             LiveVideoCounters(frames, frames, frames * 2_000_000L, frames, bytes), seconds * 100,
             JSONObject().put("view", "1920x1080").put("dragMoveEvents", frames))
+    @Test fun pipelineAveragesUseOnlyTheCurrentWindowAndKeepUnavailableStagesUnknown() {
+        val start = point(0, 0, 0)
+        val end = point(20, 1000, 1).copy(counters = LiveVideoCounters(1, 1, 10_000_000, 1, 1000,
+            com.shilapi.xcertplay.media.VideoPipelineCounters(
+                applicationWaitNanos = 8_000_000, inputWaitNanos = 4_000_000, inputSamples = 2,
+                codecOutputNanos = 20_000_000, outputSamples = 2)))
+        val window = VideoAdaptationWindow("static", start); window.add(end)
+        val stages = window.result().getJSONObject("summary").getJSONObject("pipeline")
+        assertEquals(4.0, stages.getDouble("applicationWaitMillis"), 0.001)
+        assertEquals(10.0, stages.getDouble("codecQueueToDequeueMillis"), 0.001)
+        assertTrue(stages.isNull("yuvDrawAndSwapMillis"))
+    }
     @Test fun bitrateCpuAndLatencyUseIntervalDeltasNotLifetimeTotals() {
         val window = VideoAdaptationWindow("dynamic", point(0, 1_000_000, 100))
         assertTrue(window.add(point(20, 6_000_000, 700)))

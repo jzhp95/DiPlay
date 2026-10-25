@@ -44,7 +44,9 @@ internal object VideoAdaptationSummary {
         appendLine("输出格式（含尺寸/裁剪/颜色）：${e.opt("output_format")}")
         appendLine("输入颜色声明：${e.opt("input_color")}")
         appendLine("输入配置长度：${e.opt("input_csd_size")} B；完整配置在整包报告内。")
-        appendLine("实际输出路径：${e.opt("requested")}")
+        appendLine("请求路径：${e.opt("requested")}")
+        appendLine("实际输出路径：${e.opt("actual_output_path")}")
+        appendLine("释放确认：${e.opt("teardown")}")
         val window = e.optJSONObject("automatic_window")
         val begin = window?.optJSONObject("begin")
         if (begin != null) {

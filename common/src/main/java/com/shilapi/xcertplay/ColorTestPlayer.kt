@@ -114,7 +114,8 @@ internal class ColorTestPlayer(context: Context) {
                     sink = AndroidMediaSink(surface = surface,
                         videoWidth = format.getInteger(MediaFormat.KEY_WIDTH),
                         videoHeight = format.getInteger(MediaFormat.KEY_HEIGHT),
-                        videoColorOverride = color, forceSoftwareVideoDecoder = case.forceSoftware)
+                        videoColorOverride = color, forceSoftwareVideoDecoder = case.forceSoftware,
+                        mainScreenHardwareYuv = case.hardwareYuv)
                     attachedSink = sink; attachedSurface = surface; attachedRequest = request
                     sink!!.setVideoDiagnosticHandler(110, ::emit)
                     emit("测试片输入 $format；请求 range=${color.range ?: "auto"} standard=${color.standard ?: "auto"} fromSps=${color.fromSps}")

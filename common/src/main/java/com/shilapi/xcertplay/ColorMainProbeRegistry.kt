@@ -9,7 +9,7 @@ internal object ColorMainProbeRegistry {
     const val PREFS = "color_test_results_v2"
     data class Profile(val id: String, val title: String, val smooth: Boolean?, val direct: Boolean?,
         val software: Boolean = false, val range: Int? = null, val neutral: Boolean = true, val fromSps: Boolean = false,
-        val yuv: com.shilapi.xcertplay.media.SoftwareYuvConfig? = null) {
+        val yuv: com.shilapi.xcertplay.media.SoftwareYuvConfig? = null, val hardwareYuv: Boolean = false) {
         fun resolve(savedSmooth: Boolean, savedDirect: Boolean) = (smooth ?: savedSmooth) to (direct ?: savedDirect)
     }
     val profiles = listOf(
@@ -28,12 +28,14 @@ internal object ColorMainProbeRegistry {
         Profile("yuv-auto", "正式主屏 · YUV 自绘 · 自动", false, true, software = true, yuv = com.shilapi.xcertplay.media.SoftwareYuvConfig()),
         Profile("yuv-full709", "正式主屏 · YUV 自绘 · 全范围709", false, true, software = true, yuv = com.shilapi.xcertplay.media.SoftwareYuvConfig(1, 1)),
         Profile("yuv-limited709", "正式主屏 · YUV 自绘 · 有限范围709", false, true, software = true, yuv = com.shilapi.xcertplay.media.SoftwareYuvConfig(2, 1)),
-        Profile("yuv-limited601", "正式主屏 · YUV 自绘 · 有限范围601", false, true, software = true, yuv = com.shilapi.xcertplay.media.SoftwareYuvConfig(2, 2)))
+        Profile("yuv-limited601", "正式主屏 · YUV 自绘 · 有限范围601", false, true, software = true, yuv = com.shilapi.xcertplay.media.SoftwareYuvConfig(2, 2)),
+        Profile("hardware-yuv", "正式主屏 · MTK 硬解颜色转换", false, true, hardwareYuv = true))
     data class Request(val token: String, val index: Int, val profile: Profile,
         val color: VideoColorOverride, val startedMillis: Long, val autoRunId: String? = null)
     private var current: Request? = null
     private val closing = mutableSetOf<String>()
     @Synchronized fun begin(index: Int, color: VideoColorOverride, autoRunId: String? = null): Request {
+        check(!MainProbeTeardown.blocked()) { "previous main-screen resources have not released" }
         val profile = profiles.single { it.id == ColorTestRun.cases[index].mainProfile }
         return Request(UUID.randomUUID().toString(), index, profile, color, System.currentTimeMillis(), autoRunId).also { current = it }
     }

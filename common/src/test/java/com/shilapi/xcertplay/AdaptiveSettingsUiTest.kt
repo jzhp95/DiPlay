@@ -1060,6 +1060,48 @@ class AdaptiveSettingsUiTest {
         } finally { bitmap.recycle() }
     }
 
+    @Test @Config(sdk = [28], qualifiers = "w320dp-h900dp")
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun hardwareColorScreenshotCompact() = captureHardwareColor("compact")
+
+    @Test @Config(sdk = [28], qualifiers = "w1000dp-h900dp")
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun hardwareColorScreenshotExpanded() = captureHardwareColor("expanded")
+
+    @Test @Config(sdk = [28], qualifiers = "ar-ldrtl-w320dp-h900dp")
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun hardwareColorScreenshotRtl() = captureHardwareColor("rtl")
+
+    private fun captureHardwareColor(name: String) {
+        RuntimeEnvironment.setFontScale(1.5f)
+        val screen = openSettings()
+        ReflectionHelpers.setField(screen, "settingsCategory", SettingsCategory.ADVANCED)
+        ReflectionHelpers.callInstanceMethod<Unit>(screen, "render")
+        val toggle = descendants(screen.window.decorView).filterIsInstance<Switch>()
+            .single { it.contentDescription == screen.getString(R.string.settings_hardware_yuv_video) }
+        assertFalse(toggle.isChecked)
+        toggle.performClick()
+        assertTrue(AirPlayPersistence.loadHardwareYuvEnabled(context))
+        layoutRoot(screen)
+        val title = texts(screen).single { it.text == screen.getString(R.string.settings_hardware_yuv_video) }
+        val row = title.parent.parent as View
+        val card = row.parent as ViewGroup
+        val height = row.height
+        assertTrue(card.width > 0 && height > 0)
+        for (text in descendants(row).filterIsInstance<TextView>()) {
+            val lines = text.layout ?: continue
+            assertTrue("clipped: ${text.text}", lines.height <= text.height - text.compoundPaddingTop - text.compoundPaddingBottom)
+            for (line in 0 until lines.lineCount) assertEquals(0, lines.getEllipsisCount(line))
+        }
+        val bitmap = Bitmap.createBitmap(card.width, height, Bitmap.Config.ARGB_8888)
+        try {
+            val canvas = Canvas(bitmap); canvas.translate(0f, -row.top.toFloat()); card.draw(canvas)
+            val output = Paths.get("build/reports/hardware-color-ui/$name.png")
+            Files.createDirectories(output.parent)
+            Files.newOutputStream(output).use { assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)) }
+        } finally { bitmap.recycle() }
+    }
+
     @Test fun usbChargingIsSavedForTheNextWiredConnectionWithoutDroppingTheSession() {
         AirPlayPersistence.saveWirelessEnabled(context, false)
         val screen = openSettings()

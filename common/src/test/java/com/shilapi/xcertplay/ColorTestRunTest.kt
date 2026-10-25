@@ -6,10 +6,11 @@ import org.junit.Test
 class ColorTestRunTest {
     @Test fun planCoversBothPathsBothCodecsAndBothEncodedRanges() {
         val cases = ColorTestRun.cases
-        val local = cases.filter { it.asset != null }
+        val local = cases.filter { it.asset != null && !it.hardwareYuv }
+        assertEquals(setOf("h264_full", "h264_limited"), cases.filter { it.asset != null && it.hardwareYuv }.map { it.asset }.toSet())
         assertEquals(24, local.size)
         assertEquals(24, local.map { listOf(it.asset, it.surface, it.forceSoftware, it.color.fromSps) }.distinct().size)
-        assertEquals(16, cases.count { it.mainProfile != null })
+        assertEquals(17, cases.count { it.mainProfile != null })
     }
     @Test fun unrenderedAndFailedCasesCannotBeReportedAsNormal() {
         val run = ColorTestRun()
@@ -52,10 +53,10 @@ class ColorTestRunTest {
 
     @Test fun spsComparisonsAppendWithoutChangingExistingCaseIndices() {
         val cases = ColorTestRun.cases
-        assertEquals(40, cases.size)
+        assertEquals(43, cases.size)
         assertEquals("current", cases[16].mainProfile)
         assertEquals("yuv-auto", cases[36].mainProfile)
-        assertTrue(cases.takeLast(4).all { it.forceSoftware && it.mainProfile!!.startsWith("yuv-") })
+        assertTrue(cases.subList(36, 40).all { it.forceSoftware && it.mainProfile!!.startsWith("yuv-") })
         assertEquals("software-direct", cases[25].mainProfile)
         assertTrue(cases.take(26).none { it.color.fromSps })
         val sps = cases.filter { it.color.fromSps }

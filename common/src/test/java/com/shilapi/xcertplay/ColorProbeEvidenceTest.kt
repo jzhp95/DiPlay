@@ -13,6 +13,25 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28], manifest = Config.NONE)
 class ColorProbeEvidenceTest {
+    @Test fun noDecoderIsReportedAsUnavailableRatherThanClaimingAnOutputRoute() {
+        val report = ColorProbeEvidence.capture(null, false, false, emptyList(), "test", JSONObject())
+        assertEquals("unavailable", report.getString("actual_output_path"))
+        assertFalse(report.getBoolean("rendered"))
+    }
+    @Test fun aRenderedFallbackIsNeverReportedAsHardwareColorExperimentSuccess() {
+        val bytes = RuntimeEnvironment.getApplication().assets.open("color-test/h264_full.csd").use { it.readBytes() }
+        val hash = videoConfigurationHash(bytes)
+        val output = VideoDecoderColorEvidence(hash, "OMX.MTK.VIDEO.DECODER.AVC", false,
+            mapOf("color-range" to 1, "color-standard" to 1, "color-transfer" to 3, "hardware-yuv-fallback" to 1),
+            generation = 1, active = true, firstFrameRendered = true)
+        val source = VideoSourceColorEvidence("H264", bytes, VideoColorMetadata.parse(VideoCodec.H264, bytes), output, hash)
+        val report = ColorProbeEvidence.capture(source, true, false, listOf("observation-a.png"), "test",
+            JSONObject().put("hardwareYuv", true))
+        assertTrue(report.getBoolean("rendered"))
+        assertFalse(report.getBoolean("experimental_path_succeeded"))
+        assertEquals("surface_fallback_from_mtk_yuv", report.getString("actual_output_path"))
+        assertFalse(ColorProbeEvidence.complete(report))
+    }
     @Test fun widthAndHeightCannotStandInForMissingOutputColorFields() {
         val bytes = RuntimeEnvironment.getApplication().assets.open("color-test/h264_full.csd").use { it.readBytes() }
         val hash = videoConfigurationHash(bytes)

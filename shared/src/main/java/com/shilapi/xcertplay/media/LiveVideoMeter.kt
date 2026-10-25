@@ -7,6 +7,7 @@ data class LiveVideoCounters(
     val decodeNanos: Long,
     val decodeSamples: Long,
     val receivedBytes: Long = 0,
+    val pipeline: VideoPipelineCounters = VideoPipelineCounters(),
 )
 
 /** What the live FPS counter shows for the last interval; [decodeMillis] is -1 when no frame was timed. */

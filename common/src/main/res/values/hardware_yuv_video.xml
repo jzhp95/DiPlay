@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_hardware_yuv_video">硬解颜色转换（实验性）</string>
+    <string name="settings_hardware_yuv_description">尝试保留硬解速度并修正颜色。不支持时提示并恢复原输出。开启后暂时代替软件直出、软件 YUV 和平滑视频，保留原设置。下次连接生效。</string>
+    <string name="settings_hardware_yuv_failed">硬解颜色转换不可用，正在回退 Surface 输出；原因已记录，本次不算实验成功。</string>
+</resources>

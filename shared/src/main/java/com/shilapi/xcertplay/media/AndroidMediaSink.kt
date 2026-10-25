@@ -224,6 +224,7 @@ class AndroidMediaSink(
     mainScreenSoftwareDecoder: Boolean = false,
     /** CPU-readable YUV, converted by the app only for the main non-mirror decoder. */
     val mainScreenSoftwareYuv: SoftwareYuvConfig? = null,
+    val mainScreenHardwareYuv: Boolean = false,
     val experimentalAudio: ExperimentalAudioConfig = ExperimentalAudioConfig(),
 ) : MediaSink {
     val mainScreenSoftwareDecoder = mainScreenSoftwareDecoder || mainScreenSoftwareYuv != null
@@ -759,6 +760,7 @@ class AndroidMediaSink(
         },
         colorOverride = colorOverride,
         softwareYuv = mainScreenSoftwareYuv.takeIf { type == MAIN_SCREEN_TYPE && statsLabel == null },
+        hardwareYuvEnabled = mainScreenHardwareYuv && type == MAIN_SCREEN_TYPE && statsLabel == null,
         forceSoftwareVideoDecoder = forceSoftwareVideoDecoder ||
             softwareMain,
         statsLabel = statsLabel,
@@ -767,7 +769,12 @@ class AndroidMediaSink(
         pacingDelayNanos = if (type == MAIN_SCREEN_TYPE && statsLabel == null) videoPacingDelayMillis * 1_000_000L else 0L,
         operatingRate = videoOperatingRate(type, statsLabel, mainVideoFrameRate),
         vendorLowLatency = vendorLowLatencyDecoder && !softwareMain,
-        dedicatedOutputThread = vendorLowLatencyDecoder && !softwareMain,
+        // Surface software decoding can deliver output independently of the next input job.
+        // Raw YUV/EGL stays on one owner thread; never migrate its context to this output thread.
+        dedicatedOutputThread = !(type == MAIN_SCREEN_TYPE && statsLabel == null &&
+            (mainScreenSoftwareYuv != null || mainScreenHardwareYuv)) &&
+            ((vendorLowLatencyDecoder && !softwareMain) ||
+                (type == MAIN_SCREEN_TYPE && statsLabel == null && (softwareMain || forceSoftwareVideoDecoder))),
         framesAtOnce = type == MAIN_SCREEN_TYPE && statsLabel == null && videoPacingDelayMillis > 0,
         // Keep the experimental MTK mode on the main CarPlay picture only. Mirrors and the
         // cluster have separate timing and must retain their established decoder configuration.
@@ -957,6 +964,7 @@ private class VideoDecoder(
     private val colorOverride: VideoColorOverride = VideoColorOverride(),
     private val forceSoftwareVideoDecoder: Boolean = false,
     private val softwareYuv: SoftwareYuvConfig? = null,
+    private val hardwareYuvEnabled: Boolean = false,
     private val statsLabel: String? = null,
     pacingDelayNanos: Long = 0L,
     /** Called on the worker as its last step, after it has released its codec. */
@@ -1004,6 +1012,11 @@ private class VideoDecoder(
     private var softwareYuvRenderer: SoftwareYuvRenderer? = null
     private var softwareYuvOutputFormat: MediaFormat? = null
     private var softwareYuvFailed = false
+    private var hardwareYuvFallback = false
+    private var hardwareYuvStartedNs = 0L
+    private val yuvConfig: SoftwareYuvConfig? get() = softwareYuv ?:
+        SoftwareYuvConfig().takeIf { hardwareYuvEnabled && !hardwareYuvFallback }
+    private val pipelineTiming = VideoPipelineTiming()
     @Volatile private var renderedFrameLogged = false
     // The operating rate still asked for, dropped for this stream once a decoder refuses it; and the rate
     // the current codec was configured with.
@@ -1042,6 +1055,7 @@ private class VideoDecoder(
     fun liveCounters() = LiveVideoCounters(
         received = liveReceived.get(),
         receivedBytes = liveReceivedBytes.get(),
+        pipeline = pipelineTiming.snapshot(),
         rendered = liveRendered.get(),
         decodeNanos = liveDecodeNanos.get(),
         decodeSamples = liveDecodeSamples.get(),
@@ -1154,6 +1168,9 @@ private class VideoDecoder(
                         null -> Unit
                     }
                     if (outputThread == null) decoder?.let(::drainOutput)
+                    if (hardwareYuvEnabled && !hardwareYuvFallback && hardwareYuvStartedNs > 0 &&
+                        !renderedFrameLogged && System.nanoTime() - hardwareYuvStartedNs > 5_000_000_000L)
+                        throw IllegalStateException("MTK raw YUV produced no frame within 5s")
                     stats.logIfDue()?.let(report)
                     if (referenceChain.needsKeyFrame && lastConfig != null && outputSurface != null) requestKeyFrameIfDue()
                 } catch (error: Exception) {
@@ -1181,7 +1198,8 @@ private class VideoDecoder(
     }
 
     private fun onJobFailure(stage: String, error: Exception) {
-        if (softwareYuv != null) failSoftwareYuv("$stage: ${error.javaClass.simpleName}: ${error.message}")
+        if (hardwareYuvEnabled && !hardwareYuvFallback) fallBackHardwareYuv("$stage: ${error.javaClass.simpleName}: ${error.message}")
+        else if (softwareYuv != null) failSoftwareYuv("$stage: ${error.javaClass.simpleName}: ${error.message}")
         if (running) Log.e(TAG, "video decoder job failed: $stage", error)
         if (running) reportFailure("stage=$stage", error)
         // MTK vendor failures may surface as CodecException or the broader IllegalStateException.
@@ -1261,7 +1279,7 @@ private class VideoDecoder(
         val surface = outputSurface ?: return
         val codec = config.codec
         val codecData = config.codecData
-        sourceColor = if (colorOverride.fromSps || softwareYuv != null) VideoColorMetadata.parse(codec, codecData) else null
+        sourceColor = if (colorOverride.fromSps || yuvConfig != null) VideoColorMetadata.parse(codec, codecData) else null
         if (colorOverride.fromSps) {
             val description = sourceColor
             report("SPS color request status=${description?.status} hints=${description?.let(VideoColorMetadata::androidHints)} " +
@@ -1295,14 +1313,21 @@ private class VideoDecoder(
             else diagnosticSoftwareDecoderName(diagnosticSoftwareCandidates(), mime)
         } else null
         if (forceSoftwareVideoDecoder && diagnosticSoftware == null) report("diagnostic software decoder unavailable mime=$mime; hardware fallback disabled")
-        for (attempt in diagnosticVideoDecoderAttempts(forceSoftwareVideoDecoder, diagnosticSoftware, videoDecoderAttempts(
-            requestedRate,
-            softwareDecoderName(mime),
-            requestedLowLatency,
-            requestedMtkMode,
-        ))) {
+        val rawHardware = hardwareYuvEnabled && !hardwareYuvFallback
+        val hardwareName = if (rawHardware) mtkYuvDecoderName(mime) else null
+        val attempts = if (rawHardware) hardwareName?.let { listOf(
+            DecoderAttempt(it, tuned = true, operatingRate = requestedRate),
+            DecoderAttempt(it, tuned = false)) }.orEmpty()
+        else diagnosticVideoDecoderAttempts(forceSoftwareVideoDecoder, diagnosticSoftware, videoDecoderAttempts(
+            requestedRate, softwareDecoderName(mime), requestedLowLatency, requestedMtkMode))
+        for (attempt in attempts) {
             configured = tryConfigure(mime, csd, surface, attempt, atOnce)
             if (configured != null) { used = attempt; break }
+        }
+        if (configured == null && rawHardware) {
+            fallBackHardwareYuv("no working MTK flexible-YUV decoder for $mime")
+            configureDecoder(config)
+            return
         }
         if (configured == null) {
             if (softwareYuv != null) failSoftwareYuv("no working software YUV420 decoder for $mime")
@@ -1336,6 +1361,7 @@ private class VideoDecoder(
             maximumMtkMode = configuredMtkMode
         }
         if (configured != null) {
+            hardwareYuvStartedNs = if (rawHardware) System.nanoTime() else 0L
             val rate = if (requestedRate > 0) " operatingRate=$configuredRate" else ""
             val lowLatency = if (vendorLowLatency) " vendorLowLatency=$configuredVendorLowLatency" else ""
             val output = if (outputThread != null) " outputThread=true" else ""
@@ -1384,7 +1410,7 @@ private class VideoDecoder(
     ): MediaFormat =
         MediaFormat.createVideoFormat(mime, width, height).apply {
             colorOverride.applyTo(this, sourceColor)
-            if (softwareYuv != null) setInteger(MediaFormat.KEY_COLOR_FORMAT,
+            if (yuvConfig != null) setInteger(MediaFormat.KEY_COLOR_FORMAT,
                 android.media.MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Flexible)
             if (attempt.tuned) {
                 setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, MAX_INPUT_SIZE)
@@ -1432,7 +1458,7 @@ private class VideoDecoder(
             configuredVendorLowLatency = vendorKeys.isNotEmpty()
             val pictureOrder = attempt.tuned && atOnce && listsPictureOrder(codec)
             if (pictureOrder) format.setInteger(PICTURE_ORDER_PARAMETER, 1)
-            codec.configure(format, if (softwareYuv != null) null else surface, null, 0)
+            codec.configure(format, if (yuvConfig != null) null else surface, null, 0)
             phase = "start"
             phaseStartNs = System.nanoTime()
             codec.start()
@@ -1519,7 +1545,7 @@ private class VideoDecoder(
     private fun detach(request: SurfaceDetachRequest): Unit = synchronized(outputLock) {
         var outcome = DetachOutcome.RELEASED
         try {
-            outcome = detachAction(outputSurface, request.surface, request.park && softwareYuv == null, decoder != null)
+            outcome = detachAction(outputSurface, request.surface, request.park && yuvConfig == null, decoder != null)
             when (outcome) {
                 DetachOutcome.NOT_RENDERING -> Unit
                 DetachOutcome.PARKED -> {
@@ -1561,7 +1587,7 @@ private class VideoDecoder(
             return
         }
         val codec = decoder
-        if (codec != null && softwareYuv == null) {
+        if (codec != null && yuvConfig == null) {
             try {
                 codec.setOutputSurface(surface)
                 Log.i(TAG, "video decoder output surface updated")
@@ -1603,6 +1629,7 @@ private class VideoDecoder(
                 "video decoder first input avcc=${nalus.size} annexB=${annexB.size}",
             )
         }
+        val acquireStartedNs = System.nanoTime()
         val index = DecoderInputPump.acquire(
             running = { running }, drain = { if (outputThread == null) drainOutput(codec) },
             dequeue = { codec.dequeueInputBuffer(INPUT_TIMEOUT_US) },
@@ -1622,6 +1649,7 @@ private class VideoDecoder(
             // Recorded before queueing: the output thread may dequeue the frame as soon as it is queued.
             synchronized(outputLock) {
                 val queuedNow = System.nanoTime()
+                pipelineTiming.input(receivedNs, acquireStartedNs, queuedNow)
                 if (lastQueuedNanos != 0L && queuedNow - lastQueuedNanos > STILL_GAP_NS) resumedAtNanos = queuedNow
                 lastQueuedNanos = queuedNow
                 queuedPresentationUs[queuedSlot] = presentationUs
@@ -1682,7 +1710,7 @@ private class VideoDecoder(
             index == MediaCodec.INFO_TRY_AGAIN_LATER -> return false
             index == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> logOutputFormat(codec.outputFormat)
             index >= 0 -> {
-                if (softwareYuv != null) return handleYuvOutput(codec, index, info)
+                if (yuvConfig != null) return handleYuvOutput(codec, index, info)
                 val render = outputSurface != null
                 // Parked output goes to the offscreen consumer: it keeps the codec's state, but it is
                 // not shown, so it is neither paced nor counted.
@@ -1692,6 +1720,7 @@ private class VideoDecoder(
                 val queued = if (slot >= 0) queuedAtNanos[slot] else 0L
                 val heldOverGap = queued in 1 until resumedAtNanos
                 if (queued > 0 && !heldOverGap) {
+                    pipelineTiming.output(queued, now)
                     stats.onDecodeLatency(now - queued)
                     liveDecodeNanos.addAndGet(now - queued)
                     liveDecodeSamples.incrementAndGet()
@@ -1705,6 +1734,7 @@ private class VideoDecoder(
                     stats.onPacingDelay(delay.nanos)
                     localNs + delay.nanos
                 } else 0L
+                val releaseStartedNs = System.nanoTime()
                 if (targetNs - now in 1..MAX_PACING_AHEAD_NS) {
                     codec.releaseOutputBuffer(index, targetNs)
                 } else {
@@ -1712,6 +1742,7 @@ private class VideoDecoder(
                     codec.releaseOutputBuffer(index, render)
                 }
                 if (shown) {
+                    pipelineTiming.surfaceRelease(System.nanoTime() - releaseStartedNs)
                     stats.onRendered()
                     liveRendered.incrementAndGet()
                     colorEvidence.rendered(colorGeneration)
@@ -1733,17 +1764,19 @@ private class VideoDecoder(
     private fun handleYuvOutput(codec: MediaCodec, index: Int, info: MediaCodec.BufferInfo): Boolean {
         var image: android.media.Image? = null
         var shown = false
+        val dequeuedNs = System.nanoTime()
         try {
             if (info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG != 0 ||
                 info.size == 0 && info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) return false
             val surface = outputSurface ?: return true
             image = codec.getOutputImage(index)
             if (image == null && info.size == 0) return true
-            val frame = checkNotNull(image) { "software decoder supplied no YUV Image" }
-            val color = SoftwareYuvColor.resolve(checkNotNull(softwareYuv), sourceColor,
+            val frame = checkNotNull(image) { "decoder supplied no YUV Image" }
+            val color = SoftwareYuvColor.resolve(checkNotNull(yuvConfig), sourceColor,
                 softwareYuvOutputFormat ?: codec.outputFormat)
             val renderer = softwareYuvRenderer ?: SoftwareYuvRenderer(surface).also { softwareYuvRenderer = it }
-            renderer.draw(frame, color)
+            val draw = renderer.draw(frame, color)
+            pipelineTiming.draw(draw.copyNanos, draw.drawNanos)
             shown = true
         } finally {
             try { image?.close() } finally { codec.releaseOutputBuffer(index, false) }
@@ -1753,17 +1786,25 @@ private class VideoDecoder(
             val queued = if (slot >= 0) queuedAtNanos[slot] else 0L
             val now = System.nanoTime()
             if (queued > 0 && queued !in 1 until resumedAtNanos) {
+                pipelineTiming.output(queued, dequeuedNs)
                 stats.onDecodeLatency(now - queued); liveDecodeNanos.addAndGet(now - queued); liveDecodeSamples.incrementAndGet()
             }
             stats.onRendered(); liveRendered.incrementAndGet(); colorEvidence.rendered(colorGeneration)
             if (!renderedFrameLogged) {
                 renderedFrameLogged = true
                 report("first frame rendered")
-                report("software-yuv rendered via app EGL RGB; ${SoftwareYuvColor.resolve(checkNotNull(softwareYuv),
+                report("${if (hardwareYuvEnabled) "hardware-yuv" else "software-yuv"} rendered via app EGL RGB; ${SoftwareYuvColor.resolve(checkNotNull(yuvConfig),
                     sourceColor, softwareYuvOutputFormat ?: codec.outputFormat).description}")
             }
         }
         return info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM == 0
+    }
+
+    private fun fallBackHardwareYuv(reason: String) {
+        if (hardwareYuvFallback) return
+        hardwareYuvFallback = true
+        hardwareYuvStartedNs = 0L
+        report("hardware-yuv unavailable: $reason; falling back to Surface decoder")
     }
 
     private fun failSoftwareYuv(reason: String) {
@@ -1774,16 +1815,19 @@ private class VideoDecoder(
 
     private fun logOutputFormat(format: MediaFormat) {
         softwareYuvOutputFormat = format
-        val yuvColor = softwareYuv?.let { SoftwareYuvColor.resolve(it, sourceColor, format) }
+        val yuvColor = yuvConfig?.let { SoftwareYuvColor.resolve(it, sourceColor, format) }
         val rendererFields = if (yuvColor == null) emptyMap() else mapOf(
-            "software-yuv" to 1, "yuv-render-range" to if (yuvColor.fullRange) 1 else 2,
+            (if (hardwareYuvEnabled) "hardware-yuv" else "software-yuv") to 1, "yuv-render-range" to if (yuvColor.fullRange) 1 else 2,
             "yuv-render-matrix" to if (yuvColor.bt709) 1 else 2)
-        if (yuvColor != null) report("software-yuv format ${yuvColor.description}; decoded=$format")
+        if (yuvColor != null) report("${if (hardwareYuvEnabled) "hardware-yuv" else "software-yuv"} format ${yuvColor.description}; decoded=$format")
         colorEvidence.format(colorGeneration,
             listOf(MediaFormat.KEY_WIDTH, MediaFormat.KEY_HEIGHT, MediaFormat.KEY_COLOR_STANDARD,
                 MediaFormat.KEY_COLOR_RANGE, MediaFormat.KEY_COLOR_TRANSFER, MediaFormat.KEY_COLOR_FORMAT,
                 MediaFormat.KEY_STRIDE, MediaFormat.KEY_SLICE_HEIGHT, "crop-left", "crop-top", "crop-right", "crop-bottom")
-                .associateWith { format.intOrNull(it) } + rendererFields,
+                .associateWith { format.intOrNull(it) } + rendererFields + mapOf(
+                    "hardware-yuv-requested" to if (hardwareYuvEnabled) 1 else 0,
+                    "hardware-yuv-fallback" to if (hardwareYuvFallback) 1 else 0,
+                    "independent-output" to if (outputThread != null) 1 else 0),
             format.toString() + if (yuvColor != null) " app-EGL ${yuvColor.description}" else "")
         report("output format requested=${width}x${height} " +
             "coded=${format.intOrNull(MediaFormat.KEY_WIDTH)}x${format.intOrNull(MediaFormat.KEY_HEIGHT)} " +

@@ -50,8 +50,10 @@ internal class SoftwareYuvRenderer(surface: Surface) : Closeable {
         } catch (error: Exception) { close(); throw error }
     }
 
-    fun draw(image: Image, color: YuvColorTransform) {
+    fun draw(image: Image, color: YuvColorTransform): YuvDrawTiming {
+        val start = System.nanoTime()
         frame.copy(image)
+        val copied = System.nanoTime()
         check(EGL14.eglMakeCurrent(display, window, window, context)) { "EGL window lost" }
         val w = IntArray(1); val h = IntArray(1)
         check(EGL14.eglQuerySurface(display, window, EGL14.EGL_WIDTH, w, 0) &&
@@ -86,6 +88,7 @@ internal class SoftwareYuvRenderer(surface: Surface) : Closeable {
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
         checkGl()
         check(EGL14.eglSwapBuffers(display, window)) { "EGL swap failed" }
+        return YuvDrawTiming(copied - start, System.nanoTime() - copied)
     }
 
     override fun close() {

@@ -732,6 +732,13 @@ object AirPlayPersistence {
             .putBoolean(KEY_MTK_DECODER_TUNING, enabled).apply()
     }
 
+    fun loadHardwareYuvEnabled(context: Context): Boolean =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean("hardware_yuv_enabled", false)
+
+    fun saveHardwareYuvEnabled(context: Context, enabled: Boolean) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean("hardware_yuv_enabled", enabled).apply()
+    }
+
     fun loadSoftwareYuvEnabled(context: Context): Boolean =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_SOFTWARE_YUV_ENABLED, false)
 

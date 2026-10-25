@@ -47,7 +47,17 @@ internal class VideoAdaptationWindow(val phase: String, private val first: Video
     private fun metrics(a: VideoAdaptationSample, b: VideoAdaptationSample): JSONObject {
         val seconds = (b.nanos - a.nanos) / 1e9
         val count = b.counters.decodeSamples - a.counters.decodeSamples
-        return JSONObject().put("durationSeconds", seconds)
+        val x = a.counters.pipeline; val y = b.counters.pipeline
+        fun average(nanos: Long, samples: Long): Any = if (samples > 0 && nanos >= 0) nanos / samples / 1e6 else JSONObject.NULL
+        val pipeline = JSONObject()
+            .put("applicationWaitMillis", average(y.applicationWaitNanos - x.applicationWaitNanos, y.inputSamples - x.inputSamples))
+            .put("inputAcquireAndCopyMillis", average(y.inputWaitNanos - x.inputWaitNanos, y.inputSamples - x.inputSamples))
+            .put("codecQueueToDequeueMillis", average(y.codecOutputNanos - x.codecOutputNanos, y.outputSamples - x.outputSamples))
+            .put("yuvCopyMillis", average(y.yuvCopyNanos - x.yuvCopyNanos, y.yuvSamples - x.yuvSamples))
+            .put("yuvDrawAndSwapMillis", average(y.yuvDrawNanos - x.yuvDrawNanos, y.yuvSamples - x.yuvSamples))
+            .put("surfaceReleaseCallMillis", average(y.surfaceReleaseNanos - x.surfaceReleaseNanos, y.surfaceSamples - x.surfaceSamples))
+            .put("scope", "app_measurements_not_physical_display_or_touch_latency")
+        return JSONObject().put("durationSeconds", seconds).put("pipeline", pipeline)
             .put("receivedFrames", b.counters.received - a.counters.received)
             .put("submittedToDisplayFrames", b.counters.rendered - a.counters.rendered)
             .put("receivedPayloadBytes", b.counters.receivedBytes - a.counters.receivedBytes)

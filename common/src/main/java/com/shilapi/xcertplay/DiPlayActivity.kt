@@ -1554,10 +1554,18 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         // Opt-in controls that can cost sound or video on some head units.
         filteredSection(content, SettingsSection.ADVANCED_MEDIA,
             getString(R.string.settings_advanced_media), R.drawable.ic_dp_advanced) { card ->
-            val softwareYuv = AirPlayPersistence.loadSoftwareYuvEnabled(this)
-            val softwareDirect = softwareYuv || AirPlayPersistence.loadSoftwareDirectVideoOutput(this)
+            val hardwareYuv = AirPlayPersistence.loadHardwareYuvEnabled(this)
+            toggle(card, getString(R.string.settings_hardware_yuv_video),
+                getString(R.string.settings_hardware_yuv_description), hardwareYuv) { enabled ->
+                AirPlayPersistence.saveHardwareYuvEnabled(this, enabled)
+                markReconnectNeeded()
+                render()
+            }
+            val softwareYuv = !hardwareYuv && AirPlayPersistence.loadSoftwareYuvEnabled(this)
+            val softwareDirect = !hardwareYuv && (softwareYuv || AirPlayPersistence.loadSoftwareDirectVideoOutput(this))
+            val controlledOutput = hardwareYuv || softwareDirect
             toggle(card, getString(R.string.settings_software_yuv_video),
-                getString(R.string.settings_software_yuv_description), softwareYuv) { enabled ->
+                getString(R.string.settings_software_yuv_description), softwareYuv, enabled = !hardwareYuv) { enabled ->
                 val mime = if (AirPlayPersistence.loadHevcEnabled(this)) MediaFormat.MIMETYPE_VIDEO_HEVC
                     else MediaFormat.MIMETYPE_VIDEO_AVC
                 if (enabled && com.shilapi.xcertplay.media.softwareYuvDecoderName(mime) == null) {
@@ -1585,7 +1593,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             }
             toggle(card, getString(R.string.settings_software_direct_video),
                 getString(R.string.settings_software_direct_video_description),
-                !softwareYuv && AirPlayPersistence.loadSoftwareDirectVideoOutput(this), enabled = !softwareYuv) { enabled ->
+                !hardwareYuv && !softwareYuv && AirPlayPersistence.loadSoftwareDirectVideoOutput(this), enabled = !hardwareYuv && !softwareYuv) { enabled ->
                 val mime = if (AirPlayPersistence.loadHevcEnabled(this)) MediaFormat.MIMETYPE_VIDEO_HEVC
                     else MediaFormat.MIMETYPE_VIDEO_AVC
                 if (enabled && com.shilapi.xcertplay.media.diagnosticSoftwareDecoderName(
@@ -1605,7 +1613,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             }
             val hevc = AirPlayPersistence.loadHevcEnabled(this)
             val selectedMime = if (hevc) MediaFormat.MIMETYPE_VIDEO_HEVC else MediaFormat.MIMETYPE_VIDEO_AVC
-            val mtkDecoder = if (softwareDirect || (hevc && AirPlayPersistence.loadHevcSoftwareDecoderEnabled(this))) null
+            val mtkDecoder = if (controlledOutput || (hevc && AirPlayPersistence.loadHevcSoftwareDecoderEnabled(this))) null
                 else selectedMtkDecoderName(selectedMime)
             if (mtkDecoder != null) {
                 toggle(card, getString(R.string.settings_mtk_decoder_tuning),
@@ -1616,19 +1624,19 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                 }
             }
             toggle(card, getString(R.string.smooth_video), getString(R.string.smooth_video_description),
-                !softwareDirect && AirPlayPersistence.loadSmoothVideo(this), enabled = !softwareDirect) {
+                !controlledOutput && AirPlayPersistence.loadSmoothVideo(this), enabled = !controlledOutput) {
                 AirPlayPersistence.saveSmoothVideo(this, it)
                 reconnectIfRunning()
             }
             toggle(card, getString(R.string.settings_direct_video_output),
                 getString(R.string.settings_direct_video_output_description),
-                softwareDirect || AirPlayPersistence.loadDirectVideoOutput(this), enabled = !softwareDirect) {
+                controlledOutput || AirPlayPersistence.loadDirectVideoOutput(this), enabled = !controlledOutput) {
                 AirPlayPersistence.saveDirectVideoOutput(this, it)
                 reconnectIfRunning()
             }
             toggle(card, getString(R.string.settings_low_latency_decoder),
                 getString(R.string.settings_low_latency_decoder_description),
-                !softwareDirect && AirPlayPersistence.loadLowLatencyDecoder(this), enabled = !softwareDirect) {
+                !controlledOutput && AirPlayPersistence.loadLowLatencyDecoder(this), enabled = !controlledOutput) {
                 AirPlayPersistence.saveLowLatencyDecoder(this, it)
                 markReconnectNeeded()
             }
