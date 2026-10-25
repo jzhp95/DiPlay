@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="video_adapt_title">视频适配</string>
+    <string name="video_adapt_description">采集这台车机的屏幕、GPU、解码能力与真实 CarPlay 视频链路，用于排查模糊、发白和卡顿。不会自动修改画质或断开当前连接。</string>
+    <string name="video_adapt_collect_device">采集设备能力</string>
+    <string name="video_adapt_start">采集当前 CarPlay 主屏</string>
+    <string name="video_adapt_guide">先连接 CarPlay，再进入主屏采样：静止页面 20 秒、拖动地图 20 秒。每段结束后自动保存截图。请在停车状态操作。更换输出模式后可再采一组，结果会保留模式信息。</string>
+    <string name="video_adapt_phone_model">iPhone 型号（可选，例如 iPhone 15）</string>
+    <string name="video_adapt_phone_ios">iOS 版本（可选）</string>
+    <string name="video_adapt_observation">记录清晰度与手机发热</string>
+    <string name="video_adapt_modes">进入已有画面颜色对比</string>
+    <string name="video_adapt_modes_hint">颜色页的结果作为独立参考。它不会计作本轮适配采样；需要更换日常输出方式时，仍通过设置选择并重连。</string>
+    <string name="video_adapt_export">保存并分享整包报告</string>
+    <string name="video_adapt_clear">清空本页采集结果</string>
+    <string name="video_adapt_clear_confirm">清空本页记录及截图？已导出的报告不受影响。</string>
+    <string name="video_adapt_cancel_pending">取消待采集请求</string>
+    <string name="video_adapt_idle">尚未采集。已有记录会保留，缺项会在下方显示。</string>
+    <string name="video_adapt_busy">正在后台采集或导出，请稍候。</string>
+    <string name="video_adapt_device_saved">设备能力已保存。系统不允许读取的项目会标记缺失。</string>
+    <string name="video_adapt_no_session">请先建立 CarPlay 连接，再采集真实主屏。</string>
+    <string name="video_adapt_active">采集请求仍在进行，可返回 CarPlay 完成采样，或取消请求。</string>
+    <string name="video_adapt_conflict">请先结束已有的画面颜色测试。</string>
+    <string name="video_adapt_failed">操作未完成，原因：%1$s。已有结果仍保留。</string>
+    <string name="video_adapt_export_saved">报告已保存到：%1$s</string>
+    <string name="video_adapt_missing">缺项：%1$s</string>
+    <string name="video_adapt_basic_ready">已具备静止与动态基本采样；仍需结合截图人工分析。</string>
+    <string name="video_adapt_records">已保留 %1$d 组采样（最多 8 组）。有效表示采样区间连续，不代表画质通过。</string>
+    <string name="video_adapt_overlay_ready">视频适配采集：选择静止或拖动地图，各采 20 秒。计时中控件会收起，不改变视频尺寸。</string>
+    <string name="video_adapt_static">静止页面采样 20 秒</string>
+    <string name="video_adapt_dynamic">拖动地图采样 20 秒</string>
+    <string name="video_adapt_return">结束并返回测试页</string>
+    <string name="video_adapt_static_running">静止采样：剩余 %1$d 秒。保持当前页面。</string>
+    <string name="video_adapt_dynamic_running">动态采样：剩余 %1$d 秒。请持续拖动地图。</string>
+    <string name="video_adapt_not_ready">等待真实 CarPlay 主屏显示，准备好后再开始。</string>
+    <string name="video_adapt_interrupted">本组已中断或输出发生变化，结果已标记；请重新采样。</string>
+    <string name="video_adapt_phase_saved">本段已保存，可继续另一段，或结束返回测试页。</string>
+</resources>

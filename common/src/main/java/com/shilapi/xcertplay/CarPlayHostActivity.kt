@@ -405,6 +405,8 @@ class CarPlayHostActivity : ComponentActivity() {
     // Smooth video (a setting): SurfaceView output with frames released at the iPhone's frame time.
     private var colorMainProbe: ColorMainProbeRegistry.Request? = null
     private var colorMainOverlay: ColorMainProbeOverlay? = null
+    private var videoAdaptationOverlay: VideoAdaptationOverlay? = null
+    private var videoAdaptationTouchMoves = 0L
     private var colorMainFinishing = false
     private val colorMainLines = ArrayDeque<String>()
     private var smoothVideo = false
@@ -1095,6 +1097,10 @@ class CarPlayHostActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        if (VideoAdaptationRegistry.accepts(intent.getStringExtra(VideoAdaptationRegistry.EXTRA))) {
+            attachVideoAdaptationOverlay()
+            return
+        }
         val probe = ColorMainProbeRegistry.lookup(intent.getStringExtra(ColorMainProbeRegistry.EXTRA_TOKEN))
         if (probe != null) {
             colorMainOverlay?.close(); colorMainOverlay = null
@@ -1204,6 +1210,7 @@ class CarPlayHostActivity : ComponentActivity() {
         }
         maybeStartCarPlay()
         applyFullscreenMode()
+        attachVideoAdaptationOverlay()
         if (systemBarsChanged) refreshDisplaySizeAfterLayout()
         videoView?.post {
             val view = videoView ?: return@post
@@ -1411,6 +1418,8 @@ class CarPlayHostActivity : ComponentActivity() {
     }
 
     override fun onStop() {
+        videoAdaptationOverlay?.close(); videoAdaptationOverlay = null
+        intent.removeExtra(VideoAdaptationRegistry.EXTRA)
         if (colorMainProbe != null && !isChangingConfigurations && !colorMainFinishing) {
             finishColorMainProbe("跳过", colorMainEvidence(emptyList()).put("interrupted", true), false, returnToTests = false)
         }
@@ -1503,6 +1512,7 @@ class CarPlayHostActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        videoAdaptationOverlay?.close(); videoAdaptationOverlay = null
         if (colorMainProbe != null && !colorMainFinishing && !isChangingConfigurations)
             finishColorMainProbe("无法显示", colorMainEvidence(emptyList()).put("startup_error", "destroyed_without_result"), false, returnToTests = false)
         colorMainOverlay?.close(); colorMainOverlay = null
@@ -5661,6 +5671,63 @@ class CarPlayHostActivity : ComponentActivity() {
         }
     }
 
+    private fun attachVideoAdaptationOverlay() {
+        if (videoAdaptationOverlay != null || colorMainProbe != null) return
+        val token = intent.getStringExtra(VideoAdaptationRegistry.EXTRA)
+        if (!VideoAdaptationRegistry.accepts(token)) return
+        val parent = findViewById<android.view.ViewGroup>(android.R.id.content) ?: return
+        videoAdaptationOverlay = VideoAdaptationOverlay(this, token!!, ::videoAdaptationSample,
+            outputs = { if (fallbackVideoView != null) null to fallbackVideoView else (videoView as? TextureView) to null },
+            back = {
+                videoAdaptationOverlay = null
+                intent.removeExtra(VideoAdaptationRegistry.EXTRA)
+                OwnScreenStart.start(this, Intent(this, WheelTestActivity::class.java)
+                    .putExtra("diagnostics_page", "VIDEO").addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT), ::appendLog)
+            }).also { overlay ->
+                parent.addView(overlay.root, FrameLayout.LayoutParams(-1, -2, Gravity.TOP))
+            }
+    }
+
+    private fun videoAdaptationSample(): VideoAdaptationSample? {
+        if (!CarPlayBackgroundSession.isOwner(this) || controller == null || menuOpen || picturePanel != null) return null
+        val owner = sink ?: return null
+        val output = owner.videoColorOutput()?.takeIf { it.active && it.firstFrameRendered } ?: return null
+        val counters = owner.liveVideoCounters() ?: return null
+        val view = fallbackVideoView ?: videoView ?: return null
+        if (view.width <= 0 || view.height <= 0) return null
+        val frame = fallbackVideoView?.holder?.surfaceFrame
+        val evidence = colorMainEvidence(emptyList())
+        val verified = owner.videoColorOutput() ?: return null
+        if (verified.instance != output.instance || verified.generation != output.generation || verified.format != output.format || sink !== owner) return null
+        val display = sessionDisplay ?: return null
+        val transform = FloatArray(9)
+        (videoView as? TextureView)?.getTransform(android.graphics.Matrix())?.getValues(transform)
+        val geometry = "${view.width}x${view.height}:${view.x},${view.y}:${frame?.width()}x${frame?.height()}:${transform.contentToString()}"
+        val picture = CarPlayPicture.preferences(this)
+        val pictureKey = CarPlayPicture.keys.joinToString { "$it=${CarPlayPicture.value(picture, it)}" }
+        val key = "${displayDiagnosticAttempt}:${output.instance}:${output.generation}:${output.configurationHash}:$geometry:${output.format.toSortedMap()}:$pictureKey"
+        // Capture completeness belongs to the completed interval, not its pre-capture snapshots.
+        val snapshotMissing = evidence.optJSONArray("missing") ?: org.json.JSONArray()
+        evidence.put("missing", org.json.JSONArray((0 until snapshotMissing.length())
+            .map { snapshotMissing.getString(it) }.filter { it != "capture" }))
+        evidence.put("snapshotBeforeCapture", true)
+        evidence.optJSONObject("requested")?.put("profile", "current_actual")
+        evidence.put("dragMoveEvents", videoAdaptationTouchMoves)
+        evidence.put("phoneContext", VideoAdaptationStore.read(this).optJSONObject("phone") ?: org.json.JSONObject.NULL)
+        evidence.put("source_kind", "video_adaptation_current_main").put("requestedCanvasWidth", display.width)
+            .put("requestedCanvasHeight", display.height).put("negotiatedWindowWidth", display.windowWidth)
+            .put("negotiatedWindowHeight", display.windowHeight).put("viewWidth", view.width).put("viewHeight", view.height)
+            .put("surfaceBufferWidth", frame?.width() ?: org.json.JSONObject.NULL)
+            .put("surfaceBufferHeight", frame?.height() ?: org.json.JSONObject.NULL)
+            .put("viewTransform", org.json.JSONArray(transform.toList()))
+            .put("displayNegotiation", DisplayDiagnosticSnapshot.report(this))
+            .put("transport", if (wirelessEnabled) "wireless" else "wired")
+            .put("uiSelectedResolutionPercent", displayScalePercent)
+            .put("physicalWidthMmSetting", AirPlayPersistence.loadWidthPhysicalMm(this))
+            .put("thermal", VideoAdaptationDevice.thermal(this))
+        return VideoAdaptationSample(key, System.nanoTime(), counters, android.os.Process.getElapsedCpuTime(), evidence)
+    }
+
     private fun colorMainEvidence(files: List<String>): org.json.JSONObject {
         val request = colorMainProbe
         val config = org.json.JSONObject().apply {
@@ -6100,6 +6167,7 @@ class CarPlayHostActivity : ComponentActivity() {
     }
 
     private fun onHostTouch(view: View, event: MotionEvent): Boolean {
+        if (videoAdaptationOverlay != null && event.actionMasked == MotionEvent.ACTION_MOVE) videoAdaptationTouchMoves++
         if (menuOpen) return true
 
         when (event.actionMasked) {

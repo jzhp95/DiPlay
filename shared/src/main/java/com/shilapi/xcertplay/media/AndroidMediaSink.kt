@@ -1034,12 +1034,14 @@ private class VideoDecoder(
     private val stats = VideoStats(statsLabel ?: if (streamType == MAIN_SCREEN_TYPE) "" else " stream=$streamType")
     // Running totals for the live FPS counter, read from the UI thread.
     private val liveReceived = AtomicLong()
+    private val liveReceivedBytes = AtomicLong()
     private val liveRendered = AtomicLong()
     private val liveDecodeNanos = AtomicLong()
     private val liveDecodeSamples = AtomicLong()
 
     fun liveCounters() = LiveVideoCounters(
         received = liveReceived.get(),
+        receivedBytes = liveReceivedBytes.get(),
         rendered = liveRendered.get(),
         decodeNanos = liveDecodeNanos.get(),
         decodeSamples = liveDecodeSamples.get(),
@@ -1069,6 +1071,7 @@ private class VideoDecoder(
     fun submit(nalus: ByteArray, senderNanos: Long = 0L, arrivalNanos: Long = 0L) {
         stats.onReceived(nalus.size)
         liveReceived.incrementAndGet()
+        liveReceivedBytes.addAndGet(nalus.size.toLong())
         // Pacing runs on the worker, in queue order: callbacks of a replaced stream may still deliver here.
         queue.offer(VideoJob.Frame(nalus, senderNanos = senderNanos, arrivalNanos = arrivalNanos))
     }

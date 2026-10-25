@@ -32,6 +32,7 @@ class WheelTestActivity : Activity(), AppAppearanceOwner {
     private lateinit var uidLayout: UidTestLayout
     private lateinit var uidViews: UidTestLayout.Views
     private var colorPage: ColorTestPage? = null
+    private var videoPage: VideoAdaptationPage? = null
     private var selectedPage = DiagnosticsTestLayout.Page.WHEEL
     private val appearanceHandler = Handler(Looper.getMainLooper())
     private val appearancePoll = object : Runnable {
@@ -63,12 +64,15 @@ class WheelTestActivity : Activity(), AppAppearanceOwner {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        if (intent.getStringExtra("diagnostics_page") == "COLOR") selectPage(DiagnosticsTestLayout.Page.COLOR)
+        intent.getStringExtra("diagnostics_page")?.let { name ->
+            DiagnosticsTestLayout.Page.entries.firstOrNull { it.name == name }?.let(::selectPage)
+        }
     }
 
     private fun renderAppearance() {
         colorPage?.close()
         colorPage = null
+        videoPage?.close(); videoPage = null
         val scrollY = if (::views.isInitialized) views.root.scrollY else 0
         val mfiScrollY = if (::mfiViews.isInitialized) mfiViews.root.scrollY else 0
         val uidScrollY = if (::uidViews.isInitialized) uidViews.root.scrollY else 0
@@ -93,7 +97,8 @@ class WheelTestActivity : Activity(), AppAppearanceOwner {
         uidLayout = UidTestLayout(this, palette)
         uidViews = uidLayout.build()
         colorPage = ColorTestPage(this, palette)
-        diagnosticsViews = DiagnosticsTestLayout(this, palette).build(views.root, mfiViews.root, selectedPage, ::selectPage, ::finish, uidViews.root, colorPage!!.root)
+        videoPage = VideoAdaptationPage(this, palette) { selectPage(DiagnosticsTestLayout.Page.COLOR) }
+        diagnosticsViews = DiagnosticsTestLayout(this, palette).build(views.root, mfiViews.root, selectedPage, ::selectPage, ::finish, uidViews.root, colorPage!!.root, videoPage!!.root)
         ViewCompat.setOnApplyWindowInsetsListener(diagnosticsViews.root) { view, insets ->
             val safe = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
             view.setPadding(safe.left, safe.top, safe.right, safe.bottom)
@@ -101,6 +106,7 @@ class WheelTestActivity : Activity(), AppAppearanceOwner {
         }
         setContentView(diagnosticsViews.root)
         colorPage?.setVisible(foreground && selectedPage == DiagnosticsTestLayout.Page.COLOR)
+        videoPage?.setVisible(foreground && selectedPage == DiagnosticsTestLayout.Page.VIDEO)
         showState(controller.snapshot())
         showMfiState(mfiController.snapshot())
         views.root.post { views.root.scrollTo(0, scrollY) }
@@ -112,6 +118,7 @@ class WheelTestActivity : Activity(), AppAppearanceOwner {
         super.onResume()
         foreground = true
         colorPage?.setVisible(selectedPage == DiagnosticsTestLayout.Page.COLOR)
+        videoPage?.setVisible(selectedPage == DiagnosticsTestLayout.Page.VIDEO)
         appearanceObserverRemoval?.invoke()
         appearanceObserverRemoval = AppAppearanceRuntime.observeHost {
             runOnUiThread {
@@ -134,6 +141,7 @@ class WheelTestActivity : Activity(), AppAppearanceOwner {
         if (page != DiagnosticsTestLayout.Page.MFI) mfiController.cancel()
         selectedPage = page
         colorPage?.setVisible(foreground && page == DiagnosticsTestLayout.Page.COLOR)
+        videoPage?.setVisible(foreground && page == DiagnosticsTestLayout.Page.VIDEO)
         diagnosticsViews.select(page)
         showState(controller.snapshot())
         if (page == DiagnosticsTestLayout.Page.MFI && foreground) mfiController.refresh()
@@ -232,6 +240,7 @@ class WheelTestActivity : Activity(), AppAppearanceOwner {
     override fun onStop() {
         foreground = false
         colorPage?.setVisible(false)
+        videoPage?.setVisible(false)
         appearanceHandler.removeCallbacks(appearancePoll)
         appearanceObserverRemoval?.invoke()
         appearanceObserverRemoval = null
@@ -244,6 +253,7 @@ class WheelTestActivity : Activity(), AppAppearanceOwner {
     }
 
     override fun onDestroy() {
+        videoPage?.close(); videoPage = null
         colorPage?.close()
         colorPage = null
         if (::controller.isInitialized) controller.close()

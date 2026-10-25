@@ -52,7 +52,8 @@ class DiagnosticsTestLayoutTest {
             var backs = 0
             val uid = UidTestLayout(context, palette).build()
             val color = ScrollView(context).apply { addView(TextView(context).apply { text = context.getString(R.string.color_test_title) }) }
-            val ui = DiagnosticsTestLayout(context, palette).build(wheel.root, mfi.root, DiagnosticsTestLayout.Page.WHEEL, clicks::add, back = { backs++ }, uid = uid.root, color = color)
+            val video = ScrollView(context).apply { addView(TextView(context).apply { text = context.getString(R.string.video_adapt_title) }) }
+            val ui = DiagnosticsTestLayout(context, palette).build(wheel.root, mfi.root, DiagnosticsTestLayout.Page.WHEEL, clicks::add, back = { backs++ }, uid = uid.root, color = color, video = video)
             val density = context.resources.displayMetrics.density
             val w = (width * density).toInt(); val h = (height * density).toInt()
             val prefix = "$width-$densityDpi-1.5-${if (night) "dark" else "light"}${if (rtl) "-rtl" else ""}"
@@ -64,11 +65,12 @@ class DiagnosticsTestLayoutTest {
                     DiagnosticsTestLayout.Page.MFI -> mfi.root
                     DiagnosticsTestLayout.Page.UID -> uid.root
                     DiagnosticsTestLayout.Page.COLOR -> color
+                    DiagnosticsTestLayout.Page.VIDEO -> video
                 }
                 val menus = visible(ui.root).filterIsInstance<Button>().filter {
-                    it.text == "方控测试" || it.text == "MFi 认证测试" || it.text == "UID 检测" || it.text == "画面颜色"
+                    it.text == "方控测试" || it.text == "MFi 认证测试" || it.text == "UID 检测" || it.text == "画面颜色" || it.text == "视频适配"
                 }.toList()
-                assertEquals(if (width < 600) 1 else 4, menus.size)
+                assertEquals(if (width < 600) 1 else 5, menus.size)
                 menus.forEach { menu ->
                     val menuBounds = bounds(ui.root, menu)
                     val detailBounds = bounds(ui.root, detail)
