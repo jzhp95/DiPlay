@@ -321,6 +321,42 @@ class TelephonyMicrophoneTest {
         assertEquals(AudioRecord.STATE_UNINITIALIZED, recorder.get()!!.state)
     }
 
+    @Test @Config(sdk = [28])
+    fun microphoneGainRunsAfterEchoCancellationAndBeforeOpusEncoding() {
+        provideCallFrame(frameBytes = config("telephony").copy(codec = AudioCodecKind.OPUS).frameBytes)
+        val encoded = CountDownLatch(1)
+        val actual = AtomicReference<ByteArray>()
+        val fake = object : CallEchoCanceller {
+            override val frameSamples = 960
+            override fun process(frame: ByteArray, reference: ShortArray): Boolean {
+                // Recorder supplies zeros; AEC supplies a known post-processing frame.
+                assertTrue(frame.all { it == 0.toByte() })
+                for (at in frame.indices step 2) { frame[at] = 0xe8.toByte(); frame[at + 1] = 3 }
+                return true
+            }
+            override fun close() {}
+        }
+        val uplink = MicrophoneUplink(config("telephony").copy(codec = AudioCodecKind.OPUS),
+            echoReference = EchoReference(16_000), echoCancellerFactory = { _, _, _ -> fake }, gainDb = 6,
+            opusEncoderFactory = {
+                object : MicrophoneOpusEncoder {
+                    override val implementation = "test"
+                    override val available = true
+                    override fun encode(pcm: ByteArray): List<ByteArray> {
+                        actual.set(pcm.copyOf()); encoded.countDown(); return emptyList()
+                    }
+                    override fun close() {}
+                }
+            })
+        try {
+            assertTrue(uplink.start())
+            assertTrue(encoded.await(5, TimeUnit.SECONDS))
+            val frame = requireNotNull(actual.get())
+            for (at in frame.indices step 2) assertEquals(1995,
+                (frame[at].toInt() and 255) or (frame[at + 1].toInt() shl 8))
+        } finally { uplink.close() }
+    }
+
     @Test fun softwareProcessingFailureRestoresPlatformAecAndKeepsTheSameRecorderRunning() {
         val fake = FakeCallEchoCanceller(succeeds = false)
         val nextRead = CountDownLatch(1)
@@ -412,14 +448,14 @@ class TelephonyMicrophoneTest {
         sink.onAudioRtp(id, AudioFormat(AudioCodecKind.LPCM, 16_000, 1, id.type, "telephony"), byteArrayOf(), 0)
     }
 
-    private fun provideCallFrame(nextRead: CountDownLatch? = null) {
+    private fun provideCallFrame(nextRead: CountDownLatch? = null, frameBytes: Int = config("telephony").frameBytes) {
         val produced = AtomicBoolean()
         ShadowAudioRecord.setSourceProvider { record ->
             recorder.compareAndSet(null, record)
             readStarted.countDown()
             object : ShadowAudioRecord.AudioRecordSource {
                 override fun readInByteArray(buffer: ByteArray, offset: Int, size: Int, blocking: Boolean): Int {
-                    if (produced.compareAndSet(false, true)) return config("telephony").frameBytes
+                    if (produced.compareAndSet(false, true)) return frameBytes
                     nextRead?.countDown()
                     Thread.sleep(5)
                     return 0

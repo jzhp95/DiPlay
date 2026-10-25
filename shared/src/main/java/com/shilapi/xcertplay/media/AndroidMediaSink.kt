@@ -221,8 +221,12 @@ class AndroidMediaSink(
     private val forceSoftwareVideoDecoder: Boolean = false,
     private val nativeHfpCalls: Boolean = false,
     /** Daily colour compatibility: strict software decoding for the main screen, excluding mirrors. */
-    val mainScreenSoftwareDecoder: Boolean = false,
+    mainScreenSoftwareDecoder: Boolean = false,
+    /** CPU-readable YUV, converted by the app only for the main non-mirror decoder. */
+    val mainScreenSoftwareYuv: SoftwareYuvConfig? = null,
+    val experimentalAudio: ExperimentalAudioConfig = ExperimentalAudioConfig(),
 ) : MediaSink {
+    val mainScreenSoftwareDecoder = mainScreenSoftwareDecoder || mainScreenSoftwareYuv != null
     // Each downlink publishes its own reference; a mic must match that stream and sample rate.
     private val callEchoReferences = ConcurrentHashMap<AudioStreamId, EchoReference>()
     private val nativeHfpRing = NativeHfpRingPolicy(nativeHfpCalls)
@@ -612,7 +616,8 @@ class AndroidMediaSink(
             val uplink = microphoneUplinks.computeIfAbsent(id) {
                 MicrophoneUplink(config, onAudioDiagnostic,
                     speakerphoneCall = speakerphoneCall,
-                    echoReference = if (config.audioType == TELEPHONY_AUDIO_TYPE) callEchoReferences[id] else null)
+                    echoReference = if (config.audioType == TELEPHONY_AUDIO_TYPE) callEchoReferences[id] else null,
+                    gainDb = experimentalAudio.microphoneGainDb)
             }
             if (!uplink.start()) {
                 microphoneUplinks.remove(id, uplink)
@@ -753,6 +758,7 @@ class AndroidMediaSink(
             else videoDiagnosticHandlers[type]?.invoke(message)
         },
         colorOverride = colorOverride,
+        softwareYuv = mainScreenSoftwareYuv.takeIf { type == MAIN_SCREEN_TYPE && statsLabel == null },
         forceSoftwareVideoDecoder = forceSoftwareVideoDecoder ||
             softwareMain,
         statsLabel = statsLabel,
@@ -798,6 +804,7 @@ class AndroidMediaSink(
             echoReference = echoReference,
             voiceFilter = callVoiceFilter && format.audioType == TELEPHONY_AUDIO_TYPE,
         ).also {
+            it.experiments = experimentalAudio
             it.setNavigationAttenuationDb(navigationAttenuationDb)
             if (format.audioType == TELEPHONY_AUDIO_TYPE) it.onRoutedToEarpiece = { moveCallToLoudspeaker(id) }
             audioRenderers[id] = it
@@ -949,6 +956,7 @@ private class VideoDecoder(
     private val report: (String) -> Unit,
     private val colorOverride: VideoColorOverride = VideoColorOverride(),
     private val forceSoftwareVideoDecoder: Boolean = false,
+    private val softwareYuv: SoftwareYuvConfig? = null,
     private val statsLabel: String? = null,
     pacingDelayNanos: Long = 0L,
     /** Called on the worker as its last step, after it has released its codec. */
@@ -993,6 +1001,9 @@ private class VideoDecoder(
     private var parking: ParkingOutput? = null
     private var lastConfig: VideoJob.Config? = null
     private var sourceColor: VideoColorMetadata.Description? = null
+    private var softwareYuvRenderer: SoftwareYuvRenderer? = null
+    private var softwareYuvOutputFormat: MediaFormat? = null
+    private var softwareYuvFailed = false
     @Volatile private var renderedFrameLogged = false
     // The operating rate still asked for, dropped for this stream once a decoder refuses it; and the rate
     // the current codec was configured with.
@@ -1167,6 +1178,7 @@ private class VideoDecoder(
     }
 
     private fun onJobFailure(stage: String, error: Exception) {
+        if (softwareYuv != null) failSoftwareYuv("$stage: ${error.javaClass.simpleName}: ${error.message}")
         if (running) Log.e(TAG, "video decoder job failed: $stage", error)
         if (running) reportFailure("stage=$stage", error)
         // MTK vendor failures may surface as CodecException or the broader IllegalStateException.
@@ -1225,6 +1237,7 @@ private class VideoDecoder(
     }
 
     private fun configureDecoder(config: VideoJob.Config) {
+        if (softwareYuv != null && softwareYuvFailed) return
         val previous = lastConfig
         if (
             decoder != null &&
@@ -1245,7 +1258,7 @@ private class VideoDecoder(
         val surface = outputSurface ?: return
         val codec = config.codec
         val codecData = config.codecData
-        sourceColor = if (colorOverride.fromSps) VideoColorMetadata.parse(codec, codecData) else null
+        sourceColor = if (colorOverride.fromSps || softwareYuv != null) VideoColorMetadata.parse(codec, codecData) else null
         if (colorOverride.fromSps) {
             val description = sourceColor
             report("SPS color request status=${description?.status} hints=${description?.let(VideoColorMetadata::androidHints)} " +
@@ -1274,7 +1287,10 @@ private class VideoDecoder(
             MtkDecoderTuning.legacyAcodecDecoderName(mime) != null) maximumMtkMode else MtkDecoderMode.NONE
         var configured: ConfiguredVideoDecoder? = null
         var used: DecoderAttempt? = null
-        val diagnosticSoftware = if (forceSoftwareVideoDecoder) diagnosticSoftwareDecoderName(diagnosticSoftwareCandidates(), mime) else null
+        val diagnosticSoftware = if (forceSoftwareVideoDecoder) {
+            if (softwareYuv != null) softwareYuvDecoderName(mime)
+            else diagnosticSoftwareDecoderName(diagnosticSoftwareCandidates(), mime)
+        } else null
         if (forceSoftwareVideoDecoder && diagnosticSoftware == null) report("diagnostic software decoder unavailable mime=$mime; hardware fallback disabled")
         for (attempt in diagnosticVideoDecoderAttempts(forceSoftwareVideoDecoder, diagnosticSoftware, videoDecoderAttempts(
             requestedRate,
@@ -1286,6 +1302,7 @@ private class VideoDecoder(
             if (configured != null) { used = attempt; break }
         }
         if (configured == null) {
+            if (softwareYuv != null) failSoftwareYuv("no working software YUV420 decoder for $mime")
             queue.discardCurrentChain()
             report("decoder configuration failed mime=$mime size=${width}x$height")
         }
@@ -1364,6 +1381,8 @@ private class VideoDecoder(
     ): MediaFormat =
         MediaFormat.createVideoFormat(mime, width, height).apply {
             colorOverride.applyTo(this, sourceColor)
+            if (softwareYuv != null) setInteger(MediaFormat.KEY_COLOR_FORMAT,
+                android.media.MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Flexible)
             if (attempt.tuned) {
                 setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, MAX_INPUT_SIZE)
                 setInteger(MediaFormat.KEY_PRIORITY, 0)
@@ -1410,7 +1429,7 @@ private class VideoDecoder(
             configuredVendorLowLatency = vendorKeys.isNotEmpty()
             val pictureOrder = attempt.tuned && atOnce && listsPictureOrder(codec)
             if (pictureOrder) format.setInteger(PICTURE_ORDER_PARAMETER, 1)
-            codec.configure(format, surface, null, 0)
+            codec.configure(format, if (softwareYuv != null) null else surface, null, 0)
             phase = "start"
             phaseStartNs = System.nanoTime()
             codec.start()
@@ -1497,7 +1516,7 @@ private class VideoDecoder(
     private fun detach(request: SurfaceDetachRequest): Unit = synchronized(outputLock) {
         var outcome = DetachOutcome.RELEASED
         try {
-            outcome = detachAction(outputSurface, request.surface, request.park, decoder != null)
+            outcome = detachAction(outputSurface, request.surface, request.park && softwareYuv == null, decoder != null)
             when (outcome) {
                 DetachOutcome.NOT_RENDERING -> Unit
                 DetachOutcome.PARKED -> {
@@ -1539,7 +1558,7 @@ private class VideoDecoder(
             return
         }
         val codec = decoder
-        if (codec != null) {
+        if (codec != null && softwareYuv == null) {
             try {
                 codec.setOutputSurface(surface)
                 Log.i(TAG, "video decoder output surface updated")
@@ -1660,6 +1679,7 @@ private class VideoDecoder(
             index == MediaCodec.INFO_TRY_AGAIN_LATER -> return false
             index == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> logOutputFormat(codec.outputFormat)
             index >= 0 -> {
+                if (softwareYuv != null) return handleYuvOutput(codec, index, info)
                 val render = outputSurface != null
                 // Parked output goes to the offscreen consumer: it keeps the codec's state, but it is
                 // not shown, so it is neither paced nor counted.
@@ -1705,12 +1725,63 @@ private class VideoDecoder(
         return true
     }
 
+
+    /** The worker owns both the Image and EGL; the codec never renders this buffer to a Surface. */
+    private fun handleYuvOutput(codec: MediaCodec, index: Int, info: MediaCodec.BufferInfo): Boolean {
+        var image: android.media.Image? = null
+        var shown = false
+        try {
+            if (info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG != 0 ||
+                info.size == 0 && info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) return false
+            val surface = outputSurface ?: return true
+            image = codec.getOutputImage(index)
+            if (image == null && info.size == 0) return true
+            val frame = checkNotNull(image) { "software decoder supplied no YUV Image" }
+            val color = SoftwareYuvColor.resolve(checkNotNull(softwareYuv), sourceColor,
+                softwareYuvOutputFormat ?: codec.outputFormat)
+            val renderer = softwareYuvRenderer ?: SoftwareYuvRenderer(surface).also { softwareYuvRenderer = it }
+            renderer.draw(frame, color)
+            shown = true
+        } finally {
+            try { image?.close() } finally { codec.releaseOutputBuffer(index, false) }
+        }
+        if (shown) {
+            val slot = queuedSlotOf(info.presentationTimeUs)
+            val queued = if (slot >= 0) queuedAtNanos[slot] else 0L
+            val now = System.nanoTime()
+            if (queued > 0 && queued !in 1 until resumedAtNanos) {
+                stats.onDecodeLatency(now - queued); liveDecodeNanos.addAndGet(now - queued); liveDecodeSamples.incrementAndGet()
+            }
+            stats.onRendered(); liveRendered.incrementAndGet(); colorEvidence.rendered(colorGeneration)
+            if (!renderedFrameLogged) {
+                renderedFrameLogged = true
+                report("first frame rendered")
+                report("software-yuv rendered via app EGL RGB; ${SoftwareYuvColor.resolve(checkNotNull(softwareYuv),
+                    sourceColor, softwareYuvOutputFormat ?: codec.outputFormat).description}")
+            }
+        }
+        return info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM == 0
+    }
+
+    private fun failSoftwareYuv(reason: String) {
+        if (softwareYuvFailed) return
+        softwareYuvFailed = true
+        report("software-yuv unavailable: $reason; no hardware or Surface-codec fallback")
+    }
+
     private fun logOutputFormat(format: MediaFormat) {
+        softwareYuvOutputFormat = format
+        val yuvColor = softwareYuv?.let { SoftwareYuvColor.resolve(it, sourceColor, format) }
+        val rendererFields = if (yuvColor == null) emptyMap() else mapOf(
+            "software-yuv" to 1, "yuv-render-range" to if (yuvColor.fullRange) 1 else 2,
+            "yuv-render-matrix" to if (yuvColor.bt709) 1 else 2)
+        if (yuvColor != null) report("software-yuv format ${yuvColor.description}; decoded=$format")
         colorEvidence.format(colorGeneration,
             listOf(MediaFormat.KEY_WIDTH, MediaFormat.KEY_HEIGHT, MediaFormat.KEY_COLOR_STANDARD,
                 MediaFormat.KEY_COLOR_RANGE, MediaFormat.KEY_COLOR_TRANSFER, MediaFormat.KEY_COLOR_FORMAT,
                 MediaFormat.KEY_STRIDE, MediaFormat.KEY_SLICE_HEIGHT, "crop-left", "crop-top", "crop-right", "crop-bottom")
-                .associateWith { format.intOrNull(it) }, format.toString())
+                .associateWith { format.intOrNull(it) } + rendererFields,
+            format.toString() + if (yuvColor != null) " app-EGL ${yuvColor.description}" else "")
         report("output format requested=${width}x${height} " +
             "coded=${format.intOrNull(MediaFormat.KEY_WIDTH)}x${format.intOrNull(MediaFormat.KEY_HEIGHT)} " +
             "crop=${format.intOrNull("crop-left")},${format.intOrNull("crop-top")}," +
@@ -1740,6 +1811,10 @@ private class VideoDecoder(
 
     // Worker only; [outputLock] orders it against the output thread.
     private fun releaseDecoder() {
+        val yuvRenderer = softwareYuvRenderer
+        softwareYuvRenderer = null
+        softwareYuvOutputFormat = null
+        runCatching { yuvRenderer?.close() }.onFailure { Log.w(TAG, "YUV EGL release failed", it) }
         backlogRecovery.reset()
         val codec: MediaCodec?
         synchronized(outputLock) {
@@ -1847,6 +1922,10 @@ private class AudioRenderer(
     private val echoReference: EchoReference? = null,
     voiceFilter: Boolean = false,
 ) : Closeable {
+    // Assigned by the sink before start(); never reloaded during an active stream.
+    var experiments = ExperimentalAudioConfig()
+    private val outputRecovery = AudioOutputRecovery()
+    private var recoveryExhaustedReported = false
     private data class AudioPacket(val rtp: ByteArray, val sample: Int)
 
     private val pcmChannels = if (format.channels >= 2) 2 else 1
@@ -1854,7 +1933,7 @@ private class AudioRenderer(
 
     private var trackAttributes: AudioAttributes? = null
     private var mappedChannel: AudioChannel? = null
-    private val navigationPlaybackToken = NavigationPlayback.open()
+    private var navigationPlaybackToken = NavigationPlayback.open()
     private var actualLegacyStreamType: Int? = null
     private val queue = LinkedBlockingQueue<AudioPacket>(MAX_QUEUED_PACKETS)
     /** Music with sustained decoder backpressure must not keep playing minutes-old packets. */
@@ -1898,7 +1977,7 @@ private class AudioRenderer(
     private var statsWindowStartNs = 0L
     private var statsLastUnderruns = 0
     private var bytesPerSecond = 0
-    private val bufferProgress = AudioBufferProgress(if (format.channels >= 2) 4 else 2)
+    private var bufferProgress = AudioBufferProgress(if (format.channels >= 2) 4 else 2)
     private var underrunsAtPlaybackStart = 0
     private var clockTrim: MediaClockTrim? = null
     /** Called when this call's track is routed to the earpiece; the sink moves the call to the loudspeaker. */
@@ -1970,6 +2049,11 @@ private class AudioRenderer(
                 AudioCodecKind.OPUS -> configureCodec(MediaFormat.MIMETYPE_AUDIO_OPUS)
                 AudioCodecKind.LPCM -> Unit
             }
+            if (experiments != ExperimentalAudioConfig()) runCatching {
+                report("Audio: experiments mic=${experiments.microphoneGainDb}dB " +
+                    "navigation=${if (experiments.navigationEnabled) ExperimentalAudioConfig.clamp(experiments.navigationDb) else 0}dB " +
+                    "call=${if (experiments.callEnabled) ExperimentalAudioConfig.clamp(experiments.callDb) else 0}dB recovery=${experiments.outputRecovery}")
+            }
             createTrack()
             diagnosticStage = "focus"
             requestAudioFocus()
@@ -1999,6 +2083,7 @@ private class AudioRenderer(
             if (running) reportFailure(error)
             throw error
         } finally {
+            running = false
             runCatching { logStatsIfDue(force = true) }
             release()
         }
@@ -2446,7 +2531,7 @@ private class AudioRenderer(
     }
 
     private fun writePcm(data: ByteArray, offset: Int = 0, length: Int = data.size) {
-        val track = track ?: return
+        if (track == null && !recoverOutput("missing-track", AudioTrack.ERROR_INVALID_OPERATION)) return
         diagnosticStage = "track-write"
         if (!firstPcmLogged && length > 0) {
             firstPcmLogged = true
@@ -2457,13 +2542,19 @@ private class AudioRenderer(
         }
         voiceFilter?.process(data, offset, length)
         applyNavigationAttenuation()
-        attenuateNavigation(data, offset, length)
+        if (experiments.navigationEnabled || experiments.callEnabled) {
+            Pcm16Gain.scale(data, offset, length, experiments.playbackGainDb(
+                mappedChannel == AudioChannel.NAVIGATION, format.audioType == "telephony", navigationAttenuationDb))
+        } else {
+            attenuateNavigation(data, offset, length)
+        }
         if (!fadeApplied) {
             applyFadeIn(data, offset, length)
             fadeApplied = true
         }
         var written = 0
         while (written < length && running) {
+            val track = track ?: break
             val writeLength = if (playbackStarted) {
                 length - written
             } else {
@@ -2471,17 +2562,26 @@ private class AudioRenderer(
             }
             val writeStarted = System.nanoTime()
             diagnosticStage = "track-write"
-            val count = track.write(data, offset + written, writeLength, AudioTrack.WRITE_BLOCKING)
+            val count = try {
+                track.write(data, offset + written, writeLength, AudioTrack.WRITE_BLOCKING)
+            } catch (error: IllegalStateException) {
+                if (!experiments.outputRecovery) throw error
+                if (recoverOutput("write-exception", AudioTrack.ERROR_INVALID_OPERATION)) continue
+                break
+            }
             maxWriteMs = maxOf(maxWriteMs, (System.nanoTime() - writeStarted) / 1_000_000L)
             if (count < 0) {
                 writeErrorsThisWindow++
                 lastWriteErrorCode = count
+                if (recoverOutput("write-error", count)) continue
                 break
             }
             if (count == 0) {
                 zeroWritesThisWindow++
+                if (recoverOutput("zero-write", 0)) continue
                 break
             }
+            outputRecovery.successfulWrite()
             if (count < writeLength) partialWritesThisWindow++
             val framesWritten = count / frameBytes
 
@@ -2490,23 +2590,70 @@ private class AudioRenderer(
             writtenFramesThisWindow += framesWritten
             bufferProgress.written(count)
             lastPcmWriteNs = System.nanoTime()
-            if (playbackStarted) reportNavigationPlayback(track)
-            if (playbackStarted) trimClock(track)
-            if (!playbackStarted) {
-                prebufferBytes += count
-                if (prebufferBytes >= startThresholdBytes) {
-                    startPlayback(track)
-                    Log.i(TAG, "audio playback started type=${format.payloadType}")
+            try {
+                if (playbackStarted) reportNavigationPlayback(track)
+                if (playbackStarted) trimClock(track)
+                if (!playbackStarted) {
+                    prebufferBytes += count
+                    if (prebufferBytes >= startThresholdBytes) {
+                        startPlayback(track)
+                        Log.i(TAG, "audio playback started type=${format.payloadType}")
+                    }
                 }
-            }
-            echoReference?.let { reference ->
-                val pending = if (playbackStarted) {
-                    totalWrittenFrames - (track.playbackHeadPosition.toLong() and 0xffffffffL)
-                } else {
-                    null
+                echoReference?.let { reference ->
+                    val pending = if (playbackStarted) {
+                        totalWrittenFrames - (track.playbackHeadPosition.toLong() and 0xffffffffL)
+                    } else {
+                        null
+                    }
+                    reference.append(data, offset + written - count, count, pcmChannels, pending, System.nanoTime())
                 }
-                reference.append(data, offset + written - count, count, pcmChannels, pending, System.nanoTime())
+            } catch (error: IllegalStateException) {
+                if (!experiments.outputRecovery) throw error
+                if (!recoverOutput("playback-exception", AudioTrack.ERROR_INVALID_OPERATION)) break
             }
+        }
+    }
+
+    /** Called only by the audio worker. The decoder/session is kept; old queued PCM is never replayed. */
+    private fun recoverOutput(reason: String, code: Int): Boolean {
+        if (!outputRecovery.shouldRebuild(code, experiments.outputRecovery, running)) {
+            if (running && experiments.outputRecovery && outputRecovery.attempts >= 2 && !recoveryExhaustedReported) {
+                recoveryExhaustedReported = true
+                runCatching { report("Audio: output recovery exhausted audioType=${format.audioType} reason=$reason code=$code") }
+            }
+            return false
+        }
+        runCatching { report("Audio: output recovery attempt=${outputRecovery.attempts} audioType=${format.audioType} reason=$reason code=$code") }
+        releaseTrack()
+        playbackStarted = false
+        prebufferBytes = 0
+        startThresholdBytes = 0
+        fadeApplied = false
+        totalWrittenFrames = 0
+        lastPlaybackHeadFrames = null
+        lastPcmWriteNs = 0
+        underrunsAtPlaybackStart = 0
+        statsLastUnderruns = 0
+        bufferProgress = AudioBufferProgress(frameBytes)
+        clockTrim = null
+        echoReference?.reset()
+        NavigationPlayback.close(navigationPlaybackToken)
+        if (!running) return false
+        navigationPlaybackToken = NavigationPlayback.open()
+        return try {
+            createTrack()
+            if (!running) { releaseTrack(); false }
+            else {
+                check(track?.state == AudioTrack.STATE_INITIALIZED) { "replacement AudioTrack unavailable" }
+                requestAudioFocus()
+                runCatching { report("Audio: output recovery ready audioType=${format.audioType}") }
+                true
+            }
+        } catch (error: Exception) {
+            releaseTrack()
+            runCatching { report("Audio: output recovery failed audioType=${format.audioType} ${MediaFailureSummary.describe(error)}") }
+            false
         }
     }
 
@@ -2557,6 +2704,15 @@ private class AudioRenderer(
     }
 
     private fun maintainPlaybackBuffer() {
+        try {
+            maintainTrackBuffer()
+        } catch (error: IllegalStateException) {
+            if (!experiments.outputRecovery) throw error
+            recoverOutput("buffer-exception", AudioTrack.ERROR_INVALID_OPERATION)
+        }
+    }
+
+    private fun maintainTrackBuffer() {
         val track = track ?: return
         if (bufferProgress.shouldRebuffer(mappedChannel == AudioChannel.MEDIA, playbackStarted,
                 track.underrunCount > underrunsAtPlaybackStart, queue.isEmpty(), track.playbackHeadPosition,
@@ -2586,6 +2742,15 @@ private class AudioRenderer(
 
     // Persist counters even during packet starvation, and flush before disconnect releases the track.
     private fun logStatsIfDue(force: Boolean = false) {
+        try {
+            logTrackStatsIfDue(force)
+        } catch (error: IllegalStateException) {
+            if (!experiments.outputRecovery) throw error
+            recoverOutput("stats-exception", AudioTrack.ERROR_INVALID_OPERATION)
+        }
+    }
+
+    private fun logTrackStatsIfDue(force: Boolean) {
         val now = System.nanoTime()
         if (statsWindowStartNs == 0L) statsWindowStartNs = now
         if (!force && now - statsWindowStartNs < STATS_WINDOW_NS) return
@@ -2687,6 +2852,11 @@ private class AudioRenderer(
                 // Best effort.
             }
         }
+        releaseTrack()
+    }
+
+    private fun releaseTrack() {
+        abandonAudioFocus()
         val track = track
         this.track = null
         if (track != null) {

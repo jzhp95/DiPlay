@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_software_yuv_video">软件 YUV 自绘（实验性）</string>
+    <string name="settings_software_yuv_description">由应用转换并绘制颜色，用于对比画面发白。开启时优先于软件直出，暂停平滑视频及画面调整；关闭恢复原选择。下次连接生效。</string>
+    <string name="settings_software_yuv_range">YUV 色彩范围</string>
+    <string name="settings_software_yuv_matrix">YUV 转换矩阵</string>
+    <string name="settings_software_yuv_auto">跟随视频声明</string>
+    <string name="settings_software_yuv_full">全范围</string>
+    <string name="settings_software_yuv_limited">有限范围</string>
+    <string name="settings_software_yuv_hint">自动模式缺少声明时按 BT.709 有限范围处理，并记录到诊断。颜色仍不对时可分别对比范围和矩阵。修改后下次连接生效，软件处理可能增加负载。</string>
+    <string name="settings_software_yuv_unavailable">当前格式没有支持 YUV 输出的软件解码器，无法开启。可关闭 HEVC 后重试。</string>
+    <string name="settings_software_yuv_failed">YUV 自绘不可用。请关闭该开关，恢复原输出方式后重连；原因已记录到诊断。</string>
+</resources>

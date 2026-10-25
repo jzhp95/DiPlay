@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_mic_gain">麦克风增益（实验性）</string>
+    <string name="settings_mic_gain_description">在回声消除后调整传给 iPhone 的麦克风音量，适用于通话和 Siri。默认关闭，下次连接生效。</string>
+    <string name="settings_mic_gain_db">麦克风增益值</string>
+    <string name="settings_nav_gain">导航独立增益（实验性）</string>
+    <string name="settings_nav_gain_description">只调整 CarPlay 导航提示音，与音频页的导航衰减合并计算。默认关闭，下次连接生效。</string>
+    <string name="settings_nav_gain_db">导航增益值</string>
+    <string name="settings_call_gain">通话独立增益（实验性）</string>
+    <string name="settings_call_gain_description">只调整经 DiPlay 输出的通话人声；原车 HFP 蓝牙电话音频不受此项控制。默认关闭，下次连接生效。</string>
+    <string name="settings_call_gain_db">通话增益值</string>
+    <string name="settings_audio_recovery">音频输出故障恢复（实验性）</string>
+    <string name="settings_audio_recovery_description">写入报错、输出失效或连续无法写入时，尝试重建音频输出，每路最多两次。可能短暂断音，结果写入诊断。默认关闭，下次连接生效。</string>
+    <string name="settings_audio_gain_hint">增益范围 −12～+12 dB，0 dB 保持原音量。正增益可能使声音削波失真，建议从 +3 dB 开始；不会调整车机系统音量。修改后下次连接生效。</string>
+</resources>

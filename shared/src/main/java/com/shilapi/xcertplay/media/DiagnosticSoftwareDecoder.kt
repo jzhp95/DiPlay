@@ -18,3 +18,13 @@ fun diagnosticSoftwareCandidates(): List<SoftwareVideoCandidate> = runCatching {
 }.getOrDefault(emptyList())
 internal fun diagnosticVideoDecoderAttempts(forceSoftware: Boolean, selectedSoftware: String?, normal: List<DecoderAttempt>): List<DecoderAttempt> =
     if (!forceSoftware) normal else selectedSoftware?.let { listOf(DecoderAttempt(it, tuned = false)) }.orEmpty()
+
+/** Only codecs that explicitly advertise CPU-readable flexible YUV are eligible for the experiment. */
+fun softwareYuvDecoderName(mime: String): String? = runCatching {
+    val capable = MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos.filter { info ->
+        !info.isEncoder && info.supportedTypes.any { it.equals(mime, true) } &&
+            runCatching { android.media.MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Flexible in
+                info.getCapabilitiesForType(mime).colorFormats }.getOrDefault(false)
+    }.map { it.name }.toSet()
+    diagnosticSoftwareDecoderName(diagnosticSoftwareCandidates().filter { it.name in capable }, mime)
+}.getOrNull()

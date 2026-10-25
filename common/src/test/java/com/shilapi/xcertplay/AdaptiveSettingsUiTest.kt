@@ -672,11 +672,16 @@ class AdaptiveSettingsUiTest {
 
         assertTrue(connection.any { it.startsWith(text(R.string.settings_usb_charging)) })
         assertFalse(advanced.any { it.startsWith(text(R.string.settings_usb_charging)) })
+        for (id in listOf(R.string.settings_mic_gain, R.string.settings_nav_gain, R.string.settings_call_gain, R.string.settings_audio_recovery)) {
+            assertTrue(text(id) in advanced)
+            assertFalse(text(id) in audio)
+            assertFalse(text(id) in display)
+        }
         assertTrue(audio.any { it.startsWith(text(R.string.settings_navigation_attenuation)) })
         assertFalse(advanced.any { it.startsWith(text(R.string.settings_navigation_attenuation)) })
         assertTrue(audio.any { it.startsWith(text(R.string.settings_music_buffer_wireless)) })
         assertTrue(audio.any { it.startsWith(text(R.string.settings_music_buffer_wired)) })
-        listOf(R.string.main_buffered_audio, R.string.settings_car_bluetooth_audio, R.string.efficient_video, R.string.smooth_video, R.string.settings_direct_video_output, R.string.settings_software_direct_video, R.string.settings_low_latency_decoder, R.string.call_echo_cancellation, R.string.call_voice_filter, R.string.settings_disable_media_key_audio_focus, R.string.contrib_audio_home_toggle_audio_focus).forEach {
+        listOf(R.string.main_buffered_audio, R.string.settings_car_bluetooth_audio, R.string.efficient_video, R.string.smooth_video, R.string.settings_direct_video_output, R.string.settings_software_direct_video, R.string.settings_software_yuv_video, R.string.settings_low_latency_decoder, R.string.call_echo_cancellation, R.string.call_voice_filter, R.string.settings_disable_media_key_audio_focus, R.string.contrib_audio_home_toggle_audio_focus).forEach {
             assertTrue(text(it), text(it) in advanced)
             assertFalse(text(it), text(it) in audio)
         }
@@ -692,7 +697,7 @@ class AdaptiveSettingsUiTest {
         assertFalse(audio.any { it.startsWith(text(R.string.settings_app_appearance)) })
         assertFalse(vehicle.any { it.startsWith(text(R.string.settings_app_appearance)) })
         assertFalse(advanced.any { it.startsWith(text(R.string.settings_app_appearance)) })
-        listOf(R.string.main_buffered_audio, R.string.efficient_video, R.string.smooth_video, R.string.settings_direct_video_output, R.string.settings_software_direct_video, R.string.settings_low_latency_decoder, R.string.call_echo_cancellation, R.string.call_voice_filter, R.string.settings_disable_media_key_audio_focus, R.string.right_hand_drive, R.string.car_button_in_carplay,
+        listOf(R.string.main_buffered_audio, R.string.efficient_video, R.string.smooth_video, R.string.settings_direct_video_output, R.string.settings_software_direct_video, R.string.settings_software_yuv_video, R.string.settings_low_latency_decoder, R.string.call_echo_cancellation, R.string.call_voice_filter, R.string.settings_disable_media_key_audio_focus, R.string.right_hand_drive, R.string.car_button_in_carplay,
             R.string.side_panel, R.string.split_screen_areas, R.string.carplay_rotation).forEach {
             assertFalse(text(it), text(it) in display)
         }
@@ -833,11 +838,12 @@ class AdaptiveSettingsUiTest {
     @GraphicsMode(GraphicsMode.Mode.NATIVE)
     fun softwareDirectModeScreenshotRtlLargeFont() = captureSoftwareDirectMode("compact-rtl")
 
-    private fun addSoftwareAvcDecoder(name: String = "OMX.google.h264.decoder") {
+    private fun addSoftwareAvcDecoder(name: String = "OMX.google.h264.decoder", flexible: Boolean = false) {
         val format = android.media.MediaFormat.createVideoFormat("video/avc", 1920, 1080)
         val capabilities = org.robolectric.shadows.MediaCodecInfoBuilder.CodecCapabilitiesBuilder.newBuilder()
             .setMediaFormat(format)
-            .setColorFormats(intArrayOf(android.media.MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface))
+            .setColorFormats(intArrayOf(if (flexible) android.media.MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Flexible
+                else android.media.MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface))
             .build()
         org.robolectric.shadows.ShadowMediaCodecList.addCodec(
             org.robolectric.shadows.MediaCodecInfoBuilder.newBuilder()
@@ -872,6 +878,183 @@ class AdaptiveSettingsUiTest {
         try {
             row.draw(Canvas(bitmap))
             val output = Paths.get("build/reports/software-direct-video-ui/$name.png")
+            Files.createDirectories(output.parent)
+            Files.newOutputStream(output).use { assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)) }
+        } finally { bitmap.recycle() }
+    }
+
+
+    @Test @Config(sdk = [28])
+    fun softwareYuvSettingsPreserveTheOldModeAndApplyColorChoicesOnlyAfterReconnect() {
+        org.robolectric.shadows.ShadowMediaCodecList.reset()
+        addSoftwareAvcDecoder(flexible = true)
+        AirPlayPersistence.saveSoftwareDirectVideoOutput(context, true)
+        val screen = openSettings()
+        val session = mock(CarPlayController::class.java)
+        var stops = 0
+        CarPlayBackgroundSession.store(session, mock(AndroidMediaSink::class.java), 640, 360, Any(),
+            CarPlaySessionDisplay(640, 360, Surface.ROTATION_0, false, false, 640, 360)) { stops++ }
+        try {
+            ReflectionHelpers.setField(screen, "settingsCategory", SettingsCategory.ADVANCED)
+            ReflectionHelpers.callInstanceMethod<Unit>(screen, "render")
+            fun setting(id: Int) = descendants(screen.window.decorView).filterIsInstance<Switch>()
+                .single { it.contentDescription == screen.getString(id) }
+            setting(R.string.settings_software_yuv_video).performClick()
+            assertTrue(AirPlayPersistence.loadSoftwareYuvEnabled(context))
+            assertTrue(AirPlayPersistence.loadSoftwareDirectVideoOutput(context))
+            assertFalse(setting(R.string.settings_software_direct_video).isChecked)
+            assertFalse(setting(R.string.settings_software_direct_video).isEnabled)
+            for ((id, selected) in listOf(R.string.settings_software_yuv_range to 1, R.string.settings_software_yuv_matrix to 2)) {
+                texts(screen).single { it.text.startsWith(screen.getString(id) + " · ") }.performClick()
+                val dialog = ShadowAlertDialog.getLatestAlertDialog()
+                shadowOf(dialog).clickOnItem(selected)
+                dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+                shadowOf(Looper.getMainLooper()).idle()
+            }
+            assertEquals(com.shilapi.xcertplay.media.SoftwareYuvConfig(1, 2), AirPlayPersistence.loadSoftwareYuvColor(context))
+            assertTrue(PendingReconnect.isPending(session))
+            assertEquals(0, stops)
+            setting(R.string.settings_software_yuv_video).performClick()
+            assertFalse(AirPlayPersistence.loadSoftwareYuvEnabled(context))
+            assertTrue(setting(R.string.settings_software_direct_video).isChecked)
+            assertTrue(setting(R.string.settings_software_direct_video).isEnabled)
+        } finally {
+            org.robolectric.shadows.ShadowMediaCodecList.reset()
+            CarPlayBackgroundSession.clear(); PendingReconnect.clear()
+        }
+    }
+
+    @Test @Config(sdk = [28])
+    fun softwareYuvRefusesSoftwareCodecsWithoutImageOutput() {
+        org.robolectric.shadows.ShadowMediaCodecList.reset()
+        addSoftwareAvcDecoder()
+        val screen = openSettings()
+        ReflectionHelpers.setField(screen, "settingsCategory", SettingsCategory.ADVANCED)
+        ReflectionHelpers.callInstanceMethod<Unit>(screen, "render")
+        descendants(screen.window.decorView).filterIsInstance<Switch>()
+            .single { it.contentDescription == screen.getString(R.string.settings_software_yuv_video) }.performClick()
+        assertFalse(AirPlayPersistence.loadSoftwareYuvEnabled(context))
+        assertEquals(screen.getString(R.string.settings_software_yuv_unavailable),
+            org.robolectric.shadows.ShadowToast.getTextOfLatestToast())
+        org.robolectric.shadows.ShadowMediaCodecList.reset()
+    }
+
+    @Test @Config(sdk = [28], qualifiers = "w320dp-h900dp")
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun softwareYuvScreenshotCompactLargeFont() = captureSoftwareYuv("compact")
+
+    @Test @Config(sdk = [28], qualifiers = "w1000dp-h900dp")
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun softwareYuvScreenshotExpandedLargeFont() = captureSoftwareYuv("expanded")
+
+    @Test @Config(sdk = [28], qualifiers = "ar-ldrtl-w320dp-h900dp")
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun softwareYuvScreenshotRtlLargeFont() = captureSoftwareYuv("compact-rtl")
+
+    private fun captureSoftwareYuv(name: String) {
+        RuntimeEnvironment.setFontScale(1.3f)
+        AirPlayPersistence.saveSoftwareYuvEnabled(context, true)
+        val screen = openSettings()
+        ReflectionHelpers.setField(screen, "settingsCategory", SettingsCategory.ADVANCED)
+        ReflectionHelpers.callInstanceMethod<Unit>(screen, "render")
+        layoutRoot(screen)
+        val title = texts(screen).single { it.text == screen.getString(R.string.settings_software_yuv_video) }
+        val row = title.parent.parent as View
+        val hint = texts(screen).single { it.text == screen.getString(R.string.settings_software_yuv_hint) }
+        val card = row.parent as ViewGroup
+        val height = hint.bottom - row.top
+        assertTrue(height > 0 && card.width > 0)
+        for (text in descendants(row).filterIsInstance<TextView>() + sequenceOf(hint)) {
+            val layout = text.layout ?: continue
+            assertTrue(layout.height <= text.height - text.compoundPaddingTop - text.compoundPaddingBottom)
+        }
+        for (id in listOf(R.string.settings_software_yuv_range, R.string.settings_software_yuv_matrix)) {
+            val control = texts(screen).single { it.text.startsWith(screen.getString(id) + " · ") }
+            assertTrue(control.width <= card.width)
+        }
+        val bitmap = Bitmap.createBitmap(card.width, height, Bitmap.Config.ARGB_8888)
+        try {
+            val canvas = Canvas(bitmap); canvas.translate(0f, -row.top.toFloat()); card.draw(canvas)
+            val output = Paths.get("build/reports/software-yuv-ui/$name.png")
+            Files.createDirectories(output.parent)
+            Files.newOutputStream(output).use { assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)) }
+        } finally { bitmap.recycle() }
+    }
+
+    @Test @Config(sdk = [28])
+    fun experimentalAudioSettingsPersistSeparatelyWithoutStoppingTheSession() {
+        assertEquals(com.shilapi.xcertplay.media.ExperimentalAudioConfig(), AirPlayPersistence.loadExperimentalAudio(context))
+        AirPlayPersistence.saveNavigationAudioAttenuationDb(context, -9)
+        val screen = openSettings()
+        val session = mock(CarPlayController::class.java)
+        var stops = 0
+        CarPlayBackgroundSession.store(session, mock(AndroidMediaSink::class.java), 640, 360, Any(),
+            CarPlaySessionDisplay(640, 360, Surface.ROTATION_0, false, false, 640, 360)) { stops++ }
+        try {
+            ReflectionHelpers.setField(screen, "settingsCategory", SettingsCategory.ADVANCED)
+            ReflectionHelpers.callInstanceMethod<Unit>(screen, "render")
+            fun toggle(id: Int) = descendants(screen.window.decorView).filterIsInstance<Switch>()
+                .single { it.contentDescription == screen.getString(id) }.performClick()
+            for (id in listOf(R.string.settings_mic_gain, R.string.settings_nav_gain, R.string.settings_call_gain,
+                R.string.settings_audio_recovery)) toggle(id)
+            for ((id, db) in listOf(R.string.settings_mic_gain_db to 6, R.string.settings_nav_gain_db to 3,
+                R.string.settings_call_gain_db to -6)) {
+                texts(screen).single { it.text.startsWith(screen.getString(id) + " · ") }.performClick()
+                val dialog = ShadowAlertDialog.getLatestAlertDialog()
+                assertEquals(screen.getString(R.string.save), dialog.getButton(AlertDialog.BUTTON_POSITIVE).text.toString())
+                shadowOf(dialog).clickOnItem(db + 12)
+                dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+                shadowOf(Looper.getMainLooper()).idle()
+            }
+            val expected = com.shilapi.xcertplay.media.ExperimentalAudioConfig(true, 6, true, 3, true, -6, true)
+            assertEquals(expected, AirPlayPersistence.loadExperimentalAudio(context))
+            assertEquals(-9, AirPlayPersistence.loadNavigationAudioAttenuationDb(context))
+            toggle(R.string.settings_mic_gain)
+            assertEquals(expected.copy(microphoneEnabled = false), AirPlayPersistence.loadExperimentalAudio(context))
+            assertTrue(texts(screen).none { it.text.startsWith(screen.getString(R.string.settings_mic_gain_db) + " · ") })
+            toggle(R.string.settings_mic_gain)
+            assertEquals(expected, AirPlayPersistence.loadExperimentalAudio(context))
+            assertTrue(PendingReconnect.isPending(session))
+            assertEquals(0, stops)
+        } finally { CarPlayBackgroundSession.clear(); PendingReconnect.clear() }
+    }
+
+    @Test @Config(sdk = [28], qualifiers = "w320dp-h900dp")
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun experimentalAudioScreenshotCompactLargeFont() = captureExperimentalAudio("compact")
+
+    @Test @Config(sdk = [28], qualifiers = "w1000dp-h900dp")
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun experimentalAudioScreenshotExpandedLargeFont() = captureExperimentalAudio("expanded")
+
+    @Test @Config(sdk = [28], qualifiers = "ar-ldrtl-w320dp-h900dp")
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun experimentalAudioScreenshotRtlLargeFont() = captureExperimentalAudio("compact-rtl")
+
+    private fun captureExperimentalAudio(name: String) {
+        RuntimeEnvironment.setFontScale(1.3f)
+        AirPlayPersistence.saveExperimentalAudio(context,
+            com.shilapi.xcertplay.media.ExperimentalAudioConfig(true, 6, true, 3, true, -6, true))
+        val screen = openSettings()
+        ReflectionHelpers.setField(screen, "settingsCategory", SettingsCategory.ADVANCED)
+        ReflectionHelpers.callInstanceMethod<Unit>(screen, "render")
+        layoutRoot(screen)
+        val title = texts(screen).single { it.text == screen.getString(R.string.settings_mic_gain) }
+        val row = title.parent.parent as View
+        val hint = texts(screen).single { it.text == screen.getString(R.string.settings_audio_gain_hint) }
+        val card = row.parent as ViewGroup
+        val height = hint.bottom - row.top
+        assertTrue(height > 0 && card.width > 0)
+        for (text in descendants(card).filterIsInstance<TextView>().filter { it.top >= row.top && it.bottom <= hint.bottom }) {
+            val layout = text.layout ?: continue
+            assertTrue(layout.height <= text.height - text.compoundPaddingTop - text.compoundPaddingBottom)
+        }
+        val bitmap = Bitmap.createBitmap(card.width, height, Bitmap.Config.ARGB_8888)
+        try {
+            val canvas = Canvas(bitmap)
+            canvas.drawColor(ReflectionHelpers.getField<DiPlayPalette>(screen, "palette").background)
+            canvas.translate(0f, -row.top.toFloat()); card.draw(canvas)
+            val output = Paths.get("build/reports/experimental-audio-ui/$name.png")
             Files.createDirectories(output.parent)
             Files.newOutputStream(output).use { assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)) }
         } finally { bitmap.recycle() }

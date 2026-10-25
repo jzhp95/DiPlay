@@ -42,6 +42,7 @@ internal class MicrophoneUplink(
         )
     },
     private val noAudioRestartMillis: Long = NO_AUDIO_RESTART_MILLIS,
+    private val gainDb: Int = 0,
 ) : Closeable {
     private val running = AtomicBoolean(false)
     private val stats = MicrophoneCaptureStats(config, report = { message ->
@@ -269,6 +270,7 @@ internal class MicrophoneUplink(
 
     private fun capture(recorder: AudioRecord, socket: DatagramSocket) {
         runCatching { android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_AUDIO) }
+        if (gainDb != 0) runCatching { onDiagnostic("Audio: microphone gain=${ExperimentalAudioConfig.clamp(gainDb)}dB") }
         val frame = ByteArray(config.frameBytes)
         val readBuffer = ByteArray(maxOf(frame.size, MIN_READ_BYTES))
         val counters = MicrophoneCounters()
@@ -346,6 +348,8 @@ internal class MicrophoneUplink(
                                 canceller = null
                             }
                         }
+                        // The canceller must see the unamplified capture; encode only gained PCM.
+                        Pcm16Gain.scale(frame, 0, frame.size, ExperimentalAudioConfig.clamp(gainDb))
                         stats.level(frame)
                         sendFrame(socket, counters, frame)
                         filled = 0

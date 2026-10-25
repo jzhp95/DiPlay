@@ -1554,9 +1554,38 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         // Opt-in controls that can cost sound or video on some head units.
         filteredSection(content, SettingsSection.ADVANCED_MEDIA,
             getString(R.string.settings_advanced_media), R.drawable.ic_dp_advanced) { card ->
-            val softwareDirect = AirPlayPersistence.loadSoftwareDirectVideoOutput(this)
+            val softwareYuv = AirPlayPersistence.loadSoftwareYuvEnabled(this)
+            val softwareDirect = softwareYuv || AirPlayPersistence.loadSoftwareDirectVideoOutput(this)
+            toggle(card, getString(R.string.settings_software_yuv_video),
+                getString(R.string.settings_software_yuv_description), softwareYuv) { enabled ->
+                val mime = if (AirPlayPersistence.loadHevcEnabled(this)) MediaFormat.MIMETYPE_VIDEO_HEVC
+                    else MediaFormat.MIMETYPE_VIDEO_AVC
+                if (enabled && com.shilapi.xcertplay.media.softwareYuvDecoderName(mime) == null) {
+                    toast(getString(R.string.settings_software_yuv_unavailable))
+                } else {
+                    AirPlayPersistence.saveSoftwareYuvEnabled(this, enabled)
+                    markReconnectNeeded()
+                }
+                render()
+            }
+            if (softwareYuv) {
+                val color = AirPlayPersistence.loadSoftwareYuvColor(this)
+                choice(card, getString(R.string.settings_software_yuv_range), listOf(
+                    getString(R.string.settings_software_yuv_auto), getString(R.string.settings_software_yuv_full),
+                    getString(R.string.settings_software_yuv_limited)), color.range, reconnects = false) {
+                    AirPlayPersistence.saveSoftwareYuvColor(this, AirPlayPersistence.loadSoftwareYuvColor(this).copy(range = it))
+                    markReconnectNeeded()
+                }
+                choice(card, getString(R.string.settings_software_yuv_matrix), listOf(
+                    getString(R.string.settings_software_yuv_auto), "BT.709", "BT.601"), color.matrix, reconnects = false) {
+                    AirPlayPersistence.saveSoftwareYuvColor(this, AirPlayPersistence.loadSoftwareYuvColor(this).copy(matrix = it))
+                    markReconnectNeeded()
+                }
+                card.addView(label(getString(R.string.settings_software_yuv_hint), 14, MUTED))
+            }
             toggle(card, getString(R.string.settings_software_direct_video),
-                getString(R.string.settings_software_direct_video_description), softwareDirect) { enabled ->
+                getString(R.string.settings_software_direct_video_description),
+                !softwareYuv && AirPlayPersistence.loadSoftwareDirectVideoOutput(this), enabled = !softwareYuv) { enabled ->
                 val mime = if (AirPlayPersistence.loadHevcEnabled(this)) MediaFormat.MIMETYPE_VIDEO_HEVC
                     else MediaFormat.MIMETYPE_VIDEO_AVC
                 if (enabled && com.shilapi.xcertplay.media.diagnosticSoftwareDecoderName(
@@ -1618,6 +1647,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                 AirPlayPersistence.saveCallVoiceFilter(this, it)
                 markReconnectNeeded()
             }
+            experimentalAudioControls(card)
             audioFocusControls(card)
             if (resources.getBoolean(R.bool.config_advanced_audio_channel_mapping)) {
                 toggle(card, getString(R.string.advanced_audio_channel_mapping),
@@ -3520,6 +3550,40 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         parent.addView(result.rowView)
         return result.switch
     }
+    private fun experimentalAudioControls(card: LinearLayout) {
+        val levels = (-12..12).toList()
+        fun update(transform: (com.shilapi.xcertplay.media.ExperimentalAudioConfig) -> com.shilapi.xcertplay.media.ExperimentalAudioConfig) {
+            AirPlayPersistence.saveExperimentalAudio(this, transform(AirPlayPersistence.loadExperimentalAudio(this)))
+            markReconnectNeeded()
+        }
+        val config = AirPlayPersistence.loadExperimentalAudio(this)
+        fun gain(title: Int, description: Int, valueTitle: Int, enabled: Boolean, value: Int,
+            enable: (Boolean) -> Unit, save: (Int) -> Unit) {
+            toggle(card, getString(title), getString(description), enabled) {
+                enable(it)
+                render()
+            }
+            if (enabled) choice(card, getString(valueTitle),
+                levels.map { if (it > 0) "+$it dB" else "$it dB" }, levels.indexOf(value),
+                reconnects = false) { save(levels[it]) }
+        }
+        gain(R.string.settings_mic_gain, R.string.settings_mic_gain_description,
+            R.string.settings_mic_gain_db, config.microphoneEnabled, config.microphoneDb,
+            { enabled -> update { it.copy(microphoneEnabled = enabled) } },
+            { value -> update { it.copy(microphoneDb = value) } })
+        gain(R.string.settings_nav_gain, R.string.settings_nav_gain_description,
+            R.string.settings_nav_gain_db, config.navigationEnabled, config.navigationDb,
+            { enabled -> update { it.copy(navigationEnabled = enabled) } },
+            { value -> update { it.copy(navigationDb = value) } })
+        gain(R.string.settings_call_gain, R.string.settings_call_gain_description,
+            R.string.settings_call_gain_db, config.callEnabled, config.callDb,
+            { enabled -> update { it.copy(callEnabled = enabled) } },
+            { value -> update { it.copy(callDb = value) } })
+        toggle(card, getString(R.string.settings_audio_recovery), getString(R.string.settings_audio_recovery_description),
+            config.outputRecovery) { enabled -> update { it.copy(outputRecovery = enabled) } }
+        card.addView(label(getString(R.string.settings_audio_gain_hint), 14, MUTED))
+    }
+
     private fun musicBufferChoice(card: LinearLayout, wireless: Boolean) {
         val buffer = com.shilapi.xcertplay.media.MediaAudioBuffer
         val presets = if (wireless) buffer.wirelessPresets else buffer.wiredPresets
