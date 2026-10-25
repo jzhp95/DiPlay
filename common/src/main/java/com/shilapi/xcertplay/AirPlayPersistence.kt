@@ -85,6 +85,7 @@ object AirPlayPersistence {
     private const val KEY_SMOOTH_VIDEO = "smooth_video"
     private const val KEY_MTK_DECODER_TUNING = "mtk_decoder_tuning"
     private const val KEY_DIRECT_VIDEO_OUTPUT = "direct_video_output"
+    private const val KEY_SOFTWARE_DIRECT_VIDEO_OUTPUT = "software_direct_video_output"
     private const val KEY_LOW_LATENCY_DECODER = "low_latency_decoder"
     private const val KEY_FPS_COUNTER = "fps_counter"
     private const val KEY_CLUSTER_MAP = "cluster_map_enabled"
@@ -700,6 +701,14 @@ object AirPlayPersistence {
     fun saveMtkDecoderTuning(context: Context, enabled: Boolean) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putBoolean(KEY_MTK_DECODER_TUNING, enabled).apply()
+    }
+
+    fun loadSoftwareDirectVideoOutput(context: Context): Boolean =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_SOFTWARE_DIRECT_VIDEO_OUTPUT, false)
+
+    fun saveSoftwareDirectVideoOutput(context: Context, enabled: Boolean) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putBoolean(KEY_SOFTWARE_DIRECT_VIDEO_OUTPUT, enabled).apply()
     }
 
     fun loadDirectVideoOutput(context: Context): Boolean =

@@ -1554,14 +1554,29 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         // Opt-in controls that can cost sound or video on some head units.
         filteredSection(content, SettingsSection.ADVANCED_MEDIA,
             getString(R.string.settings_advanced_media), R.drawable.ic_dp_advanced) { card ->
-            toggle(card, getString(R.string.efficient_video), getString(R.string.use_hevc_leave_off_for_the_widest_head_unit_compatibility), AirPlayPersistence.loadHevcEnabled(this)) {
+            val softwareDirect = AirPlayPersistence.loadSoftwareDirectVideoOutput(this)
+            toggle(card, getString(R.string.settings_software_direct_video),
+                getString(R.string.settings_software_direct_video_description), softwareDirect) { enabled ->
+                val mime = if (AirPlayPersistence.loadHevcEnabled(this)) MediaFormat.MIMETYPE_VIDEO_HEVC
+                    else MediaFormat.MIMETYPE_VIDEO_AVC
+                if (enabled && com.shilapi.xcertplay.media.diagnosticSoftwareDecoderName(
+                        com.shilapi.xcertplay.media.diagnosticSoftwareCandidates(), mime) == null) {
+                    toast(getString(R.string.settings_software_direct_video_unavailable))
+                } else {
+                    AirPlayPersistence.saveSoftwareDirectVideoOutput(this, enabled)
+                    markReconnectNeeded()
+                }
+                render()
+            }
+            toggle(card, getString(R.string.efficient_video), getString(R.string.use_hevc_leave_off_for_the_widest_head_unit_compatibility),
+                AirPlayPersistence.loadHevcEnabled(this), enabled = !softwareDirect) {
                 AirPlayPersistence.saveHevcEnabled(this, it)
                 markReconnectNeeded()
                 render()
             }
             val hevc = AirPlayPersistence.loadHevcEnabled(this)
             val selectedMime = if (hevc) MediaFormat.MIMETYPE_VIDEO_HEVC else MediaFormat.MIMETYPE_VIDEO_AVC
-            val mtkDecoder = if (hevc && AirPlayPersistence.loadHevcSoftwareDecoderEnabled(this)) null
+            val mtkDecoder = if (softwareDirect || (hevc && AirPlayPersistence.loadHevcSoftwareDecoderEnabled(this))) null
                 else selectedMtkDecoderName(selectedMime)
             if (mtkDecoder != null) {
                 toggle(card, getString(R.string.settings_mtk_decoder_tuning),
@@ -1572,19 +1587,19 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                 }
             }
             toggle(card, getString(R.string.smooth_video), getString(R.string.smooth_video_description),
-                AirPlayPersistence.loadSmoothVideo(this)) {
+                !softwareDirect && AirPlayPersistence.loadSmoothVideo(this), enabled = !softwareDirect) {
                 AirPlayPersistence.saveSmoothVideo(this, it)
                 reconnectIfRunning()
             }
             toggle(card, getString(R.string.settings_direct_video_output),
                 getString(R.string.settings_direct_video_output_description),
-                AirPlayPersistence.loadDirectVideoOutput(this)) {
+                softwareDirect || AirPlayPersistence.loadDirectVideoOutput(this), enabled = !softwareDirect) {
                 AirPlayPersistence.saveDirectVideoOutput(this, it)
                 reconnectIfRunning()
             }
             toggle(card, getString(R.string.settings_low_latency_decoder),
                 getString(R.string.settings_low_latency_decoder_description),
-                AirPlayPersistence.loadLowLatencyDecoder(this)) {
+                !softwareDirect && AirPlayPersistence.loadLowLatencyDecoder(this), enabled = !softwareDirect) {
                 AirPlayPersistence.saveLowLatencyDecoder(this, it)
                 markReconnectNeeded()
             }

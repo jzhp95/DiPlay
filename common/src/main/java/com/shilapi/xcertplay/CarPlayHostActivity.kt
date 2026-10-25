@@ -410,6 +410,7 @@ class CarPlayHostActivity : ComponentActivity() {
     private var smoothVideo = false
     // Direct video output (a setting): SurfaceView output with frames shown as soon as they are decoded.
     private var directVideoOutput = false
+    private var softwareDirectVideoOutput = false
     // Diagnostics setting: a game-style FPS counter over the picture.
     private var fpsCounter: FpsCounterOverlay? = null
     // Sinks whose sessions are being torn down; their decoders may still render to the current surface
@@ -498,7 +499,7 @@ class CarPlayHostActivity : ComponentActivity() {
     private val hevcDecoders by lazy { HevcSupport.decoders() }
     /** The codec a session asks for: the HEVC setting falls back to H.264 without a decoder for it (#727). */
     private val sessionHevc: Boolean
-        get() = HevcSupport.usable(hevcEnabled, hevcSoftwareDecoderEnabled, hevcDecoders)
+        get() = HevcSupport.usable(hevcEnabled, hevcSoftwareDecoderEnabled || softwareDirectVideoOutput, hevcDecoders)
     private var advancedAudioChannelMappingSupported = false
     private var advancedAudioChannelMapping = false
     private var navigationStreamType = 14
@@ -1541,7 +1542,29 @@ class CarPlayHostActivity : ComponentActivity() {
         super.onDestroy()
     }
 
+    private fun savedVideoOutput() = carPlayVideoOutput(
+        AirPlayPersistence.loadSoftwareDirectVideoOutput(this),
+        AirPlayPersistence.loadSmoothVideo(this),
+        AirPlayPersistence.loadDirectVideoOutput(this),
+    )
+
     private fun buildContentView(): View {
+        val desiredOutput = savedVideoOutput()
+        val retained = CarPlayBackgroundSession.snapshot()?.takeIf {
+            colorMainProbe == null && PendingReconnect.isPending(it.controller) &&
+                it.sink.mainScreenSoftwareDecoder != desiredOutput.software
+        }
+        // Saving the mode must not stop a retained session merely because its Activity was recreated.
+        val savedOutput = retained?.let {
+            carPlayVideoOutput(it.sink.mainScreenSoftwareDecoder, it.sink.videoPacingEnabled,
+                AirPlayPersistence.loadDirectVideoOutput(this))
+        } ?: desiredOutput
+        val profile = colorMainProbe?.profile
+        // Explicit trials remain independent; "current" must include the driver's daily mode.
+        softwareDirectVideoOutput = savedOutput.software && (profile == null || profile.id == "current")
+        val probeOutput = profile?.resolve(savedOutput.smooth, savedOutput.direct)
+        smoothVideo = probeOutput?.first ?: savedOutput.smooth
+        directVideoOutput = probeOutput?.second ?: savedOutput.direct
         val root = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
         val video = TextureView(this).apply {
             isOpaque = false
@@ -1734,11 +1757,6 @@ class CarPlayHostActivity : ComponentActivity() {
         safeAreaEditor = buildSafeAreaEditor().apply { visibility = View.GONE }
         root.addView(safeAreaEditor, FrameLayout.LayoutParams(-1, -1))
         videoView = video
-        val savedSmooth = AirPlayPersistence.loadSmoothVideo(this)
-        val savedDirect = AirPlayPersistence.loadDirectVideoOutput(this)
-        val probeOutput = colorMainProbe?.profile?.resolve(savedSmooth, savedDirect)
-        smoothVideo = probeOutput?.first ?: savedSmooth
-        directVideoOutput = probeOutput?.second ?: savedDirect
         observeVideoWindow(video)
         gestureOverlay = gestureLayer
         settingsGestureHint = gestureHint
@@ -2697,6 +2715,8 @@ class CarPlayHostActivity : ComponentActivity() {
             )
             updateResolutionMenu()
         }
+        hevcRow.switch.isEnabled = !softwareDirectVideoOutput
+        hevcRow.rowView.isEnabled = !softwareDirectVideoOutput
         pageFor("advanced").addView(
             hevcRow.rowView,
             LinearLayout.LayoutParams(
@@ -2718,6 +2738,8 @@ class CarPlayHostActivity : ComponentActivity() {
             )
             updateResolutionMenu()
         }
+        softwareHevcRow.switch.isEnabled = !softwareDirectVideoOutput
+        softwareHevcRow.rowView.isEnabled = !softwareDirectVideoOutput
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             pageFor("advanced").addView(
                 softwareHevcRow.rowView,
@@ -4753,6 +4775,7 @@ class CarPlayHostActivity : ComponentActivity() {
             videoHeight = videoHeight,
             preferSoftwareHevcDecoder = hevcSoftwareDecoderEnabled,
             forceSoftwareVideoDecoder = colorMainProbe?.profile?.software == true,
+            mainScreenSoftwareDecoder = softwareDirectVideoOutput,
             videoColorOverride = colorMainProbe?.color ?: com.shilapi.xcertplay.media.VideoColorOverride(),
             nativeHfpCalls = AirPlayPersistence.loadNativeHfpCalls(this),
             advancedAudioChannelMapping = advancedAudioChannelMapping,
@@ -4997,8 +5020,10 @@ class CarPlayHostActivity : ComponentActivity() {
         // The sink's pacing is fixed when it is built; a session from before a Smooth video change (for
         // example one whose reconnect stopped at a prerequisite) is stopped instead of adopted. Callers
         // retry, and the next start matches this view.
-        if (!backgroundSessionMatchesView(snapshot.sink.videoPacingEnabled, smoothVideo)) {
-            appendLog("Background session smooth video=${snapshot.sink.videoPacingEnabled} differs from this view; " +
+        if (!backgroundSessionMatchesView(snapshot.sink.videoPacingEnabled, smoothVideo) ||
+            snapshot.sink.mainScreenSoftwareDecoder != softwareDirectVideoOutput) {
+            appendLog("Background session video output differs from this view " +
+                "(software=${snapshot.sink.mainScreenSoftwareDecoder}/$softwareDirectVideoOutput); " +
                 "stopping it instead of adopting it")
             CarPlayBackgroundSession.stop { mainHandler.post { if (!isDestroyed) maybeStartCarPlay() } }
             return false
@@ -5457,10 +5482,10 @@ class CarPlayHostActivity : ComponentActivity() {
             return
         }
         if (controller == null && adoptBackgroundSession()) return
-        // The video view is chosen once per activity; a changed Smooth video or Direct video output
-        // setting needs a new one.
-        if (colorMainProbe == null && controller == null && (AirPlayPersistence.loadSmoothVideo(this) != smoothVideo ||
-                AirPlayPersistence.loadDirectVideoOutput(this) != directVideoOutput)) {
+        // A mode change can require a new view even when the saved output switches did not change.
+        val savedOutput = savedVideoOutput()
+        if (colorMainProbe == null && controller == null && (savedOutput.smooth != smoothVideo ||
+                savedOutput.direct != directVideoOutput || savedOutput.software != softwareDirectVideoOutput)) {
             appendLog("Video output setting changed; rebuilding the video view")
             // No session runs here, but a restart keeps this host as the session owner; the new instance
             // must be able to start its own.
@@ -5626,7 +5651,8 @@ class CarPlayHostActivity : ComponentActivity() {
             put("profile", request?.profile?.id ?: "missing")
             put("fromSps", request?.color?.fromSps == true)
             put("smoothVideo", smoothVideo); put("directVideoOutput", directVideoOutput)
-            put("softwareRequired", request?.profile?.software == true)
+            put("softwareRequired", request?.profile?.software == true || softwareDirectVideoOutput)
+            put("softwareDirectCompatibility", softwareDirectVideoOutput)
             put("range", request?.color?.range ?: org.json.JSONObject.NULL)
             put("standard", request?.color?.standard ?: org.json.JSONObject.NULL)
             put("neutralPicture", request?.profile?.neutral == true)
@@ -5635,11 +5661,13 @@ class CarPlayHostActivity : ComponentActivity() {
             put("windowColorMode", window.colorMode)
             put("windowBrightness", window.attributes.screenBrightness)
             put("fps", fps); put("hevcRequested", sessionHevc)
-            put("vendorLowLatency", AirPlayPersistence.loadLowLatencyDecoder(this@CarPlayHostActivity))
-            put("mtkTuning", AirPlayPersistence.loadMtkDecoderTuning(this@CarPlayHostActivity))
+            put("vendorLowLatency", sink?.mainVideoLowLatencyEnabled ?: false)
+            put("mtkTuning", sink?.mainVideoMtkTuningEnabled ?: false)
+            put("savedVendorLowLatency", AirPlayPersistence.loadLowLatencyDecoder(this@CarPlayHostActivity))
+            put("savedMtkTuning", AirPlayPersistence.loadMtkDecoderTuning(this@CarPlayHostActivity))
         }
         return ColorProbeEvidence.capture(sink?.videoColorEvidence(), sink?.videoColorOutput()?.let { it.active && it.firstFrameRendered } == true,
-            request?.profile?.software == true, files, "actual_carplay_host", config).apply {
+            request?.profile?.software == true || softwareDirectVideoOutput, files, "actual_carplay_host", config).apply {
             sink?.liveVideoCounters()?.let { counters -> put("performance", org.json.JSONObject().apply {
                 put("received", counters.received); put("rendered", counters.rendered)
                 put("decodeSamples", counters.decodeSamples)

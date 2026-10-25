@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_software_direct_video">软件解码直接输出（实验性）</string>
+    <string name="settings_software_direct_video_description">用于改善部分车机的画面发白。使用软件解码和直接输出，暂停平滑视频、硬件解码优化及画面调整；处理器负载可能增加。关闭后恢复原输出设置。下次连接生效。</string>
+    <string name="settings_software_direct_video_unavailable">当前视频格式没有可用的软件解码器，未开启此模式。如已开启 HEVC，可关闭后重试。</string>
+</resources>

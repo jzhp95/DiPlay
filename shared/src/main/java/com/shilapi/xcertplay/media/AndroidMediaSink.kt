@@ -220,6 +220,8 @@ class AndroidMediaSink(
     private val videoColorOverride: VideoColorOverride = VideoColorOverride(),
     private val forceSoftwareVideoDecoder: Boolean = false,
     private val nativeHfpCalls: Boolean = false,
+    /** Daily colour compatibility: strict software decoding for the main screen, excluding mirrors. */
+    val mainScreenSoftwareDecoder: Boolean = false,
 ) : MediaSink {
     // Each downlink publishes its own reference; a mic must match that stream and sample rate.
     private val callEchoReferences = ConcurrentHashMap<AudioStreamId, EchoReference>()
@@ -436,6 +438,8 @@ class AndroidMediaSink(
 
     /** True when this sink paces main-screen frames (smooth video); fixed for its lifetime. */
     val videoPacingEnabled: Boolean get() = videoPacingDelayMillis > 0
+    val mainVideoLowLatencyEnabled: Boolean get() = vendorLowLatencyDecoder && !mainScreenSoftwareDecoder
+    val mainVideoMtkTuningEnabled: Boolean get() = mtkDecoderTuningEnabled && !mainScreenSoftwareDecoder
 
     /** Requests a keyframe for stream [type], e.g. after its surface came back. */
     /** Running totals of the main screen's decoder for a live FPS counter; null while it has none. */
@@ -735,6 +739,7 @@ class AndroidMediaSink(
 
     private fun newVideoDecoder(type: Int, surface: Surface?, statsLabel: String? = null, startImmediately: Boolean = true,
         colorOverride: VideoColorOverride = videoColorOverride, diagnostic: ((String) -> Unit)? = null): VideoDecoder {
+        val softwareMain = mainScreenSoftwareDecoder && type == MAIN_SCREEN_TYPE && statsLabel == null
         lateinit var created: VideoDecoder
         created = VideoDecoder(
         type,
@@ -748,18 +753,19 @@ class AndroidMediaSink(
             else videoDiagnosticHandlers[type]?.invoke(message)
         },
         colorOverride = colorOverride,
-        forceSoftwareVideoDecoder = forceSoftwareVideoDecoder,
+        forceSoftwareVideoDecoder = forceSoftwareVideoDecoder ||
+            softwareMain,
         statsLabel = statsLabel,
         onExit = ::onVideoDecoderExit,
         // Only the main screen goes to the host's SurfaceView; mirrors and the cluster keep their path.
         pacingDelayNanos = if (type == MAIN_SCREEN_TYPE && statsLabel == null) videoPacingDelayMillis * 1_000_000L else 0L,
         operatingRate = videoOperatingRate(type, statsLabel, mainVideoFrameRate),
-        vendorLowLatency = vendorLowLatencyDecoder,
-        dedicatedOutputThread = vendorLowLatencyDecoder,
+        vendorLowLatency = vendorLowLatencyDecoder && !softwareMain,
+        dedicatedOutputThread = vendorLowLatencyDecoder && !softwareMain,
         framesAtOnce = type == MAIN_SCREEN_TYPE && statsLabel == null && videoPacingDelayMillis > 0,
         // Keep the experimental MTK mode on the main CarPlay picture only. Mirrors and the
         // cluster have separate timing and must retain their established decoder configuration.
-        mtkDecoderTuningEnabled = mtkDecoderTuningEnabled && type == MAIN_SCREEN_TYPE && statsLabel == null,
+        mtkDecoderTuningEnabled = mtkDecoderTuningEnabled && type == MAIN_SCREEN_TYPE && statsLabel == null && !softwareMain,
     )
         if (startImmediately) created.start()
         return created

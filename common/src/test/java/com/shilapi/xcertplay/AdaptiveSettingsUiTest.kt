@@ -676,7 +676,7 @@ class AdaptiveSettingsUiTest {
         assertFalse(advanced.any { it.startsWith(text(R.string.settings_navigation_attenuation)) })
         assertTrue(audio.any { it.startsWith(text(R.string.settings_music_buffer_wireless)) })
         assertTrue(audio.any { it.startsWith(text(R.string.settings_music_buffer_wired)) })
-        listOf(R.string.main_buffered_audio, R.string.settings_car_bluetooth_audio, R.string.efficient_video, R.string.smooth_video, R.string.settings_direct_video_output, R.string.settings_low_latency_decoder, R.string.call_echo_cancellation, R.string.call_voice_filter, R.string.settings_disable_media_key_audio_focus, R.string.contrib_audio_home_toggle_audio_focus).forEach {
+        listOf(R.string.main_buffered_audio, R.string.settings_car_bluetooth_audio, R.string.efficient_video, R.string.smooth_video, R.string.settings_direct_video_output, R.string.settings_software_direct_video, R.string.settings_low_latency_decoder, R.string.call_echo_cancellation, R.string.call_voice_filter, R.string.settings_disable_media_key_audio_focus, R.string.contrib_audio_home_toggle_audio_focus).forEach {
             assertTrue(text(it), text(it) in advanced)
             assertFalse(text(it), text(it) in audio)
         }
@@ -692,7 +692,7 @@ class AdaptiveSettingsUiTest {
         assertFalse(audio.any { it.startsWith(text(R.string.settings_app_appearance)) })
         assertFalse(vehicle.any { it.startsWith(text(R.string.settings_app_appearance)) })
         assertFalse(advanced.any { it.startsWith(text(R.string.settings_app_appearance)) })
-        listOf(R.string.main_buffered_audio, R.string.efficient_video, R.string.smooth_video, R.string.settings_direct_video_output, R.string.settings_low_latency_decoder, R.string.call_echo_cancellation, R.string.call_voice_filter, R.string.settings_disable_media_key_audio_focus, R.string.right_hand_drive, R.string.car_button_in_carplay,
+        listOf(R.string.main_buffered_audio, R.string.efficient_video, R.string.smooth_video, R.string.settings_direct_video_output, R.string.settings_software_direct_video, R.string.settings_low_latency_decoder, R.string.call_echo_cancellation, R.string.call_voice_filter, R.string.settings_disable_media_key_audio_focus, R.string.right_hand_drive, R.string.car_button_in_carplay,
             R.string.side_panel, R.string.split_screen_areas, R.string.carplay_rotation).forEach {
             assertFalse(text(it), text(it) in display)
         }
@@ -761,6 +761,120 @@ class AdaptiveSettingsUiTest {
         } finally {
             bitmap.recycle()
         }
+    }
+
+
+    @Test @Config(sdk = [28])
+    fun softwareDirectModeSavesWithoutDisconnectingAndPreservesOverriddenChoices() {
+        org.robolectric.shadows.ShadowMediaCodecList.reset()
+        addSoftwareAvcDecoder()
+        AirPlayPersistence.saveSmoothVideo(context, true)
+        AirPlayPersistence.saveDirectVideoOutput(context, false)
+        val screen = openSettings()
+        val session = mock(CarPlayController::class.java)
+        var stops = 0
+        CarPlayBackgroundSession.store(session, mock(AndroidMediaSink::class.java), 800, 480, Any(),
+            CarPlaySessionDisplay(800, 480, Surface.ROTATION_0, false, false, 800, 480)) { stops++ }
+        CarPlayBackgroundSession.active = true
+        try {
+            ReflectionHelpers.setField(screen, "settingsCategory", SettingsCategory.ADVANCED)
+            ReflectionHelpers.callInstanceMethod<Unit>(screen, "render")
+            fun setting(id: Int) = descendants(screen.window.decorView).filterIsInstance<Switch>()
+                .single { it.contentDescription == screen.getString(id) }
+            PendingReconnect.clear()
+            setting(R.string.settings_software_direct_video).performClick()
+            assertTrue(AirPlayPersistence.loadSoftwareDirectVideoOutput(context))
+            assertTrue(AirPlayPersistence.loadSmoothVideo(context))
+            assertFalse(AirPlayPersistence.loadDirectVideoOutput(context))
+            assertTrue(PendingReconnect.isPending(session))
+            assertEquals(0, stops)
+            assertFalse(setting(R.string.smooth_video).isEnabled)
+            assertFalse(setting(R.string.smooth_video).isChecked)
+            assertFalse(setting(R.string.settings_direct_video_output).isEnabled)
+            assertTrue(setting(R.string.settings_direct_video_output).isChecked)
+            assertFalse(setting(R.string.settings_low_latency_decoder).isEnabled)
+            setting(R.string.settings_software_direct_video).performClick()
+            assertFalse(AirPlayPersistence.loadSoftwareDirectVideoOutput(context))
+            assertTrue(setting(R.string.smooth_video).isEnabled)
+            assertTrue(setting(R.string.smooth_video).isChecked)
+            assertFalse(setting(R.string.settings_direct_video_output).isChecked)
+            assertEquals(0, stops)
+        } finally {
+            org.robolectric.shadows.ShadowMediaCodecList.reset()
+            CarPlayBackgroundSession.clear()
+            PendingReconnect.clear()
+        }
+    }
+
+    @Test @Config(sdk = [28])
+    fun softwareDirectModeDeclinesWhenOnlyAHardwareDecoderExists() {
+        org.robolectric.shadows.ShadowMediaCodecList.reset()
+        addSoftwareAvcDecoder("OMX.vendor.h264.decoder")
+        val screen = openSettings()
+        ReflectionHelpers.setField(screen, "settingsCategory", SettingsCategory.ADVANCED)
+        ReflectionHelpers.callInstanceMethod<Unit>(screen, "render")
+        descendants(screen.window.decorView).filterIsInstance<Switch>()
+            .single { it.contentDescription == screen.getString(R.string.settings_software_direct_video) }.performClick()
+        assertFalse(AirPlayPersistence.loadSoftwareDirectVideoOutput(context))
+        assertEquals(screen.getString(R.string.settings_software_direct_video_unavailable),
+            org.robolectric.shadows.ShadowToast.getTextOfLatestToast())
+        org.robolectric.shadows.ShadowMediaCodecList.reset()
+    }
+
+    @Test @Config(sdk = [28], qualifiers = "w320dp-h700dp")
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun softwareDirectModeScreenshotCompactLargeFont() = captureSoftwareDirectMode("compact")
+
+    @Test @Config(sdk = [28], qualifiers = "w1000dp-h800dp")
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun softwareDirectModeScreenshotExpandedLargeFont() = captureSoftwareDirectMode("expanded")
+
+    @Test @Config(sdk = [28], qualifiers = "ar-ldrtl-w320dp-h700dp")
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun softwareDirectModeScreenshotRtlLargeFont() = captureSoftwareDirectMode("compact-rtl")
+
+    private fun addSoftwareAvcDecoder(name: String = "OMX.google.h264.decoder") {
+        val format = android.media.MediaFormat.createVideoFormat("video/avc", 1920, 1080)
+        val capabilities = org.robolectric.shadows.MediaCodecInfoBuilder.CodecCapabilitiesBuilder.newBuilder()
+            .setMediaFormat(format)
+            .setColorFormats(intArrayOf(android.media.MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface))
+            .build()
+        org.robolectric.shadows.ShadowMediaCodecList.addCodec(
+            org.robolectric.shadows.MediaCodecInfoBuilder.newBuilder()
+                .setName(name).setCapabilities(capabilities).build())
+    }
+
+    private fun captureSoftwareDirectMode(name: String) {
+        RuntimeEnvironment.setFontScale(1.3f)
+        val screen = openSettings()
+        ReflectionHelpers.setField(screen, "settingsCategory", SettingsCategory.ADVANCED)
+        ReflectionHelpers.callInstanceMethod<Unit>(screen, "render")
+        layoutRoot(screen)
+        val setting = descendants(screen.window.decorView).filterIsInstance<Switch>()
+            .single { it.contentDescription == screen.getString(R.string.settings_software_direct_video) }
+        val row = setting.parent as View
+        row.requestRectangleOnScreen(Rect(0, 0, row.width, row.height), true)
+        layoutRoot(screen)
+        val visible = Rect()
+        assertTrue(row.getGlobalVisibleRect(visible))
+        assertEquals(row.height, visible.height())
+        val title = texts(screen).single { it.text == screen.getString(R.string.settings_software_direct_video) }
+        title.layout?.let { layout ->
+            for (line in 0 until layout.lineCount) assertEquals(0, layout.getEllipsisCount(line))
+        }
+        val description = descendants(row).filterIsInstance<TextView>().single {
+            it.text == screen.getString(R.string.settings_software_direct_video_description)
+        }
+        assertTrue(description.layout.height <=
+            description.height - description.compoundPaddingTop - description.compoundPaddingBottom)
+        // Capture the actual changed row; a window snapshot can show another card after scroll restoration.
+        val bitmap = Bitmap.createBitmap(row.width, row.height, Bitmap.Config.ARGB_8888)
+        try {
+            row.draw(Canvas(bitmap))
+            val output = Paths.get("build/reports/software-direct-video-ui/$name.png")
+            Files.createDirectories(output.parent)
+            Files.newOutputStream(output).use { assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)) }
+        } finally { bitmap.recycle() }
     }
 
     @Test fun usbChargingIsSavedForTheNextWiredConnectionWithoutDroppingTheSession() {
