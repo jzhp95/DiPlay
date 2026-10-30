@@ -1,17 +1,14 @@
 package com.shilapi.xcertplay
 
-import android.content.Context
 import com.shilapi.xcertplay.airplay.AirPlayInfoPlist
 import com.shilapi.xcertplay.airplay.AirPlayViewArea
 import kotlin.math.abs
-import kotlin.math.ln
 
 /**
  * The view areas the main screen declares for one session, and the one CarPlay uses now. A fixed dock
- * declares every area once per dock edge; the head unit's split screen adds an area the size of DiPlay's
- * window there; a square canvas for a turning screen holds a landscape and a portrait screen. The car
- * moves CarPlay between them with updateViewArea, without reconnecting. No Android types beyond
- * preferences, so the choices are unit-tested.
+ * declares every area once per dock edge; a square canvas for a turning screen holds a landscape and a
+ * portrait screen; beside DiPlay's side panel CarPlay draws in part of the screen. The car moves CarPlay
+ * between them with updateViewArea, without reconnecting.
  */
 class CarPlayViewAreas private constructor(
     val areas: List<AirPlayViewArea>,
@@ -19,7 +16,7 @@ class CarPlayViewAreas private constructor(
     initial: Int,
 ) {
     /** What an area is for; SIDE_PANEL is CarPlay beside DiPlay's panel and is only chosen on request. */
-    enum class Kind { FULL_SCREEN, SPLIT_SCREEN, SIDE_PANEL }
+    enum class Kind { FULL_SCREEN, SIDE_PANEL }
 
     /** A full screen the canvas holds: its size and whether the screen is portrait then. */
     data class Screen(val width: Int, val height: Int, val portrait: Boolean)
@@ -43,14 +40,11 @@ class CarPlayViewAreas private constructor(
         areas.indices.firstOrNull { slots[it].kind == kind && slots[it].portrait == portrait && areas[it].dockEdge == dockEdge }
 
     /**
-     * The area for DiPlay's window on a [portrait] or landscape screen, keeping the dock edge: the
-     * split-screen area in the head unit's split screen when one has about the window's shape, the
-     * whole screen otherwise. Null when this session has no area for that screen (the caller reconnects).
+     * The area for DiPlay's window on a [portrait] or landscape screen, keeping the dock edge.
+     * Null when this session has no area for that screen (the caller reconnects).
      */
-    fun indexFor(width: Int, height: Int, splitScreen: Boolean, portrait: Boolean = slots[current].portrait): Int? {
+    fun indexFor(width: Int, height: Int, splitScreen: Boolean = false, portrait: Boolean = slots[current].portrait): Int? {
         val edge = areas[current].dockEdge
-        val split = index(Kind.SPLIT_SCREEN, portrait, edge)
-        if (splitScreen && split != null && closeShape(areas[split], width, height)) return split
         return index(Kind.FULL_SCREEN, portrait, edge)
     }
 
@@ -100,9 +94,6 @@ class CarPlayViewAreas private constructor(
     }
 
     companion object {
-        /** Further than this (as an aspect ratio) from DiPlay's window, a split-screen area does not fit it. */
-        private const val MAX_ASPECT_MISMATCH = 1.25
-
         /** CarPlay's share of the screen beside the side panel, in sixths: two thirds, half, one third. */
         val SIDE_PANEL_SIXTHS = listOf(4, 3, 2)
         const val DEFAULT_SIDE_PANEL_SIXTHS = 4
@@ -115,7 +106,7 @@ class CarPlayViewAreas private constructor(
             width: Int,
             height: Int,
             dock: CarPlayDock,
-            splitWindow: Pair<Float, Float>?,
+            splitWindow: Pair<Float, Float>? = null,
             sidePanel: Boolean = false,
             rightHandDrive: Boolean = false,
         ): CarPlayViewAreas? =
@@ -125,23 +116,21 @@ class CarPlayViewAreas private constructor(
 
         /**
          * The areas for a [canvasWidth] x [canvasHeight] stream holding [screens] (each at its top-left
-         * corner), or null when the whole stream as one area will do (one screen, automatic dock, no split
-         * screen). [splitWindow] gives the split-screen window on a portrait or landscape screen as
-         * fractions of that full screen, or null without split-screen support. With [sidePanel], CarPlay
-         * also gets two thirds of each screen beside a DiPlay panel, nearer the driver ([rightHandDrive]).
+         * corner), or null when the whole stream as one area will do (one screen, automatic dock).
+         * With [sidePanel], CarPlay also gets two thirds of each screen beside a DiPlay panel, nearer
+         * the driver ([rightHandDrive]).
          */
         fun build(
             canvasWidth: Int,
             canvasHeight: Int,
             screens: List<Screen>,
             dock: CarPlayDock,
-            splitWindow: (portrait: Boolean) -> Pair<Float, Float>?,
-            startPortrait: Boolean,
+            splitWindow: ((portrait: Boolean) -> Pair<Float, Float>?)? = null,
+            startPortrait: Boolean = false,
             sidePanel: Boolean = false,
             rightHandDrive: Boolean = false,
         ): CarPlayViewAreas? {
-            val splits = screens.associateWith { splitWindow(it.portrait) }
-            if (screens.size == 1 && dock.edge == null && splits.values.all { it == null } && !sidePanel &&
+            if (screens.size == 1 && dock.edge == null && !sidePanel &&
                 screens[0].width == canvasWidth && screens[0].height == canvasHeight) return null
             val edges = dock.edge?.let { listOf(AirPlayInfoPlist.DOCK_EDGE_DRIVER_SIDE, AirPlayInfoPlist.DOCK_EDGE_BOTTOM) }
                 ?: listOf(null)
@@ -150,15 +139,6 @@ class CarPlayViewAreas private constructor(
             for (screen in screens) for (edge in edges) {
                 areas += AirPlayViewArea(screen.width, screen.height, dockEdge = edge)
                 slots += Slot(Kind.FULL_SCREEN, screen.portrait)
-            }
-            for (screen in screens) {
-                val window = splits[screen] ?: continue
-                val splitWidth = (screen.width * window.first).toInt().coerceIn(2, screen.width) and 1.inv()
-                val splitHeight = (screen.height * window.second).toInt().coerceIn(2, screen.height) and 1.inv()
-                for (edge in edges) {
-                    areas += AirPlayViewArea(splitWidth, splitHeight, dockEdge = edge)
-                    slots += Slot(Kind.SPLIT_SCREEN, screen.portrait)
-                }
             }
             if (sidePanel) for (screen in screens) for (sixths in SIDE_PANEL_SIXTHS) {
                 // CarPlay keeps two thirds, half or one third: the driver's side of a landscape screen (the panel
@@ -176,77 +156,5 @@ class CarPlayViewAreas private constructor(
             } ?: areas.indices.first { slots[it].kind == Kind.FULL_SCREEN && areas[it].dockEdge == dock.edge }
             return CarPlayViewAreas(areas, slots, initial)
         }
-
-        private fun closeShape(area: AirPlayViewArea, width: Int, height: Int): Boolean {
-            if (width <= 0 || height <= 0) return false
-            val ratio = area.width.toDouble() / area.height / (width.toDouble() / height)
-            return abs(ln(ratio)) <= ln(MAX_ASPECT_MISMATCH)
-        }
     }
-}
-
-/**
- * Optional: CarPlay fills DiPlay's window in the head unit's split screen without reconnecting. The
- * window there is remembered as fractions of the whole screen, which hiding or showing the system bars
- * does not change, so the next connection declares an area of exactly that shape.
- */
-object SplitScreenSettings {
-    private const val PREFS = "diplay_split_screen"
-    private const val KEY_ENABLED = "enabled"
-
-    fun enabled(context: Context): Boolean = prefs(context).getBoolean(KEY_ENABLED, false)
-
-    fun setEnabled(context: Context, enabled: Boolean) = prefs(context).edit().putBoolean(KEY_ENABLED, enabled).apply()
-
-    /**
-     * The split-screen window seen last on a [portrait] or landscape screen, as fractions of the whole
-     * screen. Before that: [expected] when known, else half the width side by side, or half the height on
-     * a portrait screen.
-     */
-    fun window(context: Context, portrait: Boolean, expected: Pair<Float, Float>? = null): Pair<Float, Float> {
-        val key = if (portrait) "portrait" else "landscape"
-        val width = prefs(context).getFloat("${key}_screen_width", 0f)
-        val height = prefs(context).getFloat("${key}_screen_height", 0f)
-        return if (width in 0.1f..1f && height in 0.1f..1f) width to height
-        else expected ?: if (portrait) 1f to 0.5f else 0.5f to 1f
-    }
-
-    fun expectedWindow(
-        portrait: Boolean,
-        screenLong: Int,
-        screenShort: Int,
-        statusBar: Int,
-        navigationBar: Int,
-        divider: Int,
-    ): Pair<Float, Float>? {
-        if (screenLong <= 0 || screenShort <= 0) return null
-        val bars = statusBar.coerceAtLeast(0) + navigationBar.coerceAtLeast(0)
-        val gap = divider.coerceAtLeast(0)
-        val window = if (portrait) {
-            1f to ((screenLong - bars - gap) / 2).toFloat() / screenLong
-        } else {
-            ((screenLong - gap) / 2).toFloat() / screenLong to (screenShort - bars).toFloat() / screenShort
-        }
-        return window.takeIf { it.first in 0.1f..1f && it.second in 0.1f..1f }
-    }
-
-    /** Remembers the split-screen window on a [portrait] or landscape screen as fractions of the whole screen. */
-    fun saveWindow(context: Context, portrait: Boolean, width: Float, height: Float) {
-        if (width !in 0.1f..1f || height !in 0.1f..1f) return
-        val key = if (portrait) "portrait" else "landscape"
-        prefs(context).edit().putFloat("${key}_screen_width", width).putFloat("${key}_screen_height", height).apply()
-    }
-
-    /**
-     * A split window given as fractions of a [screenWidth] x [screenHeight] screen, as fractions of the
-     * [windowWidth] x [windowHeight] full window CarPlay has on that screen (the screen minus the bars it
-     * shows then), which is what its area is sized against.
-     */
-    fun ofWindow(screenFraction: Pair<Float, Float>, screenWidth: Int, screenHeight: Int, windowWidth: Int, windowHeight: Int): Pair<Float, Float> {
-        if (screenWidth <= 0 || screenHeight <= 0 || windowWidth <= 0 || windowHeight <= 0) return screenFraction
-        return (screenFraction.first * screenWidth / windowWidth).coerceAtMost(1f) to
-            (screenFraction.second * screenHeight / windowHeight).coerceAtMost(1f)
-    }
-
-    private fun prefs(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 }
