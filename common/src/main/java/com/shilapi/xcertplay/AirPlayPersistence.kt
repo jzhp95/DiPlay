@@ -117,7 +117,6 @@ object AirPlayPersistence {
     private const val KEY_HIDE_TOP_BAR = "hide_top_bar"
     private const val KEY_HIDE_BOTTOM_BAR = "hide_bottom_bar"
     private const val KEY_TEMPORARY_SYSTEM_BARS = "temporary_system_bars"
-    private const val KEY_HARMAN_FULLSCREEN = "harman_fullscreen"
     private const val KEY_SAFE_AREA_DRAW_OUTSIDE = "safe_area_draw_outside"
     private const val KEY_MAIN_DISPLAY_DISABLE_SAFE_AREA = "main_display_disable_safe_area"
     private const val KEY_BLACK_CORNER_RADIUS = "black_corner_radius_dp"
@@ -1385,16 +1384,6 @@ object AirPlayPersistence {
     fun saveTemporarySystemBars(context: Context, enabled: Boolean) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putBoolean(KEY_TEMPORARY_SYSTEM_BARS, enabled)
-            .apply()
-    }
-
-    fun loadHarmanFullscreen(context: Context): Boolean =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getBoolean(KEY_HARMAN_FULLSCREEN, false)
-
-    fun saveHarmanFullscreen(context: Context, enabled: Boolean) {
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .putBoolean(KEY_HARMAN_FULLSCREEN, enabled)
             .apply()
     }
 

@@ -57,7 +57,6 @@ class CarPlayHostDisplaySizeTest {
             android.Manifest.permission.RECORD_AUDIO,android.Manifest.permission.BLUETOOTH_CONNECT,
             android.Manifest.permission.BLUETOOTH_SCAN,android.Manifest.permission.NEARBY_WIFI_DEVICES)
         AirPlayPersistence.saveAdaptPipResolution(activity, false)
-        AirPlayPersistence.saveHarmanFullscreen(activity, false)
         // Source-only tests have no provisioned local authentication identity.
         AirPlayPersistence.saveMfiTarget(activity, MfiTarget.USB_CH341)
         // Exercise host startup without launching vendor-service workers or real transports.
@@ -252,7 +251,6 @@ class CarPlayHostDisplaySizeTest {
     @Test fun fullscreenApplicationSupportsAllFourBarCombinations() {
         for (hideTop in listOf(false, true)) {
             for (hideBottom in listOf(false, true)) {
-                setField("harmanFullscreenEnabled", false)
                 setField("hideTopBar", hideTop)
                 setField("hideBottomBar", hideBottom)
 
@@ -311,37 +309,10 @@ class CarPlayHostDisplaySizeTest {
         setField("hideBottomBar", false)
         assertEquals(false, invoke("showTemporarySystemBars"))
         setField("hideTopBar", true)
-        setField("harmanFullscreenEnabled", true)
-        assertEquals(false, invoke("showTemporarySystemBars"))
-        setField("harmanFullscreenEnabled", false)
         setField("gestureFingerCount", 0)
         assertEquals(false, invoke("showTemporarySystemBars"))
     }
 
-    @Suppress("DEPRECATION")
-    @Test fun harmanFullscreenUsesTheVerifiedLegacyFlags() {
-        setField("harmanFullscreenEnabled", true)
-        setField("hideTopBar", false)
-        setField("hideBottomBar", false)
-
-        invoke("applyFullscreenMode")
-
-        assertEquals(0x080e, activity.window.decorView.systemUiVisibility)
-    }
-
-    @Suppress("DEPRECATION")
-    @Test fun disablingHarmanFullscreenRestoresStandardBars() {
-        setField("harmanFullscreenEnabled", true)
-        invoke("applyFullscreenMode")
-        setField("harmanFullscreenEnabled", false)
-        setField("hideTopBar", false)
-        setField("hideBottomBar", false)
-
-        invoke("applyFullscreenMode")
-
-        assertEquals(0, activity.window.decorView.systemUiVisibility and HarmanFullscreenCompat.OEM_FULLSCREEN_BIT)
-        assertWindowBars(false, false)
-    }
 
     @Test fun menuBarChangesPreviewWithoutSavingAndCancelRestoresTheSavedValues() {
         invoke("loadPersistedSettings")
