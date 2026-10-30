@@ -72,7 +72,7 @@ object Ntb16Codec {
         while (ndpOffset != 0) {
             if (ndpOffset < offset || ndpOffset + 12 > end) break
             if (!visitedNdps.add(ndpOffset)) return emptyList()
-            if (readU32(block, ndpOffset) and 0x00ffffff != NDP16_SIG and 0x00ffffff) break
+            if ((readU32(block, ndpOffset) and 0x00ffffff) != (NDP16_SIG and 0x00ffffff)) break
             val ndpLength = readU16(block, ndpOffset + 4)
             val nextNdp = readU16(block, ndpOffset + 6)
             var entry = ndpOffset + 8

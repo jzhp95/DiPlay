@@ -412,6 +412,47 @@ class UsbMuxFrameBufferTest {
         rejectAfter(synAck, capturedPadding + mux(0, byteArrayOf(0x49, 0x28, 0x73, 0), magic = 0xfaceface.toInt()))
     }
 
+    @Test fun maximumFrameCanArriveOneByteAtATime() {
+        val payload=ByteArray(65_536-36){(it%251).toByte()}
+        val wire=tcp(data=payload)
+        val buffer=UsbMuxFrameBuffer()
+        for(index in 0 until wire.lastIndex){
+            buffer.append(byteArrayOf(wire[index]));assertNull(buffer.takeFrame())
+        }
+        buffer.append(byteArrayOf(wire.last()))
+        assertArrayEquals(payload,buffer.takeFrame()!!.payload.copyOfRange(20,20+payload.size))
+        assertEquals(0,buffer.bufferedBytes)
+    }
+
+    @Test fun manyCoalescedFramesKeepTheirPayloadsAndDrainInOrder() {
+        val stream=java.io.ByteArrayOutputStream()
+        repeat(256){stream.write(mux(73,ByteArray(32){it.toByte()}+it.toByte(),magic=9))}
+        val buffer=UsbMuxFrameBuffer();buffer.append(stream.toByteArray())
+        val first=buffer.takeFrame()!!.payload
+        for(index in 1..255)assertEquals(index.toByte(),buffer.takeFrame()!!.payload.last())
+        buffer.append(mux(73,ByteArray(4000){7},magic=9));buffer.takeFrame()
+        assertArrayEquals(ByteArray(32){it.toByte()}+0.toByte(),first)
+        assertEquals(0,buffer.bufferedBytes);assertNull(buffer.takeFrame())
+    }
+
+    @Test fun consumedPrefixCanBeReusedWhileTheNextFrameIsStillFragmented() {
+        val first=mux(73,ByteArray(3000){1},magic=9)
+        val next=mux(73,ByteArray(5000){(it%251).toByte()},magic=9)
+        val buffer=UsbMuxFrameBuffer();buffer.append(first+next.copyOfRange(0,900))
+        assertEquals(3000,buffer.takeFrame()!!.payload.size)
+        buffer.append(next.copyOfRange(900,2900));assertNull(buffer.takeFrame())
+        buffer.append(next.copyOfRange(2900,next.size))
+        assertArrayEquals(next.copyOfRange(16,next.size),buffer.takeFrame()!!.payload)
+        assertEquals(0,buffer.bufferedBytes)
+    }
+
+    @Test fun appendOwnsItsInputAndEmptyTransfersDoNotDiscardBufferedData() {
+        val original=tcp(data=data);val transfer=original.copyOf()
+        val buffer=UsbMuxFrameBuffer();buffer.append(transfer);transfer.fill(0)
+        buffer.append(ByteArray(0))
+        assertArrayEquals(original.copyOfRange(16,original.size),buffer.takeFrame()!!.payload)
+    }
+
     private fun assertEverySplitPreservesFrames(first: ByteArray, padding: ByteArray, next: ByteArray) {
         val wire = first + padding + next
         for (split in 0..wire.size) {

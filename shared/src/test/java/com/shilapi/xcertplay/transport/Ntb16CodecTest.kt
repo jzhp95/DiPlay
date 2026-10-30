@@ -123,6 +123,20 @@ class Ntb16CodecTest {
         assertArrayEquals(ByteArray(8) { 2 }, parsed[1])
     }
 
+    @Test fun signatureComparisonMasksBothSidesBeforeComparing() {
+        val payload=byteArrayOf(7,8,9)
+        for(highByte in listOf(0,0x30,0x31,0xff)) {
+            val block=Ntb16Codec.build(payload,0)
+            block[15]=highByte.toByte()
+            assertArrayEquals(payload,Ntb16Codec.parse(block).single())
+        }
+        for(offset in 12..14) {
+            val invalid=Ntb16Codec.build(payload,0)
+            invalid[offset]=(invalid[offset].toInt() xor 1).toByte()
+            assertTrue(Ntb16Codec.parse(invalid).isEmpty())
+        }
+    }
+
     private fun header(block: ByteArray, ndpIndex: Int) {
         put(block, 0, Ntb16Codec.NTH16_SIG, 4)
         put(block, 4, 12, 2)

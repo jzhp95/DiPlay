@@ -60,6 +60,38 @@ class Iap2FileTransferReceiverTest {
         assertEquals(0, outcome.completed?.bytes?.size)
     }
 
+    @Test fun exceedingPendingLimitCancelsTheOldestBeforeStartingTheNewTransfer() {
+        val receiver=Iap2FileTransferReceiver()
+        for(id in 1..4)receiver.accept(setup(id,1))
+        val fifth=receiver.accept(setup(5,1))
+        assertEquals(2,fifth.replies.size)
+        assertArrayEquals(byteArrayOf(1,2),fifth.replies[0])
+        assertArrayEquals(byteArrayOf(5,1),fifth.replies[1])
+        assertNull(fifth.completed)
+        assertNull(receiver.accept(data(1,0x40,byteArrayOf(9))).completed)
+        for(id in 2..5)assertArrayEquals(byteArrayOf(9),receiver.accept(data(id,0x40,byteArrayOf(9))).completed?.bytes)
+    }
+
+    @Test fun replacingTheSameIdDoesNotEvictAnUnrelatedTransfer() {
+        val receiver=Iap2FileTransferReceiver()
+        for(id in 1..4)receiver.accept(setup(id,1))
+        assertArrayEquals(byteArrayOf(2,1),receiver.accept(setup(2,2)).replies.single())
+        assertArrayEquals(byteArrayOf(9),receiver.accept(data(1,0x40,byteArrayOf(9))).completed?.bytes)
+        assertArrayEquals(byteArrayOf(8,9),receiver.accept(data(2,0x40,byteArrayOf(8,9))).completed?.bytes)
+    }
+
+    @Test fun unsignedSizesOutsideTheSignedAndArtworkRangesAreAlwaysCancelled() {
+        val receiver=Iap2FileTransferReceiver(maximumArtworkBytes=4)
+        for(size in listOf(Long.MIN_VALUE,Long.MIN_VALUE+1,-1L,Long.MAX_VALUE,0x1_0000_0000L,5L)) {
+            val setup=setup(1,0)
+            for(index in 0..7)setup[2+index]=(size ushr ((7-index)*8)).toByte()
+            val rejected=receiver.accept(setup)
+            assertArrayEquals(byteArrayOf(1,2),rejected.replies.single())
+            assertEquals(0,rejected.completed?.bytes?.size)
+            assertNull(receiver.accept(data(1,0x40,byteArrayOf(9))).completed)
+        }
+    }
+
     private fun setup(id: Int, size: Int, type: Int = 2): ByteArray = ByteArray(12).apply {
         this[0] = id.toByte()
         this[1] = 4

@@ -335,9 +335,11 @@ class Iap2LinkEngine(
             handleAcknowledgement(header.acknowledgement, nowMillis)
         }
         if ((header.control and CONTROL_EXTENDED_ACKNOWLEDGEMENT) != 0 && payload != null) {
-            handleExtendedAcknowledgement(payload)
+            handleExtendedAcknowledgement(payload, nowMillis)
         }
-        if ((header.control and CONTROL_ACKNOWLEDGEMENT.inv()) == 0 && payload != null) {
+        // SYN/EAK payloads belong to the link layer, never to an application session.
+        val carriesSessionData = header.control == 0 || header.control == CONTROL_ACKNOWLEDGEMENT
+        if (carriesSessionData && payload != null) {
             handleData(Packet(header.sequence, header.sessionId, payload), nowMillis)
         }
         if (peerSynchronization.maxAcknowledgements > 0 &&
@@ -359,6 +361,11 @@ class Iap2LinkEngine(
     }
 
     private fun handleAcknowledgement(acknowledgement: Int, nowMillis: Long) {
+        val previousAcknowledgement = lastSentAcknowledged ?: sentSequence
+        val acknowledgedCount = sequenceDistance(acknowledgement, previousAcknowledgement)
+        val outstandingCount = sequenceDistance(sentSequence, previousAcknowledgement)
+        // Ignore old or unsent sequence numbers; neither may release packets or move the window.
+        if (acknowledgedCount > outstandingCount) return
         if (state == State.NEGOTIATING) {
             if (!peerSynchronizationReceived || !peerLimitsAreUsable() || queued.any { !peerPayloadIsAcceptable(it.payload) }) {
                 die("peer iAP2 maxLength cannot carry pending control packets")
@@ -370,39 +377,30 @@ class Iap2LinkEngine(
         }
         lastSentAcknowledged = acknowledgement
 
-        var rearmed = false
+        // The list remains in send/sequence order even when a packet is retransmitted.
+        // A cumulative ACK removes the confirmed prefix; timer order is independent.
         while (unacknowledged.isNotEmpty()) {
-            val first = unacknowledged.first()
-            val distance = sequenceDistance(first.sequence, lastSentAcknowledged)
-            if (distance > 0 && distance <= peerSynchronization.maxAcknowledgements + ACK_SLACK) {
-                receiveAcknowledgementDeadlineMillis = first.deadlineMillis
-                rearmed = true
-                break
-            }
+            val distance = sequenceDistance(unacknowledged.first().sequence, previousAcknowledgement)
+            if (distance > acknowledgedCount) break
             unacknowledged.removeAt(0)
         }
-        if (!rearmed) receiveAcknowledgementDeadlineMillis = null
+        armRetransmissionDeadline()
 
-        while (sequenceDistance(sentSequence, lastSentAcknowledged) < peerSynchronization.maxOutgoing) {
+        while (sequenceDistance(sentSequence, lastSentAcknowledged) < outgoingWindow()) {
             val packet = queued.pollFirst() ?: break
             sendPacket(packet, nowMillis)
             setWritable(true)
         }
     }
 
-    private fun handleExtendedAcknowledgement(missing: ByteArray) {
+    private fun handleExtendedAcknowledgement(missing: ByteArray, nowMillis: Long) {
         if (state != State.NORMAL) return
         for (packet in unacknowledged) {
             if (!missing.any { u8(it) == packet.sequence }) continue
-            packet.retransmissions += 1
-            if (packet.retransmissions == peerSynchronization.maxRetransmissions) {
-                die("iAP2 packet ${packet.sequence} was not acknowledged")
-                return
-            }
-            sendData(packet.sequence, packet.sessionId, packet.payload)
+            if (!retransmit(packet, nowMillis)) return
             sendAcknowledgementDeadlineMillis = null
-            receiveAcknowledgementDeadlineMillis = packet.deadlineMillis
         }
+        armRetransmissionDeadline()
     }
 
     private fun handleData(packet: Packet, nowMillis: Long) {
@@ -453,9 +451,12 @@ class Iap2LinkEngine(
         }
     }
 
+    // Preserve the existing ability to send one packet to a peer advertising zero slots.
+    private fun outgoingWindow(): Int = peerSynchronization.maxOutgoing.coerceAtLeast(1)
+
     private fun sendPacket(packet: Packet, nowMillis: Long) {
         if (state != State.NORMAL ||
-            sequenceDistance(sentSequence, lastSentAcknowledged) > peerSynchronization.maxOutgoing
+            sequenceDistance(sentSequence, lastSentAcknowledged) >= outgoingWindow()
         ) {
             if (queued.size >= config.maximumQueuedPackets) {
                 die("iAP2 outbound queue limit exceeded")
@@ -474,24 +475,32 @@ class Iap2LinkEngine(
         lastAcknowledgedReceived = lastReceivedInOrder
         if (peerSynchronization.maxRetransmissions > 0) {
             unacknowledged += packet
-            receiveAcknowledgementDeadlineMillis = packet.deadlineMillis
+            armRetransmissionDeadline()
         } else {
             lastSentAcknowledged = sentSequence
         }
     }
 
     private fun retransmitDuePacket(nowMillis: Long) {
-        if (state != State.NORMAL || unacknowledged.isEmpty()) return
+        if (state != State.NORMAL) return
         val next = unacknowledged.minByOrNull { it.deadlineMillis } ?: return
-        val secondDeadline = unacknowledged.filter { it !== next }.minOfOrNull { it.deadlineMillis }
-        next.deadlineMillis = nowMillis + peerSynchronization.retransmissionTimeoutMillis
-        next.retransmissions += 1
-        if (next.retransmissions == peerSynchronization.maxRetransmissions) {
-            die("iAP2 packet ${next.sequence} was not acknowledged")
-            return
+        if (retransmit(next, nowMillis)) armRetransmissionDeadline()
+    }
+
+    private fun retransmit(packet: Packet, nowMillis: Long): Boolean {
+        // The negotiated count is the number of retransmissions, excluding the initial send.
+        if (packet.retransmissions >= peerSynchronization.maxRetransmissions) {
+            die("iAP2 packet ${packet.sequence} was not acknowledged")
+            return false
         }
-        sendData(next.sequence, next.sessionId, next.payload)
-        receiveAcknowledgementDeadlineMillis = secondDeadline ?: next.deadlineMillis
+        packet.retransmissions += 1
+        packet.deadlineMillis = nowMillis + peerSynchronization.retransmissionTimeoutMillis
+        sendData(packet.sequence, packet.sessionId, packet.payload)
+        return state != State.DEAD
+    }
+
+    private fun armRetransmissionDeadline() {
+        receiveAcknowledgementDeadlineMillis = unacknowledged.minOfOrNull { it.deadlineMillis }
     }
 
     private fun sendSynchronization() {

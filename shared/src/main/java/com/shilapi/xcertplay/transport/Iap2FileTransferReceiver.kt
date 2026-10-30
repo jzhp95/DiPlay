@@ -63,9 +63,15 @@ class Iap2FileTransferReceiver(
                 completed = Iap2ArtworkTransfer(id, ByteArray(0)),
             )
         }
+        val replies = mutableListOf<ByteArray>()
+        while (pending.size >= MAXIMUM_PENDING_TRANSFERS) {
+            val oldest = pending.keys.first()
+            pending.remove(oldest)
+            replies += cancel(oldest)
+        }
         pending[id] = Pending(size.toInt())
-        while (pending.size > MAXIMUM_PENDING_TRANSFERS) pending.remove(pending.keys.first())
-        return Outcome(replies = listOf(start(id)))
+        replies += start(id)
+        return Outcome(replies = replies)
     }
 
     private fun data(id: Int, flags: Int, datagram: ByteArray): Outcome {
@@ -100,8 +106,8 @@ class Iap2FileTransferReceiver(
     private fun readU64(bytes: ByteArray, offset: Int): Long {
         var value = 0L
         repeat(8) {
-            if (value < 0) return -1
             value = (value shl 8) or (bytes[offset + it].toLong() and 0xff)
+            if (value < 0) return -1L
         }
         return value
     }

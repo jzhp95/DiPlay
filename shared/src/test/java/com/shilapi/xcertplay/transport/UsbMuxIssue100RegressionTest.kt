@@ -197,8 +197,12 @@ class UsbMuxIssue100RegressionTest {
         } catch (error: InvocationTargetException) { throw error.targetException }
     }
 
-    private fun remainder(host: Iap2UsbMuxHost): ByteArray =
-        ReflectionHelpers.getField(frameBuffer(host), "bytes")
+    private fun remainder(host: Iap2UsbMuxHost): ByteArray {
+        val buffer = frameBuffer(host)
+        val storage = ReflectionHelpers.getField<ByteArray>(buffer, "bytes")
+        val head = ReflectionHelpers.getField<Int>(buffer, "head")
+        return storage.copyOfRange(head, head + buffer.bufferedBytes)
+    }
     private fun frameBuffer(host: Iap2UsbMuxHost): UsbMuxFrameBuffer =
         ReflectionHelpers.getField(host, "receiveFrames")
     private fun frameLength(frame: Any?): Int = ReflectionHelpers.getField(frame!!, "length")

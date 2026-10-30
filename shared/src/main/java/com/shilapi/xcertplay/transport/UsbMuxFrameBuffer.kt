@@ -11,19 +11,46 @@ internal data class UsbMuxFrame(
 /** Incremental framing; callers serialize access with their USBMUX state lock. */
 internal class UsbMuxFrameBuffer(private val diagnostic: (String) -> Unit = {}) {
     private var bytes = ByteArray(0)
+    private var head = 0
+    private var tail = 0
     private var optionalReplyPadding: UsbMuxFrame? = null
     private var paddingReports = 0
     private var lastUsbReadBytes = 0
-    val bufferedBytes: Int get() = bytes.size
+    val bufferedBytes: Int get() = tail - head
 
     fun append(transfer: ByteArray) {
         lastUsbReadBytes = transfer.size
-        bytes += transfer
+        if (transfer.isEmpty()) return
+        val required = bufferedBytes.toLong() + transfer.size
+        if (required > Int.MAX_VALUE) throw IphoneUsbException.Protocol("USBMUX receive buffer is too large")
+        if (transfer.size > bytes.size - tail) {
+            if (required <= bytes.size) {
+                bytes.copyInto(bytes, 0, head, tail)
+            } else {
+                val capacity = maxOf(required, INITIAL_BUFFER_BYTES.toLong(), bytes.size.toLong() * 2)
+                    .coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+                val grown = ByteArray(capacity)
+                bytes.copyInto(grown, 0, head, tail)
+                bytes = grown
+            }
+            tail = bufferedBytes
+            head = 0
+        }
+        transfer.copyInto(bytes, tail)
+        tail += transfer.size
     }
 
+    private fun discard(count: Int) {
+        head += count
+        if (head == tail) { head = 0; tail = 0 }
+    }
+
+    private fun readBufferedU32(offset: Int) = readU32(bytes, head + offset)
+    private fun readBufferedU16(offset: Int) = readU16(bytes, head + offset)
+
     fun takeFrame(): UsbMuxFrame? {
-        if (bytes.size < HEADER_BYTES) return null
-        var length = readU32(bytes, 4)
+        if (bufferedBytes < HEADER_BYTES) return null
+        var length = readBufferedU32(4)
         if (length !in HEADER_BYTES..MAX_FRAME_BYTES) {
             val previous = optionalReplyPadding
             // The captured iOS 27 VERSION and valid RX TCP replies, including payload-bearing
@@ -33,58 +60,58 @@ internal class UsbMuxFrameBuffer(private val diagnostic: (String) -> Unit = {}) 
             // A normal or split next header at offset zero is always preserved.
             // Wait for the candidate MUX/TCP headers or complete diagnostic payload. A timeout
             // leaves these bytes in place; a legitimate split frame must never be lost.
-            if (previous != null && readU32(bytes, 0) != PROTOCOL_TCP &&
-                bytes.size < PADDING_BYTES + HEADER_BYTES) return null
-            val followingProtocol = readU32(bytes, PADDING_BYTES)
-            val followingLength = readU32(bytes, PADDING_BYTES + 4)
-            val candidateHeader = previous != null && readU32(bytes, 0) != PROTOCOL_TCP &&
-                readU32(bytes, PADDING_BYTES + 8) == CAPTURED_REPLY_MAGIC
+            if (previous != null && readBufferedU32(0) != PROTOCOL_TCP &&
+                bufferedBytes < PADDING_BYTES + HEADER_BYTES) return null
+            val followingProtocol = readBufferedU32(PADDING_BYTES)
+            val followingLength = readBufferedU32(PADDING_BYTES + 4)
+            val candidateHeader = previous != null && readBufferedU32(0) != PROTOCOL_TCP &&
+                readBufferedU32(PADDING_BYTES + 8) == CAPTURED_REPLY_MAGIC
             val validTarget = when {
                 candidateHeader && followingProtocol == PROTOCOL_TCP &&
                     followingLength in (HEADER_BYTES + TCP_HEADER_BYTES)..MAX_FRAME_BYTES -> {
-                    if (bytes.size < PADDING_BYTES + HEADER_BYTES + TCP_HEADER_BYTES) return null
-                    val tcpHeaderBytes = ((bytes[PADDING_BYTES + HEADER_BYTES + 12].toInt() ushr 4) and 0x0f) * 4
+                    if (bufferedBytes < PADDING_BYTES + HEADER_BYTES + TCP_HEADER_BYTES) return null
+                    val tcpHeaderBytes = ((bytes[head + PADDING_BYTES + HEADER_BYTES + 12].toInt() ushr 4) and 0x0f) * 4
                     tcpHeaderBytes in TCP_HEADER_BYTES..(followingLength - HEADER_BYTES) &&
-                        readU16(bytes, PADDING_BYTES + HEADER_BYTES) != 0 &&
-                        readU16(bytes, PADDING_BYTES + HEADER_BYTES + 2) != 0
+                        readBufferedU16(PADDING_BYTES + HEADER_BYTES) != 0 &&
+                        readBufferedU16(PADDING_BYTES + HEADER_BYTES + 2) != 0
                 }
                 candidateHeader && followingProtocol == PROTOCOL_DIAGNOSTIC &&
                     followingLength in (HEADER_BYTES + 2)..(HEADER_BYTES + MAX_DIAGNOSTIC_PAYLOAD_BYTES) -> {
                     // Issue #100 also captures four extra bytes before/after protocol 1.
                     // Validate its entire bounded subtype/text payload before recovering.
                     // A timeout leaves the trailer and incomplete frame untouched.
-                    if (bytes.size < PADDING_BYTES + followingLength) return null
-                    isCapturedDiagnosticPayload(bytes, PADDING_BYTES + HEADER_BYTES, followingLength - HEADER_BYTES)
+                    if (bufferedBytes < PADDING_BYTES + followingLength) return null
+                    isCapturedDiagnosticPayload(bytes, head + PADDING_BYTES + HEADER_BYTES, followingLength - HEADER_BYTES)
                 }
                 // Issue #100 (0.2.19): a 24-byte transfer carried a VERSION reply and its own trailer
                 // after the previous reply's trailer. Its whole header is fixed, so validate it exactly.
-                previous != null && readU32(bytes, 0) != PROTOCOL_TCP && followingProtocol == PROTOCOL_VERSION &&
-                    followingLength == VERSION_BYTES && readU32(bytes, PADDING_BYTES + 8) == VERSION_REPLY_WORD -> true
+                previous != null && readBufferedU32(0) != PROTOCOL_TCP && followingProtocol == PROTOCOL_VERSION &&
+                    followingLength == VERSION_BYTES && readBufferedU32(PADDING_BYTES + 8) == VERSION_REPLY_WORD -> true
                 else -> false
             }
             if (previous != null && validTarget) {
-                bytes = bytes.copyOfRange(PADDING_BYTES, bytes.size)
+                discard(PADDING_BYTES)
                 optionalReplyPadding = null
                 if (paddingReports++ < MAX_PADDING_REPORTS) report(
                     "USBMUX optional reply padding skipped bytes=$PADDING_BYTES " +
                         "previousProtocol=${previous.protocol} previousLength=${previous.length} " +
                         "nextProtocol=$followingProtocol nextLength=$followingLength " +
-                        "lastUsbReadBytes=$lastUsbReadBytes bufferedBytes=${bytes.size}")
-                if (bytes.size < HEADER_BYTES) return null
-                length = readU32(bytes, 4)
+                        "lastUsbReadBytes=$lastUsbReadBytes bufferedBytes=${bufferedBytes}")
+                if (bufferedBytes < HEADER_BYTES) return null
+                length = readBufferedU32(4)
             } else {
-                report("USBMUX framing rejected declaredLength=$length bufferedBytes=${bytes.size} " +
+                report("USBMUX framing rejected declaredLength=$length bufferedBytes=${bufferedBytes} " +
                     "lastUsbReadBytes=$lastUsbReadBytes optionalReplyPadding=${previous != null}")
                 throw IphoneUsbException.Protocol("Invalid USBMUX frame length $length")
             }
         }
-        if (bytes.size < length) return null
+        if (bufferedBytes < length) return null
         val frame = UsbMuxFrame(
-            protocol = readU32(bytes, 0), length = length, word8 = readU32(bytes, 8),
-            sequence = ((bytes[12].toInt() and 0xff) shl 8) or (bytes[13].toInt() and 0xff),
-            payload = bytes.copyOfRange(HEADER_BYTES, length),
+            protocol = readBufferedU32(0), length = length, word8 = readBufferedU32(8),
+            sequence = ((bytes[head + 12].toInt() and 0xff) shl 8) or (bytes[head + 13].toInt() and 0xff),
+            payload = bytes.copyOfRange(head + HEADER_BYTES, head + length),
         )
-        bytes = bytes.copyOfRange(length, bytes.size)
+        discard(length)
         optionalReplyPadding = frame.takeIf(::canHaveOptionalReplyPadding)
         return frame
     }
@@ -118,6 +145,7 @@ internal class UsbMuxFrameBuffer(private val diagnostic: (String) -> Unit = {}) 
             (source[offset + 3].toInt() and 0xff)
 
     private companion object {
+        const val INITIAL_BUFFER_BYTES = 4_096
         const val HEADER_BYTES = 16
         const val TCP_HEADER_BYTES = 20
         const val MAX_FRAME_BYTES = 65_536
