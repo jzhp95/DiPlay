@@ -61,6 +61,15 @@ android {
             keyAlias = providers.environmentVariable("ANDROID_KEY_ALIAS").getOrElse("")
             keyPassword = providers.environmentVariable("ANDROID_KEY_PASSWORD").getOrElse("")
         }
+        val platformKeystore = rootProject.file("AOSP-platform-signing/platform.jks")
+        if (platformKeystore.isFile) {
+            getByName("debug") {
+                storeFile = platformKeystore
+                storePassword = "android"
+                keyAlias = "platform"
+                keyPassword = "android"
+            }
+        }
     }
 
     buildTypes {
