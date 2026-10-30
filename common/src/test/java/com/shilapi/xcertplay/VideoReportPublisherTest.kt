@@ -102,4 +102,31 @@ class VideoReportPublisherTest {
         assertEquals("public", next.getString("status"))
         File(next.getString("path")).delete()
     }
+
+    @Test fun liveReportExcludesFixtureHistoryAndUnknownSources() {
+        val live=JSONObject().put("phase","static").put("begin",JSONObject().put("source_kind","video_adaptation_current_main"))
+        val fixture=JSONObject().put("phase","static").put("begin",JSONObject().put("source_kind","production_decoder_fixture"))
+        VideoAdaptationStore.update(c){it.put("samples",JSONArray().put(live).put(fixture))}
+        c.getSharedPreferences("automatic_video_suite_v1",0).edit().putString("state",JSONObject()
+            .put("id","old-fixture").put("status","completed").put("sequence",JSONArray().put(0)).toString()).commit()
+        val snapshot=VideoReportPublisher.liveSnapshot(c)
+        assertEquals("live_carplay_only",snapshot.getString("sourceScope"))
+        assertEquals(1,snapshot.getJSONArray("samples").length())
+        assertFalse(snapshot.has("automaticSuite"));assertFalse(snapshot.has("separateColorTestHistory"))
+        assertFalse(snapshot.has("unexecutedCases"));assertEquals(1,snapshot.getInt("excludedUnverifiedSourceRows"))
+    }
+    @Test fun completedLiveSegmentsAreCommittedBeforePackaging() {
+        VideoAdaptationStore.append(c,JSONObject().put("sampleId","live-segment").put("phase","static").put("valid",true)
+            .put("begin",JSONObject().put("source_kind","video_adaptation_current_main")))
+        assertTrue(VideoReportPublisher.live(c))
+        val result=waitForReport()
+        assertTrue(result.getString("status") in listOf("public","private"))
+        ZipFile(File(result.getString("path"))).use{zip->
+            val data=JSONObject(zip.getInputStream(zip.getEntry("report.json")).bufferedReader().readText())
+            assertEquals("completed_rows_commit_confirmed",data.getString("samplePersistence"))
+            assertEquals("live-segment",data.getJSONArray("samples").getJSONObject(0).getString("sampleId"))
+            assertFalse(data.has("automaticSuite"))
+        }
+        assertTrue(File(result.getString("path")).name.startsWith("live-carplay-"))
+    }
 }

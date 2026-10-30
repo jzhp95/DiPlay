@@ -1,16 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="video_adapt_title">视频适配</string>
-    <string name="video_adapt_description">采集这台车机的屏幕、GPU、解码能力与真实 CarPlay 视频链路，用于排查模糊、发白和卡顿。不会自动修改画质或断开当前连接。</string>
+    <string name="video_adapt_title">真机投屏测试</string>
+    <string name="video_adapt_description">只采当前 iPhone 的真实投屏，不运行内置素材。每段 20 秒完成后独立持久化并生成报告；进程中断时，当前未保存段可能需要重采，已确认保存的分段可重新导出。保留最近 8 段。</string>
     <string name="video_adapt_collect_device">采集设备能力</string>
-    <string name="video_adapt_start">采集当前 CarPlay 主屏</string>
+    <string name="video_adapt_start">只测真机投屏（需连接 iPhone）</string>
     <string name="video_adapt_guide">先连接 CarPlay，再进入主屏采样：静止页面 20 秒、拖动地图 20 秒。每段结束后自动保存报告及截图到 Download/Apple CarPlay，并显示实际保存位置。请在停车状态操作。更换输出模式后可再采一组，结果会保留模式信息。</string>
     <string name="video_adapt_phone_model">iPhone 型号（可选，例如 iPhone 15）</string>
     <string name="video_adapt_phone_ios">iOS 版本（可选）</string>
     <string name="video_adapt_observation">记录清晰度与手机发热</string>
     <string name="video_adapt_modes">进入已有画面颜色对比</string>
     <string name="video_adapt_modes_hint">颜色页的结果作为独立参考。它不会计作本轮适配采样；需要更换日常输出方式时，仍通过设置选择并重连。</string>
-    <string name="video_adapt_export">保存并分享整包报告</string>
+    <string name="video_adapt_export">保存／重发真机报告</string>
     <string name="video_adapt_clear">清空本页采集结果</string>
     <string name="video_adapt_clear_confirm">清空本页记录及截图？已导出的报告不受影响。</string>
     <string name="video_adapt_cancel_pending">取消待采集请求</string>
@@ -34,9 +34,9 @@
     <string name="video_adapt_not_ready">等待真实 CarPlay 主屏显示，准备好后再开始。</string>
     <string name="video_adapt_interrupted">本组已中断或输出发生变化，结果已标记；请重新采样。</string>
     <string name="video_adapt_phase_saved">本段已采集，正在生成并写入 Download；请以实际保存结果为准。</string>
-    <string name="video_auto_start">开始自动化测试</string>
-    <string name="video_auto_stop">停止整套自动测试</string>
-    <string name="video_auto_description">自动读取设备信息，自动运行色块、灰阶、1080p 清晰度与运动片，覆盖相关软硬解与输出路径，再对照真实 CarPlay 主屏，采样并保存到 Download/Apple CarPlay。会临时暂停生产视频解码，保留连接与音频；结束后释放诊断占用。请停车并保持 iPhone 连接。完整项目仍可手动选择；真实滑动及面板颜色需人工确认。</string>
+    <string name="video_auto_start">内置素材自动测试</string>
+    <string name="video_auto_stop">停止素材测试并保存</string>
+    <string name="video_auto_description">只使用内置色块、灰阶、1080p 清晰度和运动视频，测试软硬解与输出路径；不捕获真实 iPhone 视频，也不混跑真机采样。每项结果独立落盘，中断后可重新发布已完成证据。若已连接 CarPlay，会临时暂停视频解码，保留连接与音频；结束后释放诊断占用。请停车测试。</string>
     <string name="video_auto_main_progress">自动测试 %1$d/%2$d：%3$s</string>
     <string name="video_auto_storage_needed">需要允许存储权限，才能将整包报告保存到 Download。允许后只需点一次运行。</string>
     <string name="video_auto_running">自动测试正在运行，请等待；可随时停止。</string>
@@ -49,7 +49,7 @@
     <string name="video_report_writing">正在生成并写入 Download，请稍候…</string>
     <string name="video_report_open_downloads">打开系统下载列表</string>
     <string name="video_report_downloads_unavailable">未找到系统下载列表，请按上方路径打开文件管理器。报告仍保留。</string>
-    <string name="decoder_short_description">停车并保持 iPhone 连接。自动采集并测试，最终报告写入 Download/Apple CarPlay。</string>
+    <string name="decoder_short_description">两个入口独立运行：内置素材自动测试；真机投屏分段采集。素材逐项保存，真机每段 20 秒保存。发生中断可重新发布已有结果，尚未完成的项目会标明。</string>
     <string name="decoder_system_retry">重新发布上次结果包（无需重新测试）</string>
     <string name="decoder_system_downloads">打开系统下载列表</string>
     <string name="decoder_system_previous_release_failed">上次手动测试的解码器未确认释放，未启动新测试。请重启应用后重试。</string>

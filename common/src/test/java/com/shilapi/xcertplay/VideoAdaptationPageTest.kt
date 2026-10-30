@@ -54,6 +54,26 @@ class VideoAdaptationPageTest {
     private fun button(activity: Activity, id: Int) = views(page!!.root).filterIsInstance<Button>()
         .single { it.text == activity.getString(id) }
 
+
+    @Test fun comparisonRoundAndReferenceAttestationAreExplicitAndDoNotChangeHevc() {
+        val activity = Robolectric.buildActivity(Activity::class.java).setup().get()
+        val before = AirPlayPersistence.loadHevcEnabled(activity)
+        page = VideoAdaptationPage(activity, DiPlayPalette.LIGHT, {}, combined = true)
+        button(activity, R.string.video_trouble_round_a).performClick()
+        val dialog = org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog()
+        views(dialog.window!!.decorView).filterIsInstance<EditText>().single().setText("固定地图区域")
+        dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).performClick()
+        shadowOf(Looper.getMainLooper()).idle()
+        val context = VideoAdaptationStore.read(activity).getJSONObject("troubleshootingContext")
+        assertEquals("A", context.getString("round")); assertFalse(context.getBoolean("referenceDisplayed"))
+        button(activity, R.string.video_trouble_reference_confirm).performClick()
+        org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog().getButton(android.app.AlertDialog.BUTTON_POSITIVE).performClick()
+        shadowOf(Looper.getMainLooper()).idle()
+        assertTrue(VideoAdaptationStore.read(activity).getJSONObject("troubleshootingContext").getBoolean("referenceDisplayed"))
+        assertEquals(before, AirPlayPersistence.loadHevcEnabled(activity))
+        assertTrue(views(page!!.root).filterIsInstance<TextView>().any { it.text.contains("跟手性") })
+    }
+
     @Test fun openingIsReadOnlyAndSamplingWithoutAConnectionDoesNotStartCarPlay() {
         val c = RuntimeEnvironment.getApplication()
         VideoAdaptationStore.clear(c); BackgroundSessionFixture.clear()
@@ -209,5 +229,23 @@ class VideoAdaptationPageTest {
             val dir = File("build/reports/video-adaptation-ui").apply { mkdirs() }
             File(dir, "$name.png").outputStream().use { assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)) }
         } finally { bitmap.recycle(); page!!.close(); controller.pause().stop().destroy() }
+    }
+
+    @Test fun fixtureAndLiveButtonsRouteIndependently() {
+        val activity=Robolectric.buildActivity(Activity::class.java).setup().get()
+        var fixtures=0;var live=0
+        val colors=ColorTestPage(activity,DiPlayPalette.LIGHT,requestAutomatic={fixtures++},
+            combined=true,requestLive={live++})
+        try {
+            views(colors.root).filterIsInstance<Button>().single{it.text==activity.getString(R.string.video_auto_start)}.performClick()
+            assertEquals(1,fixtures);assertEquals(0,live)
+            views(colors.root).filterIsInstance<Button>().single{it.text==activity.getString(R.string.video_adapt_start)}.performClick()
+            val deadline=System.nanoTime()+5_000_000_000L
+            while(live==0 && System.nanoTime()<deadline) {
+                shadowOf(Looper.getMainLooper()).idle()
+                if(live==0)Thread.sleep(10)
+            }
+            assertEquals(1,fixtures);assertEquals(1,live)
+        } finally { colors.close() }
     }
 }

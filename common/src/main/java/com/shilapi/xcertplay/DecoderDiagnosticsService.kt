@@ -173,89 +173,6 @@ class DecoderDiagnosticsService : Service() {
             if(value.has("error") || hashes==null){finishRun("source_index_unavailable:${value.optString("error")}");return@send}
             sourceHashes=JSONObject(hashes.toString())
             run.put("sourceHashes",JSONObject(sourceHashes.toString())).put("sourceHashApk",value.optString("sourceHashApk"))
-            captureLive()
-        }
-    }
-    private fun captureLive(){
-        if(closing)return
-        stage("live_capture") { attachLive() }
-    }
-    private fun attachLive() {
-        if(closing)return
-        val originalSnapshot=JSONObject(original.toString())
-        background("live_source_attach",5000,{
-            val session=diagnosticLease?.let{com.shilapi.xcertplay.diagnostics.DiagnosticLease.production(it)}
-            check(diagnosticLease?.let{com.shilapi.xcertplay.diagnostics.DiagnosticLease.owns(it,DiPlaySessionService.liveRuntime?.currentConnection?.controller)}==true){"diagnostic_session_replaced"}
-            check(session?.sink?.diagnosticsVideoSuspended()!=true) { "production_video_waiting_for_prior_release" }
-            liveSession=session;sourceSink=session?.sink
-            val evidence=session?.sink?.videoColorEvidence()
-            if(evidence==null)JSONObject().put("unavailable","no_current_carplay_video")
-            else{
-                val capture=VideoDiagnosticCapture(VideoCodec.valueOf(evidence.codec),evidence.csd)
-                check(!closing) { "capture_cancelled" }
-                val current=checkNotNull(session)
-                tap=capture;current.sink.diagnosticCapture=capture
-                if(closing){current.sink.diagnosticCapture=null;error("capture_cancelled")}
-                liveBefore=current.sink.liveVideoCounters()
-                current.sink.requestDiagnosticKeyFrame()
-                VideoDiagnosticTrace.begin()
-                JSONObject().put("width",checkNotNull(session).width).put("height",session.height).put("sessionIdentity",System.identityHashCode(checkNotNull(session).controller))
-                    .put("initialSource",ColorProbeEvidence.capture(evidence,true,false,emptyList(),"live_production",originalSnapshot))
-                    .put("negotiation",DisplayDiagnosticSnapshot.report(this))
-            }
-        }){value->
-            if(value.has("error")){finishRun(value.optString("error"));return@background}
-            run.put("live",value)
-            if(value.has("unavailable")){gap("real_input_missing:no_current_carplay_video");isolateProduction();return@background}
-            main.postDelayed({if(!closing)Thread({sourceSink?.requestDiagnosticKeyFrame()},"diagnostic-gop-boundary").apply{isDaemon=true;start()}},11_000)
-            main.postDelayed({if(!closing)finishCapture()},15_000)
-        }
-    }
-    private fun finishCapture(){
-        if(closing)return
-        val runId = run.getString("id")
-        val live = JSONObject(run.getJSONObject("live").toString())
-        background("live_source_seal",5000,{
-            val sink=sourceSink;sink?.diagnosticCapture=null
-            val captured=tap?.finish();tap=null
-            val directory=DecoderDiagnosticsRun.directory(this,runId)
-            val same=DiPlaySessionService.liveRuntime?.currentConnection?.controller===liveSession?.controller
-            val trace=VideoDiagnosticTrace.end()
-            live.put("sameSession",same).put("timing",DecoderDiagnosticsMetrics.trace(trace,File(directory,"traces/live-production.tsv")))
-                .put("fullTouchLatency","not_measured").put("actualTheme","unknown").put("motionVerification","not_observed_by_content_analysis")
-            val after=sink?.liveVideoCounters();val before=liveBefore
-            if(after!=null && before!=null)live.put("receivedFrames",after.received-before.received).put("submittedFrames",after.rendered-before.rendered)
-                .put("receivedBytes",after.receivedBytes-before.receivedBytes)
-            if(captured==null || captured.frames.isEmpty())return@background JSONObject().put("strictReplay",false).put("reason","no_random_access_video_received").put("liveSnapshot",live)
-            val source=JSONObject().put("codec",captured.codec.name).put("strictReplay",captured.strictReplay && same)
-                .put("reason",if(same)captured.reason else "session_changed").put("configurationChanged",captured.configurationChanged)
-                .put("width",live.getInt("width")).put("height",live.getInt("height"))
-                .put("themeActual","unknown").put("themeBasis","no_verified_iPhone_theme_feedback")
-                .put("transportContinuity","unknown; protocol_loss_counters_not_available_at_sink")
-                .put("replayCadenceBasis",if(captured.frames.size>1)"recorded_receive_intervals_with_last_interval_estimated_loop_tail"else"controlled_33ms_loop_original_cadence_unknown")
-                .put("replayScope","same_compressed_input_path_comparison; not_actual_iPhone_interaction_or_transport_latency")
-            val inputs=File(directory,"inputs").apply{mkdirs()}
-            File(inputs,"source.csd").writeBytes(captured.csd)
-            var offset=0;val units=JSONArray()
-            File(inputs,"source.bin").outputStream().use{out->captured.frames.forEachIndexed{i,f->
-                units.put(JSONObject().put("frameId",f.receivedNs.toString()).put("sequence",i).put("offset",offset).put("bytes",f.bytes.size).put("receivedNs",f.receivedNs)
-                    .put("senderNs",f.senderNs).put("arrivalNs",f.arrivalNs).put("randomAccess",f.key))
-                out.write(f.bytes);offset+=f.bytes.size
-            }}
-            source.put("accessUnits",units).put("sha256",DecoderDiagnosticsRun.sha(File(inputs,"source.bin")))
-                .put("csdSha256",DecoderDiagnosticsRun.sha(File(inputs,"source.csd")))
-            if(captured.frames.size>1)source.put("lastIntervalNs",captured.frames.last().receivedNs-captured.frames[captured.frames.size-2].receivedNs)
-            DecoderDiagnosticsRun.json(File(inputs,"source.json"),source)
-            DecoderDiagnosticsRun.json(File(directory,"device/live-production.json"),live)
-            source.put("liveSnapshot",live)
-        }){value->
-            if(value.has("error")){finishRun(value.optString("error"));return@background}
-            (value.remove("liveSnapshot") as? JSONObject)?.let { run.put("live",it) }
-            replaySource=JSONObject(value.toString())
-            run.put("replayAvailable",value.optBoolean("strictReplay"))
-            if(!value.optBoolean("strictReplay"))gap("strict_replay_unavailable:${value.optString("reason")}")
-            gap("live_light_and_dark_theme_pair_unverified")
-            gap("physical_panel_and_complete_touch_latency_not_measured")
             isolateProduction()
         }
     }
@@ -273,7 +190,7 @@ class DecoderDiagnosticsService : Service() {
         }){value->
             if(value.has("error")){finishRun(value.optString("error"));return@background}
             val plan=DecoderDiagnosticsRun.plan()
-            if(run.optBoolean("replayAvailable")){val replay=DecoderDiagnosticsRun.plan(true);for(i in 0 until replay.length())plan.put(replay.getJSONObject(i))}
+            // This entry runs only bundled fixtures; real CarPlay collection has its own entry.
             run.put("plan",plan).put("total",plan.length()).put("position",0)
             monitorProduction()
             nextCase()

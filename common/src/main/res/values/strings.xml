@@ -900,4 +900,18 @@
     <string name="connection_stage_media">协商音视频通道</string>
     <string name="connection_stage_waiting_picture">等待 CarPlay 画面</string>
     <string name="connection_stage_failed">连接失败</string>
+    <string name="video_trouble_title">色彩与跟手性排查</string>
+    <string name="video_trouble_guide">请停车测试。先选基线 A，再选对照 B；每轮分别采集静止与拖图各 20 秒。此处不会自动切换 HEVC 或重连。请保持手机、应用、地图场景、分辨率、帧率和其他显示设置一致，报告会核对实际编码与输出路径。</string>
+    <string name="video_trouble_reference">色彩排查：分享固定参考图</string>
+    <string name="video_trouble_color_guide">参考图上半部为灰阶 0、16、32、64、128、192、235、255，下半部为红、绿、蓝、青、品红、黄、白、黑。请将同一原图通过支持的源应用显示到投屏，停止缩放后采静止画面，并另拍手机与车机屏幕，尽量固定曝光和白平衡。若 CarPlay 源应用不能显示此图，请保留“参考图未呈现”，不要把日常地图当作已知色值。截图不能测量背光和面板颜色。</string>
+    <string name="video_trouble_touch_guide">跟手性：使用同一地图区域，以相近速度连续左右拖动 20 秒。应用会记录触控到达、进入本地发送队列的返回结果及视频处理指标。请另用高速录像同时拍到手指和车机画面，并在每轮开头做一次明显点按作标记。未取得手机对应返回帧及屏幕显示时刻前，不计算完整触控延迟。</string>
+    <string name="video_trouble_round_a">记录基线 A（关闭 HEVC）</string>
+    <string name="video_trouble_round_b">记录对照 B（开启 HEVC）</string>
+    <string name="video_trouble_scene">本轮共同场景（例如同一区域地图缩放）</string>
+    <string name="video_trouble_scene_required">请填写可重复的共同测试场景。</string>
+    <string name="video_trouble_round_a_hint">已选 A：请在设置中关闭 HEVC 并重新连接，再开始采样。</string>
+    <string name="video_trouble_round_b_hint">已选 B：请在设置中开启 HEVC 并重新连接，再开始采样；若实际仍是 H.264，对照不会判为齐备。</string>
+    <string name="video_trouble_reference_confirm">记录原参考图已在投屏显示</string>
+    <string name="video_trouble_reference_confirmation">仅在本轮源应用确实将同一张参考图显示到车机时确认。分享图片、手机打开图片或内置素材播放都不能证明此事。这是人工说明，不代替屏幕实拍或校准判色。</string>
+    <string name="video_trouble_select_round">请先记录本轮基线 A 或对照 B。</string>
 </resources>

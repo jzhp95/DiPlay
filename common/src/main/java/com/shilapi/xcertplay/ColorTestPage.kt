@@ -35,7 +35,8 @@ import java.util.zip.ZipOutputStream
 /** All color experiments are local to this page. Opening it never starts decoding or changes settings. */
 internal class ColorTestPage(private val activity: Activity, private val palette: DiPlayPalette,
     private val requestAutomatic: () -> Unit = {}, private val combined: Boolean = false,
-    private val requestRepublish: () -> Unit = { DecoderDiagnosticsService.retry(activity) }) {
+    private val requestRepublish: () -> Unit = { DecoderDiagnosticsService.retry(activity) },
+    private val requestLive: () -> Unit = {}) {
     val run = ColorTestRun()
     private val prefs = activity.getSharedPreferences(ColorMainProbeRegistry.PREFS, Activity.MODE_PRIVATE)
     private val player = ColorTestPlayer(activity)
@@ -117,6 +118,9 @@ internal class ColorTestPage(private val activity: Activity, private val palette
         automaticButton = action(R.string.video_auto_start, true) {
             if (DecoderDiagnosticsService.active(activity)) DecoderDiagnosticsService.stop(activity)
             else requestAutomatic()
+        }
+        if (combined) action(R.string.video_adapt_start, true) {
+            prepareIndependentTest(requestLive)
         }
         action(R.string.decoder_system_retry) {
             if (!DecoderDiagnosticsService.active(activity)) requestRepublish()
@@ -599,18 +603,20 @@ internal class ColorTestPage(private val activity: Activity, private val palette
     private fun captureDirectory() = ColorProbeEvidence.directory(activity)
     private fun resourcesWidth() = activity.resources.displayMetrics.widthPixels.coerceAtLeast(1)
     private fun resourcesHeight() = activity.resources.displayMetrics.heightPixels.coerceAtLeast(1)
-    fun startAutomatic() {
+    private fun prepareIndependentTest(action: () -> Unit) {
         if (disposed || exporting || capturing || DecoderDiagnosticsService.active(activity)) return
         if (AutomaticVideoCleanup.blocked() || MainProbeTeardown.blocked() || VideoAdaptationRegistry.current() != null || prefs.getString("pending_token", null) != null) {
             status.setText(R.string.video_adapt_conflict); return
         }
         stop()
         AutomaticVideoCleanup.await(activity, java.util.UUID.randomUUID().toString(), player::afterCleanup) {
-            if (!disposed && !AutomaticVideoCleanup.blocked()) {
-                DecoderDiagnosticsService.start(activity, VideoAdaptationDevice.screen(activity))
-                handler.removeCallbacks(autoPoll); handler.postDelayed(autoPoll, 500)
-            } else if (!disposed) status.setText(R.string.decoder_system_previous_release_failed)
+            if (!disposed && !AutomaticVideoCleanup.blocked()) action()
+            else if (!disposed) status.setText(R.string.decoder_system_previous_release_failed)
         }
+    }
+    fun startAutomatic() = prepareIndependentTest {
+        DecoderDiagnosticsService.start(activity, VideoAdaptationDevice.screen(activity))
+        handler.removeCallbacks(autoPoll); handler.postDelayed(autoPoll, 500)
     }
     private fun export() {
         if (exporting || disposed || capturing) return

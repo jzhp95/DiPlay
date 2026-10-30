@@ -400,6 +400,7 @@ class CarPlayHostActivity : ComponentActivity() {
     private var colorMainOverlay: ColorMainProbeOverlay? = null
     private var videoAdaptationOverlay: VideoAdaptationOverlay? = null
     private var videoAdaptationTouchMoves = 0L
+    private val videoAdaptationTouches = VideoTouchTimeline()
     private var colorMainFinishing = false
     private val colorMainLines = ArrayDeque<String>()
     private var smoothVideo = false
@@ -5398,15 +5399,21 @@ class CarPlayHostActivity : ComponentActivity() {
         val geometry = "${view.width}x${view.height}:${view.x},${view.y}:${frame?.width()}x${frame?.height()}:${transform.contentToString()}"
         val picture = CarPlayPicture.preferences(this)
         val pictureKey = CarPlayPicture.keys.joinToString { "$it=${CarPlayPicture.value(picture, it)}" }
-        val key = "${displayDiagnosticAttempt}:${output.instance}:${output.generation}:${output.configurationHash}:$geometry:${output.format.toSortedMap()}:$pictureKey"
+        val diagnosticContext = VideoAdaptationStore.read(this)
+        val comparisonContext = diagnosticContext.optJSONObject("troubleshootingContext")
+        val key = "${comparisonContext?.optString("id")}:${displayDiagnosticAttempt}:${output.instance}:${output.generation}:${output.configurationHash}:$geometry:${output.format.toSortedMap()}:$pictureKey"
         // Capture completeness belongs to the completed interval, not its pre-capture snapshots.
         val snapshotMissing = evidence.optJSONArray("missing") ?: org.json.JSONArray()
         evidence.put("missing", org.json.JSONArray((0 until snapshotMissing.length())
             .map { snapshotMissing.getString(it) }.filter { it != "capture" }))
         evidence.put("snapshotBeforeCapture", true)
         evidence.optJSONObject("requested")?.put("profile", "current_actual")
+        evidence.put("touchTimeline", videoAdaptationTouches.drain())
+        evidence.put("touchTraceEvictions", videoAdaptationTouches.evictions())
+        evidence.put("comparisonPicture", pictureKey)
+        evidence.put("troubleshootingContext", comparisonContext ?: org.json.JSONObject.NULL)
         evidence.put("dragMoveEvents", videoAdaptationTouchMoves)
-        evidence.put("phoneContext", VideoAdaptationStore.read(this).optJSONObject("phone") ?: org.json.JSONObject.NULL)
+        evidence.put("phoneContext", diagnosticContext.optJSONObject("phone") ?: org.json.JSONObject.NULL)
         evidence.put("source_kind", "video_adaptation_current_main").put("requestedCanvasWidth", display.width)
             .put("requestedCanvasHeight", display.height).put("negotiatedWindowWidth", display.windowWidth)
             .put("negotiatedWindowHeight", display.windowHeight).put("viewWidth", view.width).put("viewHeight", view.height)
@@ -5855,6 +5862,8 @@ class CarPlayHostActivity : ComponentActivity() {
     }
 
     private fun onHostTouch(view: View, event: MotionEvent): Boolean {
+        val diagnosticTouch = if (videoAdaptationOverlay != null) videoAdaptationTouches.received(
+            event.actionMasked, event.pointerCount, event.eventTime, android.os.SystemClock.uptimeMillis(), System.nanoTime()) else null
         if (videoAdaptationOverlay != null && event.actionMasked == MotionEvent.ACTION_MOVE) videoAdaptationTouchMoves++
         if (menuOpen) return true
 
@@ -5926,6 +5935,7 @@ class CarPlayHostActivity : ComponentActivity() {
         }
         val contacts = CarPlayTouchMapper.contacts(event, content)
         val queued = controller?.sendTouch(contacts) ?: false
+        diagnosticTouch?.let { videoAdaptationTouches.enqueued(it, queued, System.nanoTime()) }
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN,
             MotionEvent.ACTION_POINTER_DOWN,

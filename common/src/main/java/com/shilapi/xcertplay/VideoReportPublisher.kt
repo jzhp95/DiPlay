@@ -66,6 +66,20 @@ internal object VideoReportPublisher {
         })
         return JSONObject(value.toString())
     }
+    fun liveSnapshot(c: Context): JSONObject {
+        val value = snapshot(c)
+        for (key in listOf("automaticSuite", "separateColorTestHistory", "pendingMainResult",
+            "unexecutedCases", "manualAdaptationSamplesReference")) value.remove(key)
+        val source = value.optJSONArray("samples") ?: JSONArray()
+        val rows = JSONArray()
+        for (i in 0 until source.length()) {
+            val row = source.optJSONObject(i) ?: continue
+            if (row.optJSONObject("begin")?.optString("source_kind") == "video_adaptation_current_main") rows.put(row)
+        }
+        return value.put("samples", rows).put("excludedUnverifiedSourceRows", source.length() - rows.length())
+            .put("sourceScope", "live_carplay_only").put("reportOrigin", "live_carplay_only")
+    }
+    fun live(c: Context, done: (JSONObject) -> Unit = {}): Boolean = publish(c, liveSnapshot(c), null, done)
     fun manual(c: Context, done: (JSONObject) -> Unit = {}): Boolean = publish(c, snapshot(c), null, done)
     fun automatic(c: Context, id: String, done: (JSONObject) -> Unit = {}): Boolean {
         val value = snapshot(c, true)
@@ -84,6 +98,8 @@ internal object VideoReportPublisher {
             var source: File? = null
             val value = JSONObject().put("key", key).put("endedAt", System.currentTimeMillis())
             try {
+                check(VideoAdaptationStore.flush(context)) { "sample_checkpoint_failed" }
+                frozen.put("samplePersistence", "completed_rows_commit_confirmed")
                 source = VideoAdaptationExport.zip(context, frozen)
                 val saved = DiagnosticExportStore.saveFileWithoutPicker(context, source, "application/zip")
                 value.put("status", if (saved.savedInApp) "private" else "public").put("path", saved.savedPath ?: source.absolutePath)

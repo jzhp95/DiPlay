@@ -30,6 +30,7 @@ internal class VideoAdaptationPage(private val activity: Activity, private val p
     private lateinit var status: TextView
     private lateinit var details: TextView
     private lateinit var saveStatus: TextView
+    private lateinit var troubleshooting: TextView
     private var publicationVersion = ""
     private val pollPublication = object : Runnable {
         override fun run() {
@@ -77,8 +78,17 @@ internal class VideoAdaptationPage(private val activity: Activity, private val p
         ios = edit(R.string.video_adapt_phone_ios, phone?.optString("ios").orEmpty())
         status = label(R.string.video_adapt_idle)
         saveStatus = label(R.string.video_report_idle, FlymeAutoStyle.TextRole.SECONDARY).apply { setTextIsSelectable(true) }
+        label(R.string.video_trouble_title, FlymeAutoStyle.TextRole.SECTION_TITLE)
+        label(R.string.video_trouble_guide, FlymeAutoStyle.TextRole.SECONDARY)
+        label(R.string.video_trouble_color_guide, FlymeAutoStyle.TextRole.SECONDARY)
+        action(R.string.video_trouble_reference, false, ::shareReference)
+        action(R.string.video_trouble_round_a) { setComparisonRound("A") }
+        action(R.string.video_trouble_round_b) { setComparisonRound("B") }
+        action(R.string.video_trouble_reference_confirm, false, ::confirmReference)
+        label(R.string.video_trouble_touch_guide, FlymeAutoStyle.TextRole.SECONDARY)
+        troubleshooting = label(R.string.video_adapt_idle, FlymeAutoStyle.TextRole.SECONDARY).apply { setTextIsSelectable(true) }
         action(R.string.video_adapt_collect_device, true) { collectDevice() }
-        action(R.string.video_adapt_start, true) { launch() }
+        if (!combined) action(R.string.video_adapt_start, true) { launch() }
         action(R.string.video_adapt_observation, false, ::observation)
         action(R.string.video_adapt_cancel_pending) {
             VideoAdaptationRegistry.current()?.let(VideoAdaptationRegistry::finish)
@@ -121,6 +131,54 @@ internal class VideoAdaptationPage(private val activity: Activity, private val p
             value.put("phone", phone.put("model", safe(model.text.toString())).put("ios", safe(ios.text.toString())))
         }
     }
+
+    private fun setComparisonRound(round: String) {
+        val previous = VideoAdaptationStore.read(activity).optJSONObject("troubleshootingContext")
+        SettingsTextEditor.show(activity, activity.getString(R.string.video_trouble_scene),
+            previous?.optString("scene").orEmpty()) { input ->
+            val scene = safe(input)
+            if (scene.isBlank()) { status.setText(R.string.video_trouble_scene_required); return@show }
+            VideoAdaptationStore.update(activity) { it.put("troubleshootingContext", JSONObject()
+                .put("id", java.util.UUID.randomUUID().toString()).put("round", round).put("scene", scene)
+                .put("referenceId", VideoTroubleshooting.REFERENCE_ID).put("referenceDisplayed", false)
+                .put("createdAt", System.currentTimeMillis())) }
+            status.setText(if (round == "A") R.string.video_trouble_round_a_hint else R.string.video_trouble_round_b_hint)
+            refresh()
+        }
+    }
+    private fun confirmReference() {
+        val context = VideoAdaptationStore.read(activity).optJSONObject("troubleshootingContext")
+        if (context == null) { status.setText(R.string.video_trouble_select_round); return }
+        val id = context.optString("id")
+        activity.appDialogBuilder().setTitle(R.string.video_trouble_reference_confirm)
+            .setMessage(R.string.video_trouble_reference_confirmation)
+            .setPositiveButton(R.string.save) { _, _ ->
+                VideoAdaptationStore.update(activity) { value ->
+                    value.optJSONObject("troubleshootingContext")?.takeIf { it.optString("id") == id }
+                        ?.put("referenceDisplayed", true)?.put("attestation", "user_reported_not_verified")
+                }
+                refresh()
+            }.setNegativeButton(R.string.cancel, null).show()
+    }
+    private fun shareReference() {
+        busy = true; refresh()
+        val context = activity.applicationContext
+        worker.execute {
+            val result = runCatching { VideoReferenceImage.file(context) }
+            handler.post {
+                if (disposed) return@post
+                busy = false; refresh()
+                runCatching {
+                    val file = result.getOrThrow()
+                    val uri = FileProvider.getUriForFile(activity, activity.packageName + ".diagnostic-reports", file)
+                    activity.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("image/png")
+                        .putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        .apply { clipData = ClipData.newRawUri("color-reference", uri) }, activity.getString(R.string.video_trouble_reference)))
+                }.onFailure { status.text = activity.getString(R.string.video_adapt_failed, it.javaClass.simpleName) }
+            }
+        }
+    }
+
     private fun observation() {
         activity.appDialogBuilder().setTitle(R.string.video_adapt_observation)
             .setItems(arrayOf("画面清晰", "静止文字也模糊", "仅移动时模糊", "画面发白", "画面卡顿", "手机明显发热", "手机未明显发热")) { _, index ->
@@ -186,24 +244,12 @@ internal class VideoAdaptationPage(private val activity: Activity, private val p
         controls.forEach { it.isEnabled = !busy && !(AutomaticVideoSuite.active(activity) || DecoderDiagnosticsService.active(activity)) }
         saveStatus.text = VideoReportPublisher.description(activity)
         val value = VideoAdaptationStore.read(activity)
+        val context = value.optJSONObject("troubleshootingContext")
+        troubleshooting.text = (context?.let { "本轮：${it.optString("round")} · ${it.optString("scene")}；原图呈现：${if (it.optBoolean("referenceDisplayed")) "人工确认" else "未确认"}\n" }.orEmpty()) + VideoTroubleshooting.text(value)
         val rows = value.optJSONArray("samples") ?: JSONArray()
         val missing = VideoAdaptationStore.gaps(value)
         details.text = buildString {
-            appendLine(DecoderDiagnosticsRun.description(activity))
             appendLine(VideoAdaptationSummary.device(value.optJSONObject("device")))
-            val suite = AutomaticVideoSuite.read(activity)
-            appendLine(VideoAdaptationSummary.latest(suite))
-            if (suite.optString("id").isNotEmpty()) {
-                appendLine("自动测试：${suite.optString("status")} · ${suite.optInt("position", suite.optJSONArray("results")?.length() ?: 0)}/${suite.optInt("total")}")
-                if (suite.has("exportPath")) appendLine("报告：${suite.optString("exportPath")}")
-                val autoRows = suite.optJSONArray("results")
-                val latest = autoRows?.optJSONObject(autoRows.length() - 1)?.optJSONObject("evidence")
-                if (latest != null) {
-                    appendLine("最新解码器：${latest.opt("selected_decoder")}")
-                    appendLine("最新输出格式：${latest.opt("output_format")}")
-                    appendLine("主屏采样：${latest.optJSONObject("automatic_window")?.optJSONObject("summary")}")
-                }
-            }
             appendLine(activity.getString(R.string.video_adapt_records, rows.length()))
             appendLine(if (missing.isEmpty()) activity.getString(R.string.video_adapt_basic_ready)
                 else activity.getString(R.string.video_adapt_missing, missing.joinToString("；")))
@@ -224,8 +270,8 @@ internal class VideoAdaptationPage(private val activity: Activity, private val p
         if (VideoAdaptationRegistry.current() != null) { status.setText(R.string.video_adapt_active); return }
         savePhone()
         busy = true; status.setText(R.string.video_report_writing); refresh()
-        VideoReportPublisher.manual(activity.applicationContext) { saved ->
-            if (disposed) return@manual
+        VideoReportPublisher.live(activity.applicationContext) { saved ->
+            if (disposed) return@live
             busy = false; refresh()
             status.text = VideoReportPublisher.description(activity)
             if (saved.optString("status") in listOf("public", "private") && saved.optString("uri").startsWith("content:")) runCatching {

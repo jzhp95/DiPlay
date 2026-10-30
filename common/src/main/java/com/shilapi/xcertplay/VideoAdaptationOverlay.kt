@@ -124,7 +124,7 @@ internal class VideoAdaptationOverlay(private val activity: Activity, private va
     }
     private fun persistAndPublish(result: org.json.JSONObject) {
         VideoAdaptationStore.append(activity, result)
-        VideoReportPublisher.manual(activity.applicationContext) {
+        VideoReportPublisher.live(activity.applicationContext) {
             if (!closed) status.text = VideoReportPublisher.description(activity)
         }
     }

@@ -99,7 +99,8 @@ class WheelTestActivity : Activity(), AppAppearanceOwner {
         }
         uidLayout = UidTestLayout(this, palette)
         uidViews = uidLayout.build()
-        colorPage = ColorTestPage(this, palette, ::requestAutomaticVideo, combined = true, requestRepublish = ::requestDecoderRepublish)
+        colorPage = ColorTestPage(this, palette, ::requestAutomaticVideo, combined = true, requestRepublish = ::requestDecoderRepublish,
+            requestLive = { videoPage?.continueCollection() })
         videoPage = VideoAdaptationPage(this, palette, { selectPage(DiagnosticsTestLayout.Page.COLOR) },
             startAutomatic = ::requestAutomaticVideo, requestStorage = { requestVideoStorage("export") },
             requestCollectionStorage = { requestVideoStorage("collect") }, combined = true)

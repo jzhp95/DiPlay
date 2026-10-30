@@ -48,7 +48,7 @@ class VideoAdaptationOverlayTest {
     private fun point(key: String = "original"): VideoAdaptationSample {
         val now = SystemClock.elapsedRealtimeNanos()
         return VideoAdaptationSample(key, now, LiveVideoCounters(now / 1_000_000_000, now / 1_000_000_000,
-            0, 0, now / 1000), 10, JSONObject().put("viewport", "1920x1080"))
+            0, 0, now / 1000), 10, JSONObject().put("viewport", "1920x1080").put("source_kind", "video_adaptation_current_main"))
     }
     @Test fun twentySecondsAutomaticallyCreatesAPublicZipEvenAfterTheOverlayCloses() {
         org.robolectric.Shadows.shadowOf(activity.application).grantPermissions(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)

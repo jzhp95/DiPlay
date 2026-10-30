@@ -26,6 +26,10 @@ class VideoAdaptationExportTest {
             ZipFile(output).use { zip ->
                 val names = zip.entries().asSequence().map { it.name }.toSet()
                 assertTrue("report.json" in names && "report.txt" in names)
+                assertTrue("reference/diplay-rgb-v1.png" in names)
+                assertTrue("reference/diplay-rgb-v1.json" in names)
+                val data = JSONObject(zip.getInputStream(zip.getEntry("report.json")).bufferedReader().readText())
+                assertTrue(data.getJSONObject("troubleshooting").isNull("touchToPhotonMs"))
                 assertTrue("captures/${capture.name}" in names)
                 assertFalse(names.any { it.contains("secret") || it.contains("other") || it.contains("..") })
                 assertArrayEquals(byteArrayOf(1, 2, 3), zip.getInputStream(zip.getEntry("captures/${capture.name}")).readBytes())

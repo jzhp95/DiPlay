@@ -17,6 +17,8 @@ internal data class VideoAdaptationSample(
 internal class VideoAdaptationWindow(val phase: String, private val first: VideoAdaptationSample) {
     private var last = first
     private val points = JSONArray()
+    private val touchRows = JSONArray()
+    private var touchLimitDropped = 0
     var failure: String? = null
         private set
     fun add(next: VideoAdaptationSample): Boolean {
@@ -27,6 +29,11 @@ internal class VideoAdaptationWindow(val phase: String, private val first: Video
             next.counters.decodeSamples < last.counters.decodeSamples || next.counters.decodeNanos < last.counters.decodeNanos ||
             next.cpuMillis < last.cpuMillis) { failure = "counter_or_clock_reset"; return false }
         if (points.length() >= 30) { failure = "sampling_timeout"; return false }
+        next.evidence.optJSONArray("touchTimeline")?.let { batch ->
+            for (i in 0 until batch.length()) {
+                if (touchRows.length() < 4096) touchRows.put(batch.getJSONObject(i)) else touchLimitDropped++
+            }
+        }
         points.put(metrics(last, next))
         last = next
         return true
@@ -43,6 +50,8 @@ internal class VideoAdaptationWindow(val phase: String, private val first: Video
         return JSONObject().put("phase", phase).put("identity", first.key).put("valid", missing.isEmpty())
             .put("missing", JSONArray(missing)).put("summary", metrics(first, last))
             .put("intervals", points).put("begin", first.evidence).put("end", last.evidence)
+            .put("touch", VideoTouchTimeline.window(first.evidence, last.evidence, first.nanos, last.nanos,
+                if (last.evidence.has("touchTimeline")) touchRows else null).put("windowLimitDropped", touchLimitDropped))
     }
     private fun metrics(a: VideoAdaptationSample, b: VideoAdaptationSample): JSONObject {
         val seconds = (b.nanos - a.nanos) / 1e9
@@ -101,6 +110,11 @@ internal object VideoAdaptationStore {
     @Synchronized fun update(c: Context, edit: (JSONObject) -> Unit) {
         val value = read(c); edit(value)
         prefs(c).edit().putString("report", value.toString()).apply()
+    }
+    /** Run on the report worker. A successful return acknowledges completed rows on disk. */
+    @Synchronized fun flush(c: Context): Boolean {
+        val preferences = prefs(c)
+        return preferences.edit().putString("report", preferences.getString("report", "{}")).commit()
     }
     @Synchronized fun append(c: Context, row: JSONObject) = update(c) { value ->
         val previous = value.optJSONArray("samples") ?: JSONArray()

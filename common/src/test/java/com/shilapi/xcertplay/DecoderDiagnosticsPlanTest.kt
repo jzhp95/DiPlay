@@ -49,4 +49,16 @@ class DecoderDiagnosticsPlanTest {
         val c = org.robolectric.RuntimeEnvironment.getApplication()
         assertThrows(IllegalArgumentException::class.java) { DecoderDiagnosticsRun.directory(c, "../../other") }
     }
+
+    @Test fun automaticEntryIsExplicitlyFixtureOnly() {
+        val fresh=DecoderDiagnosticsRun.fresh(org.json.JSONObject())
+        assertEquals("fixtures_only",fresh.getString("sourceScope"))
+        assertFalse(fresh.getBoolean("replayAvailable"))
+        val plan=fresh.getJSONArray("plan")
+        assertEquals(68,plan.length())
+        for(i in 0 until plan.length()){
+            assertFalse(plan.getJSONObject(i).getBoolean("replay"))
+            assertNotEquals("real-source",plan.getJSONObject(i).getString("sourceId"))
+        }
+    }
 }

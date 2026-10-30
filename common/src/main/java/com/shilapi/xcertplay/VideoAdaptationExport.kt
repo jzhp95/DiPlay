@@ -10,6 +10,8 @@ import java.util.zip.ZipOutputStream
 internal object VideoAdaptationExport {
     fun report(value: JSONObject): String = buildString {
         appendLine("DiPlay 车机视频适配采集")
+        if (value.optString("sourceScope") == "live_carplay_only") appendLine("来源：当前 iPhone 真实投屏分段；已完成分段独立保存。")
+        appendLine(VideoTroubleshooting.text(value))
         val auto = value.optJSONObject("automaticSuite")
         if (auto != null && auto.optString("id").isNotEmpty()) {
             appendLine("自动套件：${auto.optString("status")}；已执行 ${auto.optInt("position", auto.optJSONArray("results")?.length() ?: 0)}/${auto.optInt("total")}")
@@ -25,9 +27,11 @@ internal object VideoAdaptationExport {
     }
     /** Call with a frozen JSON snapshot on a worker; never zip arbitrary paths from stored data. */
     fun zip(context: Context, value: JSONObject): File {
+        value.put("troubleshooting", VideoTroubleshooting.report(value))
         val directory = File(context.getExternalFilesDir(null) ?: context.filesDir, "diagnostic-reports").apply { mkdirs() }
         val stamp = java.text.SimpleDateFormat("yyyyMMdd-HHmmss", java.util.Locale.ROOT).format(java.util.Date())
-        val file = File(directory, "decoder-diagnostics-$stamp-${java.util.UUID.randomUUID().toString().take(8)}.zip")
+        val prefix = if (value.optString("sourceScope") == "live_carplay_only") "live-carplay" else "decoder-diagnostics"
+        val file = File(directory, "$prefix-$stamp-${java.util.UUID.randomUUID().toString().take(8)}.zip")
         val names = linkedSetOf<String>()
         val rows = JSONArray()
         for (key in listOf("samples", "manualAdaptationSamplesReference")) {
@@ -49,6 +53,9 @@ internal object VideoAdaptationExport {
                     manifest.put(JSONObject().put("name", name).put("bytes", bytes.size)
                         .put("sha256", java.security.MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it.toInt() and 255) }))
                 }
+                val reference = VideoReferenceImage.bytes()
+                entry("reference/diplay-rgb-v1.png", reference)
+                entry("reference/diplay-rgb-v1.json", VideoReferenceImage.manifest(reference).toString(2).toByteArray(Charsets.UTF_8))
                 entry("report.json", value.toString(2).toByteArray(Charsets.UTF_8))
                 entry("report.txt", report(value).toByteArray(Charsets.UTF_8))
                 for (name in listOf("manifest.json", "decoder-reference-manifest.json")) {
@@ -79,7 +86,7 @@ internal object VideoAdaptationExport {
                 entry("missing-capture-files.json", missingFiles.toString(2).toByteArray(Charsets.UTF_8))
                 entry("bundle-manifest.json", manifest.toString(2).toByteArray(Charsets.UTF_8))
             }
-            directory.listFiles()?.filter { it != file && (it.name.startsWith("video-adaptation-") || it.name.startsWith("decoder-diagnostics-")) && it.extension == "zip" }
+            directory.listFiles()?.filter { it != file && (it.name.startsWith("video-adaptation-") || it.name.startsWith("decoder-diagnostics-") || it.name.startsWith("live-carplay-")) && it.extension == "zip" }
                 ?.sortedByDescending { it.lastModified() }?.drop(7)?.forEach { it.delete() }
             return file
         } catch (e: Exception) { file.delete(); throw e }

@@ -42,6 +42,12 @@ class AutomaticVideoPermissionTest {
             val activity = controller.get()
             descendants(activity.window.decorView).filterIsInstance<Button>()
                 .single { it.text == activity.getString(R.string.video_adapt_start) }.performClick()
+            val deadline=System.nanoTime()+5_000_000_000L
+            while(shadowOf(activity).lastRequestedPermission==null && System.nanoTime()<deadline) {
+                shadowOf(android.os.Looper.getMainLooper()).idle()
+                if(shadowOf(activity).lastRequestedPermission==null)Thread.sleep(10)
+            }
+            assertNotNull("Storage permission must be requested after local decoder cleanup",shadowOf(activity).lastRequestedPermission)
             assertEquals(listOf(Manifest.permission.WRITE_EXTERNAL_STORAGE), shadowOf(activity).lastRequestedPermission.requestedPermissions.toList())
             assertNull(VideoAdaptationRegistry.current())
         } finally { BackgroundSessionFixture.clear(); sink.close(); controller.pause().stop().destroy() }

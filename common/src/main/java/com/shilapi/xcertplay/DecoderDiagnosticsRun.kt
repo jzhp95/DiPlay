@@ -53,6 +53,7 @@ internal object DecoderDiagnosticsRun {
     fun fresh(screen: JSONObject): JSONObject {
         val id = UUID.randomUUID().toString()
         val value = JSONObject().put("id", id).put("planVersion", PLAN_VERSION).put("status", "preflight")
+            .put("sourceScope", "fixtures_only").put("replayAvailable", false)
             .put("startedAt", System.currentTimeMillis()).put("startedElapsedMs", android.os.SystemClock.elapsedRealtime())
             .put("screen", screen).put("position", 0).put("results", JSONArray()).put("gaps", JSONArray())
             .put("execution", "running").put("measurementValidity", "pending").put("evidenceCompleteness", "pending")
