@@ -281,7 +281,7 @@ internal object CarPlayMediaKeys {
         WheelKeyLog.note("media keys audio focus change=$change")
         // Resolve the matching sink and invoke it outside the media-key monitor. An abandoned
         // request must never mute a newer controller, and these owners must not nest locks.
-        val background = CarPlayBackgroundSession.snapshot()
+        val background = DiPlaySessionService.liveRuntime?.currentConnection
         if (background?.controller === expectedController) background.sink.onMediaAudioFocusChanged(change)
     }
 

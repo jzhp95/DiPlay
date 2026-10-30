@@ -65,8 +65,7 @@ class CarPlayHostSettingsTest {
         val size = sizeClass.getDeclaredConstructor(Int::class.javaPrimitiveType, Int::class.javaPrimitiveType)
             .apply { isAccessible = true }.newInstance(1920, 990)
         setField("activeDisplaySize", size)
-        CarPlayBackgroundSession::class.java.getDeclaredField("owner").apply { isAccessible = true }
-            .set(CarPlayBackgroundSession, activity)
+        BackgroundSessionFixture.claimOwner(activity)
         AirPlayPersistence.saveMfiTarget(activity, MfiTarget.USB_CH341)
         AirPlayPersistence.saveWirelessHotspotMode(activity, WirelessHotspotMode.WIFI_P2P)
         invoke("loadPersistedSettings")
@@ -78,7 +77,7 @@ class CarPlayHostSettingsTest {
         (field("mainHandler") as Handler).removeCallbacksAndMessages(null)
         (field("teardownExecutor") as ExecutorService).shutdownNow()
         (field("airPlayCommandExecutor") as ExecutorService).shutdownNow()
-        CarPlayBackgroundSession.clear()
+        BackgroundSessionFixture.clear()
         activity.getSharedPreferences("diplay_managed_hotspot", 0).edit().clear().commit()
         controllers.close()
     }
@@ -615,7 +614,7 @@ class CarPlayHostSettingsTest {
         assertFalse(field("menuOpen") as Boolean)
         assertEquals(CarPlayDisplayScale.MIN_TENTHS, AirPlayPersistence.loadDisplayScaleTenths(activity))
         assertEquals(4, AirPlayPersistence.loadSettingsGestureFingers(activity))
-        assertEquals(1, field("restartGeneration"))
+        assertEquals(com.shilapi.xcertplay.session.RuntimePhase.STOPPING,DiPlaySessionService.liveRuntime!!.snapshot().phase)
         assertTrue(field("handshakeResetInProgress") as Boolean)
     }
 
@@ -631,7 +630,7 @@ class CarPlayHostSettingsTest {
         saveButton().performClick()
         assertFalse("Save and reconnect left the menu open", field("menuOpen") as Boolean)
         assertEquals(CarPlayDisplayScale.MIN_TENTHS, AirPlayPersistence.loadDisplayScaleTenths(activity))
-        assertEquals(1, field("restartGeneration"))
+        assertEquals(com.shilapi.xcertplay.session.RuntimePhase.STOPPING,DiPlaySessionService.liveRuntime!!.snapshot().phase)
     }
 
     // Switching to wireless puts the hotspot to use, so its details are checked although nobody touched them.
@@ -676,23 +675,23 @@ class CarPlayHostSettingsTest {
         assertEquals(0, field("restartGeneration"))
     }
 
-    @Test fun failedStartupWhileMenuIsOpenRecoversOnCancel() {
+    @Test fun failedStartupWhileMenuIsOpenRendersWithoutStartingASecondRecovery() {
         attachController()
         invoke("openSettingsMenu")
         report(CarPlayStatus.Failed("Authentication failed"))
         assertEquals(0, field("restartGeneration"))
         invoke("cancelSettingsEdits")
-        assertEquals(1, field("restartGeneration"))
+        assertEquals("UI rendering must not own protocol recovery",0, field("restartGeneration"))
     }
 
-    @Test fun transportLossWhileMenuIsOpenRecoversOnCancel() {
+    @Test fun transportLossWhileMenuIsOpenRendersWithoutStartingASecondRecovery() {
         attachController()
         invoke("openSettingsMenu")
         val listener = activity.javaClass.getDeclaredMethod("createSessionListener", Int::class.javaPrimitiveType)
             .apply { isAccessible = true }.invoke(activity, 0) as AirPlaySessionListener
         listener.onTransportError("transport lost")
         invoke("cancelSettingsEdits")
-        assertEquals(1, field("restartGeneration"))
+        assertEquals("UI rendering must not own protocol recovery",0, field("restartGeneration"))
     }
 
     @Test fun wifiResetFailureRequiresManualRecoveryAfterCancel() {
@@ -702,7 +701,7 @@ class CarPlayHostSettingsTest {
         invoke("cancelSettingsEdits")
         assertEquals(View.VISIBLE, (field("wifiRecoveryButton") as View).visibility)
         assertEquals(0, field("restartGeneration"))
-        assertFalse(field("reconnectScheduled") as Boolean)
+        assertEquals(com.shilapi.xcertplay.session.RuntimePhase.STARTING,DiPlaySessionService.liveRuntime!!.snapshot().phase)
     }
 
     // #873: a second CarPlay mode request failed while the iPhone was already switching, the switch
@@ -710,42 +709,42 @@ class CarPlayHostSettingsTest {
     @Test fun aRetryDoesNotTearDownAnAttemptThatRecoveredAfterItsFailure() {
         attachController()
         report(CarPlayStatus.Failed("CarPlay configuration request transferred -1 of 1 bytes"))
-        assertTrue(field("reconnectScheduled") as Boolean)
+        assertEquals(com.shilapi.xcertplay.session.RuntimePhase.STARTING,DiPlaySessionService.liveRuntime!!.snapshot().phase)
         report(CarPlayStatus.RunningControl)
         shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofSeconds(3))
         assertEquals(0, field("restartGeneration"))
-        assertFalse(field("reconnectScheduled") as Boolean)
+        assertEquals(com.shilapi.xcertplay.session.RuntimePhase.STARTING,DiPlaySessionService.liveRuntime!!.snapshot().phase)
     }
 
-    @Test fun aRetryStillRestartsAnAttemptThatDidNotRecover() {
+    @Test fun uiCallbacksCannotRestartAnAttemptThatDidNotRecover() {
         attachController()
         report(CarPlayStatus.Failed("CarPlay configuration request transferred -1 of 1 bytes"))
         report(CarPlayStatus.WaitingForIphone)
         shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofSeconds(3))
-        assertEquals(1, field("restartGeneration"))
+        assertEquals("UI rendering must not own protocol recovery",0, field("restartGeneration"))
     }
 
     // A loss after the recovery, inside the retry's delay, is dropped because a retry is pending,
     // so that retry has to restart: otherwise nothing would reconnect.
-    @Test fun aRetryStillRestartsWhenTheRecoveredAttemptFailsAgain() {
+    @Test fun uiCallbacksCannotRestartWhenTheRecoveredAttemptFailsAgain() {
         attachController()
         report(CarPlayStatus.Failed("CarPlay configuration request transferred -1 of 1 bytes"))
         report(CarPlayStatus.RunningControl)
         report(CarPlayStatus.Failed("USBMUX write transferred -1 of 218 bytes"))
         shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofSeconds(3))
-        assertEquals(1, field("restartGeneration"))
+        assertEquals("UI rendering must not own protocol recovery",0, field("restartGeneration"))
     }
 
-    @Test fun aRetryStillRestartsWhenTheRecoveredAttemptsControlEnds() {
+    @Test fun uiCallbacksCannotRestartWhenTheRecoveredAttemptsControlEnds() {
         attachController()
         report(CarPlayStatus.Failed("CarPlay configuration request transferred -1 of 1 bytes"))
         report(CarPlayStatus.RunningControl)
         report(CarPlayStatus.ControlEnded)
         shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofSeconds(3))
-        assertEquals(1, field("restartGeneration"))
+        assertEquals("UI rendering must not own protocol recovery",0, field("restartGeneration"))
     }
 
-    @Test fun aRetryStillRestartsWhenTheRecoveredAttemptLosesItsTransport() {
+    @Test fun uiCallbacksCannotRestartWhenTheRecoveredAttemptLosesItsTransport() {
         attachController()
         report(CarPlayStatus.Failed("CarPlay configuration request transferred -1 of 1 bytes"))
         report(CarPlayStatus.RunningControl)
@@ -753,7 +752,7 @@ class CarPlayHostSettingsTest {
             .apply { isAccessible = true }.invoke(activity, 0) as AirPlaySessionListener
         listener.onTransportError("transport lost")
         shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofSeconds(3))
-        assertEquals(1, field("restartGeneration"))
+        assertEquals("UI rendering must not own protocol recovery",0, field("restartGeneration"))
     }
 
     @Test fun savingWirelessAfterWifiResetFailureStillRequiresManualRecovery() {
@@ -774,7 +773,7 @@ class CarPlayHostSettingsTest {
         setField("wirelessEnabled", false)
         invoke("saveSettingsAndReconnect")
         assertFalse(AirPlayPersistence.loadWirelessEnabled(activity))
-        assertEquals(1, field("restartGeneration"))
+        assertEquals(com.shilapi.xcertplay.session.RuntimePhase.STOPPING,DiPlaySessionService.liveRuntime!!.snapshot().phase)
     }
 
     @Test fun staleFailureDoesNotRestartWhenTheMenuCloses() {
@@ -786,39 +785,23 @@ class CarPlayHostSettingsTest {
         assertEquals(0, field("restartGeneration"))
     }
 
-    @Test fun authenticationChoicesExposeAutomaticLocalAndCh341() {
+    @Test fun authenticationStaysInTheDedicatedSettingsFlow() {
         invoke("openSettingsMenu")
-        val options = views(menu()).filterIsInstance<RadioButton>().filter { it.tag is MfiTarget }.toList()
-        assertEquals(listOf(MfiTarget.AUTO, MfiTarget.LOCAL, MfiTarget.USB_CH341), options.map { it.tag })
-        options.first().performClick()
-        invoke("cancelSettingsEdits")
-        assertEquals(MfiTarget.USB_CH341, AirPlayPersistence.loadMfiTarget(activity))
-        assertEquals(MfiTarget.USB_CH341, field("mfiTarget"))
+        assertFalse(views(menu()).filterIsInstance<RadioButton>().any{it.tag is MfiTarget})
+        assertEquals(MfiTarget.USB_CH341,AirPlayPersistence.loadMfiTarget(activity))
     }
 
-    @Test fun selectingLocalWithoutIdentityKeepsTheMenuAndSavedUsbChoice() {
-        attachController()
-        invoke("openSettingsMenu")
-        views(menu()).filterIsInstance<RadioButton>().first { it.tag == MfiTarget.LOCAL }.performClick()
-        invoke("saveSettingsAndReconnect")
-        assertTrue(field("menuOpen") as Boolean)
-        assertEquals(MfiTarget.USB_CH341, AirPlayPersistence.loadMfiTarget(activity))
-        assertEquals(View.VISIBLE, (field("mfiErrorView") as View).visibility)
-        assertEquals(0, field("restartGeneration"))
+    @Test fun localAuthenticationWithoutIdentityFailsExplicitValidation() {
+        setField("mfiTarget",MfiTarget.LOCAL)
+        assertEquals(false,invoke("validateMfiSettings"))
+        assertEquals(MfiTarget.USB_CH341,AirPlayPersistence.loadMfiTarget(activity))
     }
 
-    @Test fun switchingToUsbPersistsAndPassesUsbToTheRuntime() {
-        AirPlayPersistence.saveMfiTarget(activity, MfiTarget.LOCAL)
-        attachController()
-        invoke("openSettingsMenu")
-        views(menu()).filterIsInstance<RadioButton>().first { it.tag == MfiTarget.USB_CH341 }.performClick()
-        invoke("saveSettingsAndReconnect")
-        assertFalse(field("menuOpen") as Boolean)
-        assertEquals(MfiTarget.USB_CH341, AirPlayPersistence.loadMfiTarget(activity))
-        val config = invoke("createRuntimeConfig") as CarPlayRuntimeConfig
-        assertEquals(MfiTarget.USB_CH341, config.mfiTarget)
-        assertEquals(listOf(com.shilapi.xcertplay.transport.UsbDeviceId(0x1a86, 0x5512)), config.ch341Devices)
-        assertEquals(1, field("restartGeneration"))
+    @Test fun savedUsbAuthenticationIsPassedToTheNextRuntime() {
+        invoke("loadPersistedSettings")
+        val config=invoke("createRuntimeConfig") as CarPlayRuntimeConfig
+        assertEquals(MfiTarget.USB_CH341,config.mfiTarget)
+        assertEquals(listOf(com.shilapi.xcertplay.transport.UsbDeviceId(0x1a86,0x5512)),config.ch341Devices)
     }
 
     @Test fun automaticRuntimeProvidesTheCh341IdentityWithoutRequiringLocalMaterials() {
@@ -886,7 +869,7 @@ class CarPlayHostSettingsTest {
         method.invoke(activity, intent)
         assertTrue(field("awaitingVpnConsent") as Boolean)
         assertFalse(field("vpnReady") as Boolean)
-        assertNull(field("controller"))
+        assertNotNull("The retiring controller stays owned until its release receipt",field("controller"))
         assertEquals("test.VPN_CONSENT", shadowOf(activity).nextStartedActivityForResult.intent.action)
         method.invoke(activity, intent)
         assertNull(shadowOf(activity).nextStartedActivityForResult)
@@ -908,8 +891,8 @@ class CarPlayHostSettingsTest {
         assertFalse(field("menuOpen") as Boolean)
         assertFalse(field("wirelessEnabled") as Boolean)
         assertTrue(field("vpnReady") as Boolean)
-        assertNull(field("controller"))
-        assertEquals(1, field("restartGeneration"))
+        assertNotNull("The retiring controller stays owned until its release receipt",field("controller"))
+        assertEquals(com.shilapi.xcertplay.session.RuntimePhase.STOPPING,DiPlaySessionService.liveRuntime!!.snapshot().phase)
         assertFalse(activity.isFinishing)
     }
 
@@ -1091,9 +1074,8 @@ class CarPlayHostSettingsTest {
     }
     private fun invoke(name: String): Any? = activity.javaClass.getDeclaredMethod(name)
         .apply { isAccessible = true }.invoke(activity)
-    private fun field(name: String): Any? = activity.javaClass.getDeclaredField(name)
-        .apply { isAccessible = true }.get(activity)
+    private fun field(name: String): Any? = HostSessionFixture.getField<Any?>(activity, name)
     private fun setField(name: String, value: Any?) {
-        activity.javaClass.getDeclaredField(name).apply { isAccessible = true }.set(activity, value)
+        HostSessionFixture.setField(activity, name, value)
     }
 }

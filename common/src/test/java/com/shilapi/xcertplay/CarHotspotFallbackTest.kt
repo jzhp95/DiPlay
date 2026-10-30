@@ -70,17 +70,17 @@ class CarHotspotFallbackTest {
         ConnectivityManager::class.java.getDeclaredField("mService").apply {
             isAccessible = true
         }.set(app.getSystemService(ConnectivityManager::class.java), null)
-        assertStartupFailure("This firmware does not support automatic hotspot startup")
+        assertStartupFailure("Car hotspot startup was not confirmed")
     }
 
     @Test fun missingControlPermissionIsStillReported() {
         ApState.enabled = false
         CarHotspotAdbGrantTest.WritePermission.allowed = false
-        assertStartupFailure("Hotspot control permission is missing")
+        assertStartupFailure("Car hotspot startup was not confirmed")
     }
 
     @Test fun cancelledStartupDoesNotFallBackEvenWhenApStateIsUnreadable() {
-        assertStartupFailure("Hotspot startup was cancelled", generation = 1)
+        assertStartupFailure("Hotspot startup cancelled", generation = 1)
     }
 
     @Test fun existingWifiBypassesHotspotControlEvenWithAutoStartupSavedAndApOff() {

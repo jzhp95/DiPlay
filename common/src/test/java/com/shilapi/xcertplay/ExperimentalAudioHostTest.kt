@@ -18,6 +18,7 @@ import org.robolectric.util.ReflectionHelpers
 class ExperimentalAudioHostTest {
     @Test fun settingsClampPersistAndNewSinksTakeAnIndependentSnapshot() {
         val activity = Robolectric.buildActivity(CarPlayHostActivity::class.java).get()
+        val connections=mutableListOf<com.shilapi.xcertplay.session.SessionConnection>()
         var old: AndroidMediaSink? = null
         var next: AndroidMediaSink? = null
         try {
@@ -25,21 +26,19 @@ class ExperimentalAudioHostTest {
             AirPlayPersistence.saveExperimentalAudio(activity, ExperimentalAudioConfig(true, 999, true, -999, true, 6, true))
             val expected = ExperimentalAudioConfig(true, 12, true, -12, true, 6, true)
             assertEquals(expected, AirPlayPersistence.loadExperimentalAudio(activity))
-            ReflectionHelpers.setField(activity, "airPlayIdentity", AirPlayPersistence.loadIdentity(activity))
+            HostSessionFixture.setField(activity, "airPlayIdentity", AirPlayPersistence.loadIdentity(activity))
             for (name in listOf("loadPersistedSettings", "buildContentView"))
                 activity.javaClass.getDeclaredMethod(name).apply { isAccessible = true }.invoke(activity)
-            val method = activity.javaClass.getDeclaredMethod("createMediaSink", Int::class.javaPrimitiveType,
-                Int::class.javaPrimitiveType, Int::class.javaPrimitiveType).apply { isAccessible = true }
-            old = method.invoke(activity, 640, 360, 0) as AndroidMediaSink
+            old=HostSessionFixture.mediaConnection(activity,640,360,0).also{connections.add(it)}.sink
             assertEquals(expected, old.experimentalAudio)
             AirPlayPersistence.saveExperimentalAudio(activity, expected.copy(microphoneEnabled = false, outputRecovery = false))
             assertEquals(expected, old.experimentalAudio)
-            next = method.invoke(activity, 640, 360, 0) as AndroidMediaSink
+            next=HostSessionFixture.mediaConnection(activity,640,360,0).also{connections.add(it)}.sink
             assertEquals(expected.copy(microphoneEnabled = false, outputRecovery = false), next.experimentalAudio)
         } finally {
-            old?.close(); next?.close()
+            connections.forEach{it.close()}
             old?.awaitVideoReleased(5000); next?.awaitVideoReleased(5000)
-            ReflectionHelpers.getField<Handler>(activity, "mainHandler").removeCallbacksAndMessages(null)
+            HostSessionFixture.getField<Handler>(activity, "mainHandler").removeCallbacksAndMessages(null)
             activity.getSharedPreferences("xcertplay_airplay", 0).edit().clear().commit()
         }
     }

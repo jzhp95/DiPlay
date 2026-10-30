@@ -55,39 +55,15 @@ class AutomaticColorContinuationTest {
             }
         } finally { released = true; MainProbeTeardown.blocked() }
     }
-    @Test fun unconfirmedMainResultIsSavedBeforeTheSuiteStops() {
-        val id = AutomaticVideoSuite.begin(activity)
-        repeat(16) { AutomaticVideoSuite.record(activity, id, it, JSONObject(), "fixture") }
-        result(id)
-        val prefs = activity.getSharedPreferences(ColorMainProbeRegistry.PREFS, 0)
-        val data = JSONObject(prefs.getString("pending_result", "{}"))
-        data.put("teardown_confirmed", false)
-        data.getJSONObject("evidence").put("teardown_interrupted", true)
-        prefs.edit().putString("pending_result", data.toString()).commit()
-        page = ColorTestPage(activity, DiPlayPalette.LIGHT)
-        page!!.javaClass.getDeclaredMethod("consumeMainResult").apply { isAccessible = true }.invoke(page)
-        val state = AutomaticVideoSuite.read(activity)
-        assertEquals(17, state.getJSONArray("results").length())
-        assertEquals("interrupted", state.getString("status"))
-        assertTrue(state.getJSONArray("results").getJSONObject(16).getJSONObject("evidence").getBoolean("teardown_interrupted"))
-    }
-    @Test fun anAutomaticMainFailureStillAdvancesOnceAfterConfirmedTeardown() {
-        val id = AutomaticVideoSuite.begin(activity)
-        repeat(16) { AutomaticVideoSuite.record(activity, id, it, JSONObject(), "fixture") }
-        result(id)
-        page = ColorTestPage(activity, DiPlayPalette.LIGHT)
-        val consume = page!!.javaClass.getDeclaredMethod("consumeMainResult").apply { isAccessible = true }
-        consume.invoke(page); consume.invoke(page)
-        assertEquals(17, AutomaticVideoSuite.read(activity).getInt("index"))
-        assertEquals(17, AutomaticVideoSuite.read(activity).getJSONArray("results").length())
-    }
-    @Test fun aLateMainResultCannotAdvanceOrStopADifferentRun() {
-        val id = AutomaticVideoSuite.begin(activity)
-        repeat(16) { AutomaticVideoSuite.record(activity, id, it, JSONObject(), "fixture") }
-        result("old-run")
-        page = ColorTestPage(activity, DiPlayPalette.LIGHT)
-        page!!.javaClass.getDeclaredMethod("consumeMainResult").apply { isAccessible = true }.invoke(page)
-        assertEquals(16, AutomaticVideoSuite.read(activity).getInt("index"))
-        assertTrue(AutomaticVideoSuite.active(activity))
+    @Test fun pendingLegacyResultDoesNotAdvanceOrRestartRetiredSuite() {
+        val raw="{\"id\":\"old\",\"status\":\"running\",\"index\":16,\"results\":[]}"
+        val prefs=activity.getSharedPreferences("automatic_video_suite_v1",0)
+        prefs.edit().putString("state",raw).commit()
+        result("old")
+        page=ColorTestPage(activity,DiPlayPalette.LIGHT)
+        page!!.setVisible(true)
+        assertFalse(AutomaticVideoSuite.active(activity))
+        assertEquals(16,AutomaticVideoSuite.read(activity).getInt("index"))
+        assertEquals(raw,prefs.getString("state",null))
     }
 }

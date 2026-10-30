@@ -31,6 +31,20 @@ internal class ColorTestPlayer(context: Context) {
     @Volatile private var attachedSink: AndroidMediaSink? = null
     @Volatile private var attachedSurface: Surface? = null
 
+    @Volatile private var fixtureStartedNs = 0L
+    fun performance(): org.json.JSONObject {
+        val counters = attachedSink?.liveVideoCounters() ?: return org.json.JSONObject().put("unavailable", true)
+        val seconds = (System.nanoTime() - fixtureStartedNs) / 1e9
+        val p = counters.pipeline
+        fun avg(n: Long, count: Long): Any = if (count > 0) n / count / 1e6 else org.json.JSONObject.NULL
+        return org.json.JSONObject().put("durationSeconds", seconds).put("receivedFrames", counters.received).put("submittedFrames", counters.rendered)
+            .put("submittedFps", if (seconds > 0) counters.rendered / seconds else org.json.JSONObject.NULL)
+            .put("appWaitMillis", avg(p.applicationWaitNanos, p.inputSamples)).put("inputAcquireMillis", avg(p.inputWaitNanos, p.inputSamples))
+            .put("codecQueueToDequeueMillis", avg(p.codecOutputNanos, p.outputSamples))
+            .put("yuvCopyMillis", avg(p.yuvCopyNanos, p.yuvSamples)).put("yuvDrawMillis", avg(p.yuvDrawNanos, p.yuvSamples))
+            .put("backgroundCarPlaySession", CarPlayBackgroundSession.hasSession())
+            .put("scope", "fixture_app_counters_not_physical_panel_fps; concurrent_CarPlay_may_add_load")
+    }
     @Volatile private var retainedEvidence: com.shilapi.xcertplay.media.VideoSourceColorEvidence? = null
     fun evidence(): com.shilapi.xcertplay.media.VideoSourceColorEvidence? = synchronized(stateLock) {
         val request = pending ?: return@synchronized null
@@ -69,12 +83,15 @@ internal class ColorTestPlayer(context: Context) {
         fun emit(message: String) { main.post { if (alive()) event(message) } }
         worker.execute {
             if (!alive()) return@execute
+            val diagnosticLease=com.shilapi.xcertplay.diagnostics.DiagnosticLease.acquire(
+                java.util.UUID.randomUUID().toString(),DiPlaySessionService.liveRuntime?.currentConnection?.controller)
+            if(diagnosticLease==null){emit("错误：另一项诊断正在执行或等待资源释放");return@execute}
             var sink: AndroidMediaSink? = null
             var extractor: MediaExtractor? = null
             var live = false
             try {
                 if (case.asset == null) {
-                    val session = CarPlayBackgroundSession.snapshot()
+                    val session = com.shilapi.xcertplay.diagnostics.DiagnosticLease.production(diagnosticLease)
                         ?: throw IllegalStateException("未连接 CarPlay。先连接 iPhone，再返回此页重试；无需退出测试页修改参数。")
                     synchronized(stateLock) {
                         if (pending !== request || !surface.isValid) return@execute
@@ -88,7 +105,7 @@ internal class ColorTestPlayer(context: Context) {
                     var sawFrame = false
                     // Mirror diagnostics provide its own first-frame signal, not the main screen's counters.
                     while (alive()) {
-                        if (CarPlayBackgroundSession.snapshot()?.sink !== sink) throw IllegalStateException("CarPlay 连接已变化，请重试当前项目")
+                        if (com.shilapi.xcertplay.diagnostics.DiagnosticLease.production(diagnosticLease)?.sink !== sink) throw IllegalStateException("CarPlay 连接已变化，请重试当前项目")
                         if (!sawFrame && SystemClock.elapsedRealtime() > deadline) {
                             emit("提示：若画面仍黑屏，请点亮 iPhone 或切换 CarPlay 页面触发新画面；也可记录无法显示")
                             sawFrame = true
@@ -107,11 +124,18 @@ internal class ColorTestPlayer(context: Context) {
                         reader.setDataSource(it.fileDescriptor, it.startOffset, it.length)
                     }
                     val format = reader.getTrackFormat(0)
+                    val fixtureFps = runCatching { format.getInteger(MediaFormat.KEY_FRAME_RATE) }.getOrDefault(10).coerceIn(1, 120)
+                    var nextFrameNs = System.nanoTime()
+                    fixtureStartedNs = nextFrameNs
                     reader.selectTrack(0)
                     val hevc = format.getString(MediaFormat.KEY_MIME) == MediaFormat.MIMETYPE_VIDEO_HEVC
                     synchronized(stateLock) {
                     if (pending !== request || !surface.isValid) return@execute
-                    sink = AndroidMediaSink(surface = surface,
+                    val plan=com.shilapi.xcertplay.media.VideoPlanResolver.resolve(com.shilapi.xcertplay.media.VideoPipelineRequest(
+                        codec=fixtureCodec,width=format.getInteger(MediaFormat.KEY_WIDTH),height=format.getInteger(MediaFormat.KEY_HEIGHT),
+                        forceSoftware=case.forceSoftware,hardwareYuv=case.hardwareYuv,direct=case.surface,color=color,
+                        purpose=com.shilapi.xcertplay.media.VideoPurpose.DIAGNOSTIC))
+                    sink = AndroidMediaSink(videoPipelinePlan=plan,surface = surface,
                         videoWidth = format.getInteger(MediaFormat.KEY_WIDTH),
                         videoHeight = format.getInteger(MediaFormat.KEY_HEIGHT),
                         videoColorOverride = color, forceSoftwareVideoDecoder = case.forceSoftware,
@@ -138,7 +162,10 @@ internal class ColorTestPlayer(context: Context) {
                         if (!firstFrame && SystemClock.elapsedRealtime() - started > 10_000)
                             throw IllegalStateException("10 秒内没有解码画面；该解码器可能不支持此测试片")
                         reader.advance()
-                        Thread.sleep(100)
+                        nextFrameNs += 1_000_000_000L / fixtureFps
+                        val sleepMs = ((nextFrameNs - System.nanoTime()) / 1_000_000).coerceAtLeast(0)
+                        if (sleepMs > 0) Thread.sleep(sleepMs)
+                        if (System.nanoTime() - nextFrameNs > 250_000_000L) nextFrameNs = System.nanoTime()
                     }
                 }
             } catch (error: Exception) {
@@ -165,6 +192,7 @@ internal class ColorTestPlayer(context: Context) {
                     }
                 }
                 synchronized(stateLock) { attachedSink = null; attachedSurface = null; attachedRequest = null }
+                com.shilapi.xcertplay.diagnostics.DiagnosticLease.release(diagnosticLease,true)
             }
         }
     }

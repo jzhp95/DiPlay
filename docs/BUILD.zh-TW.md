@@ -47,11 +47,11 @@ sdk.dir=C:/Users/YOUR_NAME/AppData/Local/Android/Sdk
 ./gradlew :mobile:assembleDebug
 ```
 
-一般原始碼 APK 不包含配件認證身分，除非自行提供執行時認證素材；因此它可用於介面驗證，但獨立 CarPlay 連線需要下節素材。Debug 套件名稱為 `com.shihab.diplay.hudtest`，正式版為 `com.shihab.diplay`。
+一般原始碼 APK 不包含配件認證身分，除非自行提供執行時認證素材；因此它可用於介面驗證，但獨立 CarPlay 連線需要下節素材。本分支只保留 Flyme 版本：Debug 套件名稱為 `com.shihab.diplay.flyme.test`，正式版為 `com.shihab.diplay.flyme`。兩者都宣告系統 UID 與 EAS，安裝前必須使用目標車機相符的平台簽章；Gradle 預設 debug 簽章不能直接滿足共享 UID。
 
 ## Android Studio 執行
 
-在 **Run → Edit Configurations** 選擇或建立 Android App 設定，將 Module 設為 **mobile**，選取 Android 裝置後執行。只要 APK 而不安裝時，在終端機執行 `:mobile:assembleDebug`，輸出見上表。
+在 **Run → Edit Configurations** 選擇或建立 Android App 設定，將 Module 設為 **mobile**，先建置 APK，再依下節平台簽章流程簽署後安裝到目標車機。只要 APK 而不安裝時，在終端機執行 `:mobile:assembleDebug`，輸出見上表。
 
 ## 完整檢查
 
@@ -99,7 +99,7 @@ Linux／macOS：
 DIPLAY_AUTH_ASSETS_DIR=/absolute/path/to/runtime-assets ./gradlew :mobile:assembleStandaloneDebug
 ```
 
-任一必要檔案缺少或為空時，任務會停止；建置也會拒絕非預期的憑證容器。輸出為 `mobile/build/outputs/apk/debug/mobile-debug.apk`。請確認 APK 中的 `assets/offline-mfi/identity.pk8` 與 `assets/offline-mfi/certificate.p7b` 符合選定素材。使用相同簽章更新既有測試程式，才能保留設定。
+任一必要檔案缺少或為空時，任務會停止；建置也會拒絕非預期的憑證容器。輸出為 `mobile/build/outputs/apk/debug/mobile-debug.apk`。請確認 APK 中的 `assets/offline-mfi/identity.pk8` 與 `assets/offline-mfi/certificate.p7b` 符合選定素材。使用 `integrations/flyme-eas/build-apks.sh` 或 Windows 的 `build-apks.ps1` 建置並完成平台簽章，輸出 `build/car-test-apks/Apple-CarPlay-flyme-test-建置時間.apk`。新套件名稱與舊 `com.shihab.diplay.flyme.hudtest` 不同，不會自動繼承舊私有設定；保留舊安裝與報告。同一新套件名稱及相同簽章的後續更新才會保留該安裝的設定。
 
 ## 正式版建置
 
@@ -108,7 +108,7 @@ DIPLAY_AUTH_ASSETS_DIR=/absolute/path/to/runtime-assets ./gradlew :mobile:assemb
 | 變數 | 內容 |
 | --- | --- |
 | `DIPLAY_AUTH_ASSETS_DIR` | 認證素材目錄的絕對路徑 |
-| `ANDROID_KEYSTORE_PATH` | Android 簽章 keystore 路徑 |
+| `ANDROID_KEYSTORE_PATH` | 與目標車機平台相符的簽章 keystore 路徑 |
 | `ANDROID_KEYSTORE_PASSWORD` | keystore 密碼 |
 | `ANDROID_KEY_ALIAS` | 簽章金鑰別名 |
 | `ANDROID_KEY_PASSWORD` | 簽章金鑰密碼 |

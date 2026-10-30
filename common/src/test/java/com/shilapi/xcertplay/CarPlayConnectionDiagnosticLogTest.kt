@@ -34,8 +34,7 @@ class CarPlayConnectionDiagnosticLogTest {
         activity.javaClass.getDeclaredField("sessionLog").apply { isAccessible = true }
             .get(activity).let { (it as Closeable).close() }
         for (field in listOf("teardownExecutor", "airPlayCommandExecutor")) {
-            (activity.javaClass.getDeclaredField(field).apply { isAccessible = true }
-                .get(activity) as ExecutorService).shutdownNow()
+            (HostSessionFixture.getField<Any?>(activity, field) as ExecutorService).shutdownNow()
         }
     }
 

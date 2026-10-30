@@ -63,7 +63,7 @@ class AdaptiveSettingsUiTest {
     @Test
     @Config(sdk = [29], qualifiers = "ja-w320dp-h600dp")
     fun japaneseSettingsDoNotEllipsizeVisibleTextOnNarrowScreens() {
-        verifySettingsDoNotEllipsizeVisibleText("アプリの言語")
+        verifySettingsDoNotEllipsizeVisibleText("应用语言")
     }
 
     @Test
@@ -71,7 +71,7 @@ class AdaptiveSettingsUiTest {
     fun traditionalChineseSettingsFitNarrowScreensWithLargeFonts() {
         RuntimeEnvironment.setFontScale(1.3f)
         AirPlayPersistence.saveAudioFocusEnabled(context, true)
-        verifySettingsDoNotEllipsizeVisibleText("應用程式語言")
+        verifySettingsDoNotEllipsizeVisibleText("应用语言")
     }
 
     @Test
@@ -79,7 +79,7 @@ class AdaptiveSettingsUiTest {
     fun traditionalChineseSettingsFitExpandedScreensWithLargeFonts() {
         RuntimeEnvironment.setFontScale(1.3f)
         AirPlayPersistence.saveAudioFocusEnabled(context, true)
-        verifySettingsDoNotEllipsizeVisibleText("應用程式語言")
+        verifySettingsDoNotEllipsizeVisibleText("应用语言")
     }
 
     private fun verifySettingsDoNotEllipsizeVisibleText(languageLabel: String) {
@@ -107,6 +107,15 @@ class AdaptiveSettingsUiTest {
         }
     }
 
+    @Test fun settingsHeaderOffersBackWithoutTheRetiredSearchControl() {
+        val screen=openSettings()
+        val back=texts(screen).single{it.text==screen.getString(R.string.back)}
+        assertTrue(back.isClickable)
+        assertFalse(descendants(screen.window.decorView).any{it.contentDescription==screen.getString(R.string.settings_search)})
+        back.performClick()
+        assertEquals("home",ReflectionHelpers.getField<String>(screen,"page"))
+    }
+
     @After fun tearDown() {
         activity?.finish()
         RuntimeEnvironment.setFontScale(1f)
@@ -118,7 +127,7 @@ class AdaptiveSettingsUiTest {
     @Test fun compactSettingsOpenOnAnEverydayDriverOverview() {
         val screen = openSettings()
 
-        assertTrue(texts(screen).any { it.text == screen.getString(R.string.settings_overview) })
+        assertTrue(texts(screen).any { it.text == screen.getString(R.string.settings) })
         assertTrue(texts(screen).any { it.text == screen.getString(R.string.settings_quick_settings) })
     }
 
@@ -292,6 +301,8 @@ class AdaptiveSettingsUiTest {
         DiPlayPreferences.savePhone(context, "AA:BB:CC:DD:EE:FF", "My iPhone")
         val screen = openSettings()
         ReflectionHelpers.setField(screen, "setupError", null)
+        context.getSharedPreferences("diplay_managed_hotspot",0).edit().clear().commit()
+        AirPlayPersistence.saveManualHotspotSsid(context,"")
         ReflectionHelpers.callInstanceMethod<Unit>(screen, "render")
 
         assertTrue(texts(screen).any { it.text == screen.getString(R.string.setup_needs_attention) })
@@ -308,7 +319,7 @@ class AdaptiveSettingsUiTest {
         val index = ReflectionHelpers.callInstanceMethod<List<Any>>(screen, "buildSettingsSearchIndex")
         val results = ReflectionHelpers.callInstanceMethod<List<Any>>(screen, "searchSettings",
             ReflectionHelpers.ClassParameter(List::class.java, index),
-            ReflectionHelpers.ClassParameter(String::class.java, "FRAME rate"))
+            ReflectionHelpers.ClassParameter(String::class.java, screen.getString(R.string.frame_rate)))
         val frameRate = results.single {
             ReflectionHelpers.getField<String>(it, "title") == screen.getString(R.string.frame_rate)
         }
@@ -321,131 +332,8 @@ class AdaptiveSettingsUiTest {
     }
 
     @Test
-    @Config(sdk = [28, 29])
-    fun headerSearchBoxListsMatchesAsYouTypeAndOpensTheChosenSetting() {
-        val screen = openSettings()
-        fun box() = descendants(screen.window.decorView).filterIsInstance<EditText>()
-            .single { it.contentDescription == screen.getString(R.string.settings_search) }
-        assertTrue(descendants(screen.window.decorView).none { it is EditText })
-        descendants(screen.window.decorView).single {
-            it.contentDescription == screen.getString(R.string.settings_search)
-        }.performClick()
-        shadowOf(Looper.getMainLooper()).idle()
-        assertTrue(box().hasFocus())
-
-        val editor = box()
-        box().setText("FRAME rate")
-        shadowOf(Looper.getMainLooper()).idle()
-
-        // Typing and clearing a query must keep the keyboard's original editor.
-        assertSame(editor, box())
-        box().setText("")
-        shadowOf(Looper.getMainLooper()).idle()
-        box().setText("FRAME rate")
-        shadowOf(Looper.getMainLooper()).idle()
-        assertSame(editor, box())
-        assertEquals("FRAME rate", box().text.toString())
-        assertTrue(box().hasFocus())
-        val popup = ReflectionHelpers.getField<PopupWindow>(screen, "settingsSearchPopup")
-        assertTrue(popup.isShowing)
-        // The list's position is worked out in screen coordinates, so it is laid out in the screen.
-        assertTrue(ReflectionHelpers.getField<Boolean>(popup, "mLayoutInScreen"))
-        val row = descendants(popup.contentView).first {
-            it.isClickable && it.contentDescription?.startsWith(screen.getString(R.string.frame_rate) + ", ") == true
-        }
-        row.performClick()
-        shadowOf(Looper.getMainLooper()).idle()
-
-        assertFalse(popup.isShowing)
-        assertEquals(SettingsCategory.DISPLAY, ReflectionHelpers.getField<SettingsCategory>(screen, "settingsCategory"))
-        assertTrue(texts(screen).any { it.text.startsWith(screen.getString(R.string.frame_rate) + " · ") })
-        assertTrue(descendants(screen.window.decorView).none { it is EditText })
-    }
-
-    @Test fun backClosesAnOpenSearchBeforeLeavingSettings() {
-        val screen = openSettings()
-        fun box() = descendants(screen.window.decorView).filterIsInstance<EditText>()
-            .single { it.contentDescription == screen.getString(R.string.settings_search) }
-        descendants(screen.window.decorView).single {
-            it.contentDescription == screen.getString(R.string.settings_search)
-        }.performClick()
-        shadowOf(Looper.getMainLooper()).idle()
-        box().setText("no such setting zz")
-        shadowOf(Looper.getMainLooper()).idle()
-        val popup = ReflectionHelpers.getField<PopupWindow>(screen, "settingsSearchPopup")
-        assertTrue(descendants(popup.contentView).filterIsInstance<TextView>()
-            .any { it.text == screen.getString(R.string.settings_search_empty) })
-
-        screen.onBackPressedDispatcher.onBackPressed()
-
-        assertEquals("settings", ReflectionHelpers.getField<String>(screen, "page"))
-        assertFalse(popup.isShowing)
-        assertTrue(descendants(screen.window.decorView).none { it is EditText })
-        screen.onBackPressedDispatcher.onBackPressed()
-        assertEquals("home", ReflectionHelpers.getField<String>(screen, "page"))
-    }
-
-    @Test fun rebuiltSearchFieldsDoNotLeaveLayoutListenersOnTheWindow() {
-        val screen = openSettings()
-        descendants(screen.window.decorView).single {
-            it.contentDescription == screen.getString(R.string.settings_search)
-        }.performClick()
-        shadowOf(Looper.getMainLooper()).idle()
-        fun globalLayoutListeners(): Int {
-            val listeners = ReflectionHelpers.getField<Any?>(screen.window.decorView.viewTreeObserver, "mOnGlobalLayoutListeners")
-                ?: return 0
-            return ReflectionHelpers.callInstanceMethod<Int>(listeners, "size")
-        }
-        val before = globalLayoutListeners()
-        repeat(5) {
-            ReflectionHelpers.callInstanceMethod<Unit>(screen, "render")
-            shadowOf(Looper.getMainLooper()).idle()
-        }
-        assertTrue(descendants(screen.window.decorView).any { it is EditText })
-        assertEquals(before, globalLayoutListeners())
-    }
-
-    @Test
-    @Config(qualifiers = "en-w900dp-h600dp-land")
-    fun backCollapsesAnEmptySearchAndFullLayoutKeepsItsExistingLabel() {
-        val screen = openSettings()
-        val button = descendants(screen.window.decorView).single {
-            it.contentDescription == screen.getString(R.string.settings_search)
-        }
-        assertTrue(button is android.widget.Button)
-        assertEquals(screen.getString(R.string.settings_search_hint), (button as TextView).text.toString())
-        button.performClick()
-        shadowOf(Looper.getMainLooper()).idle()
-        assertTrue(descendants(screen.window.decorView).any { it is EditText && it.hasFocus() })
-        screen.onBackPressedDispatcher.onBackPressed()
-        assertEquals("settings", ReflectionHelpers.getField<String>(screen, "page"))
-        assertTrue(descendants(screen.window.decorView).none { it is EditText })
-        assertTrue(descendants(screen.window.decorView).single {
-            it.contentDescription == screen.getString(R.string.settings_search)
-        }.hasFocus())
-    }
-
-    @Test
-    @Config(qualifiers = "en-w500dp-h400dp-land")
-    fun compactSearchUsesASquareTouchTargetAndCollapsesAfterBack() {
-        val screen = openSettings()
-        fun search() = descendants(screen.window.decorView).single {
-            it.contentDescription == screen.getString(R.string.settings_search)
-        }
-        assertTrue(search() is android.widget.ImageButton)
-        assertEquals(search().layoutParams.width, search().layoutParams.height)
-        assertTrue(search().layoutParams.height >= Math.round(44 * screen.resources.displayMetrics.density))
-        search().performClick()
-        shadowOf(Looper.getMainLooper()).idle()
-        assertTrue(search() is EditText)
-        screen.onBackPressedDispatcher.onBackPressed()
-        assertTrue(search() is android.widget.ImageButton)
-        assertEquals("settings", ReflectionHelpers.getField<String>(screen, "page"))
-    }
-
-    @Test
     @Config(shadows = [HotspotSearchProbe::class])
-    fun hotspotSearchKeepsTheCarHotspotAudienceGateAndNeedsNoAdbOffBydUnits() {
+    fun hotspotSearchDoesNotOfferUnsupportedAutomaticControl() {
         installBydSettingsPackage()
         AirPlayPersistence.saveWirelessHotspotMode(context, WirelessHotspotMode.EXISTING_WIFI)
         HotspotSearchProbe.workers.clear()
@@ -459,7 +347,7 @@ class AdaptiveSettingsUiTest {
         AirPlayPersistence.saveWirelessHotspotMode(context, WirelessHotspotMode.MANUAL)
         shadowOf(context.packageManager).removePackage("com.byd.carsettings")
         // Other head units up to Android 10 get the switch through "Modify system settings" access instead of ADB.
-        assertEquals(SettingsCategory.CONNECTION, index().single { it.title == title }.category)
+        assertFalse(index().any { it.title == title })
         assertTrue(HotspotSearchProbe.workers.isEmpty())
     }
 
@@ -611,7 +499,7 @@ class AdaptiveSettingsUiTest {
 
     @Test fun connectionCategoryUsesAChoiceAndDoesNotDuplicateHomeActions() {
         val screen = openConnectionSettings()
-        for (id in listOf(R.string.settings_connection_method, R.string.mfi_certificate_signing_target)) {
+        for (id in listOf(R.string.settings_connection_method)) {
             assertTrue(texts(screen).any { it.text.startsWith(screen.getString(id) + " · ") })
         }
         for (id in listOf(R.string.s_1_choose_your_connection, R.string.s_2_pair_your_iphone,
@@ -708,9 +596,9 @@ class AdaptiveSettingsUiTest {
         val session = mock(CarPlayController::class.java)
         val sink = mock(AndroidMediaSink::class.java)
         var disconnects = 0
-        CarPlayBackgroundSession.store(session, sink, 800, 480, Any(),
+        BackgroundSessionFixture.store(session, sink, 800, 480, Any(),
             CarPlaySessionDisplay(800, 480, Surface.ROTATION_0, false, false, 800, 480)) { disconnects++ }
-        CarPlayBackgroundSession.active = true
+        BackgroundSessionFixture.setActive(true)
         try {
             PendingReconnect.clear()
             ReflectionHelpers.setField(screen, "settingsCategory", SettingsCategory.AUDIO)
@@ -726,9 +614,9 @@ class AdaptiveSettingsUiTest {
             verify(sink).setNavigationAttenuationDb(-13)
             assertFalse(PendingReconnect.isPending(session))
             assertEquals(0, disconnects)
-            assertSame(session, CarPlayBackgroundSession.snapshot()?.controller)
+            assertSame(session, BackgroundSessionFixture.snapshot()?.controller)
         } finally {
-            CarPlayBackgroundSession.clear()
+            BackgroundSessionFixture.clear()
             PendingReconnect.clear()
         }
     }
@@ -778,9 +666,9 @@ class AdaptiveSettingsUiTest {
         val screen = openSettings()
         val session = mock(CarPlayController::class.java)
         var stops = 0
-        CarPlayBackgroundSession.store(session, mock(AndroidMediaSink::class.java), 800, 480, Any(),
+        BackgroundSessionFixture.store(session, mock(AndroidMediaSink::class.java), 800, 480, Any(),
             CarPlaySessionDisplay(800, 480, Surface.ROTATION_0, false, false, 800, 480)) { stops++ }
-        CarPlayBackgroundSession.active = true
+        BackgroundSessionFixture.setActive(true)
         try {
             ReflectionHelpers.setField(screen, "settingsCategory", SettingsCategory.ADVANCED)
             ReflectionHelpers.callInstanceMethod<Unit>(screen, "render")
@@ -806,7 +694,7 @@ class AdaptiveSettingsUiTest {
             assertEquals(0, stops)
         } finally {
             org.robolectric.shadows.ShadowMediaCodecList.reset()
-            CarPlayBackgroundSession.clear()
+            BackgroundSessionFixture.clear()
             PendingReconnect.clear()
         }
     }
@@ -892,7 +780,7 @@ class AdaptiveSettingsUiTest {
         val screen = openSettings()
         val session = mock(CarPlayController::class.java)
         var stops = 0
-        CarPlayBackgroundSession.store(session, mock(AndroidMediaSink::class.java), 640, 360, Any(),
+        BackgroundSessionFixture.store(session, mock(AndroidMediaSink::class.java), 640, 360, Any(),
             CarPlaySessionDisplay(640, 360, Surface.ROTATION_0, false, false, 640, 360)) { stops++ }
         try {
             ReflectionHelpers.setField(screen, "settingsCategory", SettingsCategory.ADVANCED)
@@ -920,7 +808,7 @@ class AdaptiveSettingsUiTest {
             assertTrue(setting(R.string.settings_software_direct_video).isEnabled)
         } finally {
             org.robolectric.shadows.ShadowMediaCodecList.reset()
-            CarPlayBackgroundSession.clear(); PendingReconnect.clear()
+            BackgroundSessionFixture.clear(); PendingReconnect.clear()
         }
     }
 
@@ -988,7 +876,7 @@ class AdaptiveSettingsUiTest {
         val screen = openSettings()
         val session = mock(CarPlayController::class.java)
         var stops = 0
-        CarPlayBackgroundSession.store(session, mock(AndroidMediaSink::class.java), 640, 360, Any(),
+        BackgroundSessionFixture.store(session, mock(AndroidMediaSink::class.java), 640, 360, Any(),
             CarPlaySessionDisplay(640, 360, Surface.ROTATION_0, false, false, 640, 360)) { stops++ }
         try {
             ReflectionHelpers.setField(screen, "settingsCategory", SettingsCategory.ADVANCED)
@@ -1016,7 +904,7 @@ class AdaptiveSettingsUiTest {
             assertEquals(expected, AirPlayPersistence.loadExperimentalAudio(context))
             assertTrue(PendingReconnect.isPending(session))
             assertEquals(0, stops)
-        } finally { CarPlayBackgroundSession.clear(); PendingReconnect.clear() }
+        } finally { BackgroundSessionFixture.clear(); PendingReconnect.clear() }
     }
 
     @Test @Config(sdk = [28], qualifiers = "w320dp-h900dp")
@@ -1107,9 +995,9 @@ class AdaptiveSettingsUiTest {
         val screen = openSettings()
         val session = mock(CarPlayController::class.java)
         var stops = 0
-        CarPlayBackgroundSession.store(session, mock(AndroidMediaSink::class.java), 800, 480, Any(),
+        BackgroundSessionFixture.store(session, mock(AndroidMediaSink::class.java), 800, 480, Any(),
             CarPlaySessionDisplay(800, 480, Surface.ROTATION_0, false, false, 800, 480)) { stops++ }
-        CarPlayBackgroundSession.active = true
+        BackgroundSessionFixture.setActive(true)
         try {
             PendingReconnect.clear()
             ReflectionHelpers.setField(screen, "settingsCategory", SettingsCategory.CONNECTION)
@@ -1126,9 +1014,9 @@ class AdaptiveSettingsUiTest {
             assertEquals(UsbChargingCurrent.LOW, AirPlayPersistence.loadUsbChargingCurrent(context))
             assertTrue(PendingReconnect.isPending(session))
             assertEquals(0, stops)
-            assertSame(session, CarPlayBackgroundSession.snapshot()?.controller)
+            assertSame(session, BackgroundSessionFixture.snapshot()?.controller)
         } finally {
-            CarPlayBackgroundSession.clear()
+            BackgroundSessionFixture.clear()
             PendingReconnect.clear()
         }
     }
@@ -1141,9 +1029,9 @@ class AdaptiveSettingsUiTest {
         val screen = openSettings()
         val session = mock(CarPlayController::class.java)
         var stops = 0
-        CarPlayBackgroundSession.store(session, mock(AndroidMediaSink::class.java), 800, 480, Any(),
+        BackgroundSessionFixture.store(session, mock(AndroidMediaSink::class.java), 800, 480, Any(),
             CarPlaySessionDisplay(800, 480, Surface.ROTATION_0, false, false, 800, 480)) { stops++ }
-        CarPlayBackgroundSession.active = true
+        BackgroundSessionFixture.setActive(true)
         try {
             ReflectionHelpers.setField(screen, "settingsCategory", SettingsCategory.ADVANCED)
             listOf(R.string.call_echo_cancellation, R.string.call_voice_filter).forEach { title ->
@@ -1156,14 +1044,14 @@ class AdaptiveSettingsUiTest {
 
                 assertTrue(PendingReconnect.isPending(session))
                 assertEquals(View.VISIBLE, ReflectionHelpers.getField<View>(screen, "reconnectBar").visibility)
-                assertSame(session, CarPlayBackgroundSession.snapshot()?.controller)
+                assertSame(session, BackgroundSessionFixture.snapshot()?.controller)
                 assertEquals(0, stops)
                 assertEquals(null, shadowOf(screen).nextStartedActivity)
             }
             assertTrue(AirPlayPersistence.loadCallEchoCancellation(context))
             assertTrue(AirPlayPersistence.loadCallVoiceFilter(context))
         } finally {
-            CarPlayBackgroundSession.clear()
+            BackgroundSessionFixture.clear()
             PendingReconnect.clear()
         }
     }
@@ -1186,9 +1074,9 @@ class AdaptiveSettingsUiTest {
         })
 
         val session = mock(CarPlayController::class.java)
-        CarPlayBackgroundSession.store(session, mock(AndroidMediaSink::class.java), 800, 480, Any(),
+        BackgroundSessionFixture.store(session, mock(AndroidMediaSink::class.java), 800, 480, Any(),
             CarPlaySessionDisplay(800, 480, Surface.ROTATION_0, false, false, 800, 480)) {}
-        CarPlayBackgroundSession.active = true
+        BackgroundSessionFixture.setActive(true)
         try {
             val setting = descendants(screen.window.decorView).filterIsInstance<Switch>()
                 .single { it.contentDescription == screen.getString(R.string.settings_mtk_decoder_tuning) }
@@ -1197,10 +1085,10 @@ class AdaptiveSettingsUiTest {
 
             assertTrue(AirPlayPersistence.loadMtkDecoderTuning(context))
             assertTrue(PendingReconnect.isPending(session))
-            assertSame(session, CarPlayBackgroundSession.snapshot()?.controller)
+            assertSame(session, BackgroundSessionFixture.snapshot()?.controller)
         } finally {
             AirPlayPersistence.saveMtkDecoderTuning(context, false)
-            CarPlayBackgroundSession.clear()
+            BackgroundSessionFixture.clear()
             PendingReconnect.clear()
         }
     }
@@ -1212,9 +1100,9 @@ class AdaptiveSettingsUiTest {
         val screen = openSettings()
         val session = mock(CarPlayController::class.java)
         var stops = 0
-        CarPlayBackgroundSession.store(session, mock(AndroidMediaSink::class.java), 800, 480, Any(),
+        BackgroundSessionFixture.store(session, mock(AndroidMediaSink::class.java), 800, 480, Any(),
             CarPlaySessionDisplay(800, 480, Surface.ROTATION_0, false, false, 800, 480)) { stops++ }
-        CarPlayBackgroundSession.active = true
+        BackgroundSessionFixture.setActive(true)
         try {
             ReflectionHelpers.setField(screen, "settingsCategory", SettingsCategory.ADVANCED)
             PendingReconnect.clear()
@@ -1228,12 +1116,12 @@ class AdaptiveSettingsUiTest {
             assertTrue(AirPlayPersistence.loadDisableMediaKeyAudioFocus(context))
             assertTrue(PendingReconnect.isPending(session))
             assertEquals(View.VISIBLE, ReflectionHelpers.getField<View>(screen, "reconnectBar").visibility)
-            assertSame(session, CarPlayBackgroundSession.snapshot()?.controller)
+            assertSame(session, BackgroundSessionFixture.snapshot()?.controller)
             assertEquals(0, stops)
             assertEquals(null, shadowOf(screen).nextStartedActivity)
         } finally {
             AirPlayPersistence.saveDisableMediaKeyAudioFocus(context, false)
-            CarPlayBackgroundSession.clear()
+            BackgroundSessionFixture.clear()
             PendingReconnect.clear()
         }
     }
@@ -1247,9 +1135,9 @@ class AdaptiveSettingsUiTest {
         val screen = openSettings()
         val session = mock(CarPlayController::class.java)
         var stops = 0
-        CarPlayBackgroundSession.store(session, mock(AndroidMediaSink::class.java), 800, 480, Any(),
+        BackgroundSessionFixture.store(session, mock(AndroidMediaSink::class.java), 800, 480, Any(),
             CarPlaySessionDisplay(800, 480, Surface.ROTATION_0, false, false, 800, 480)) { stops++ }
-        CarPlayBackgroundSession.active = true
+        BackgroundSessionFixture.setActive(true)
         try {
             ReflectionHelpers.setField(screen, "settingsCategory", SettingsCategory.ADVANCED)
             PendingReconnect.clear()
@@ -1262,11 +1150,11 @@ class AdaptiveSettingsUiTest {
             assertFalse(AirPlayPersistence.loadAudioFocusAutoYield(context))
             assertTrue(PendingReconnect.isPending(session))
             assertEquals(View.VISIBLE, ReflectionHelpers.getField<View>(screen, "reconnectBar").visibility)
-            assertSame(session, CarPlayBackgroundSession.snapshot()?.controller)
+            assertSame(session, BackgroundSessionFixture.snapshot()?.controller)
             assertEquals(0, stops)
             assertEquals(null, shadowOf(screen).nextStartedActivity)
         } finally {
-            CarPlayBackgroundSession.clear()
+            BackgroundSessionFixture.clear()
             PendingReconnect.clear()
         }
     }
@@ -1292,11 +1180,13 @@ class AdaptiveSettingsUiTest {
         val screen = openSettings()
         val rail = ReflectionHelpers.getField<ScrollView>(screen, "settingsRailScroll")
         val destinations = descendants(rail).filter { destination ->
-            destination.contentDescription?.startsWith("Open ") == true &&
-                destination.contentDescription?.endsWith(" settings") == true &&
+            SettingsCategory.entries.any { category ->
+                val title=ReflectionHelpers.callInstanceMethod<String>(screen,"settingsCategoryTitle",ReflectionHelpers.ClassParameter(SettingsCategory::class.java,category))
+                destination.contentDescription==screen.getString(R.string.settings_open_category,title)
+            } &&
                 descendants(destination).filterIsInstance<ImageView>().count() == 1
         }.toList()
-        assertEquals(10, destinations.size)
+        assertEquals(SettingsCategory.entries.size, destinations.size)
         destinations.forEach { destination ->
             assertEquals(1, descendants(destination).filterIsInstance<ImageView>().count())
         }
@@ -1357,23 +1247,6 @@ class AdaptiveSettingsUiTest {
         } finally { bitmap.recycle() }
     }
 
-    @Test fun headerActionsShareOneHeight() = assertHeaderActionsShareOneHeight()
-
-    @Test
-    @Config(sdk = [29], qualifiers = "en-w400dp-h700dp-port")
-    fun compactHeaderActionsShareOneHeight() = assertHeaderActionsShareOneHeight()
-
-    private fun assertHeaderActionsShareOneHeight() {
-        val screen = openSettings()
-        val search = descendants(screen.window.decorView).single { it.tag == "settings_search_button" }
-        val actions = (search.parent as ViewGroup).let { header ->
-            (0 until header.childCount).map(header::getChildAt)
-                .filter { it is android.widget.Button || it is android.widget.ImageButton || it is EditText }
-        }
-        assertTrue(actions.size >= 2)
-        assertEquals(1, actions.map { it.layoutParams.height }.toSet().size)
-    }
-
     @Test fun compactAboutWorksWithoutLanguageDestination() {
         verifyChineseOnlyAboutDestination(expanded = false)
     }
@@ -1399,7 +1272,7 @@ class AdaptiveSettingsUiTest {
         assertFalse(texts(screen).any { it.text == screen.getString(R.string.language_app_language) })
         open(R.string.about)
         assertEquals(SettingsCategory.ABOUT, ReflectionHelpers.getField<SettingsCategory>(screen, "settingsCategory"))
-        assertTrue(texts(screen).any { it.text == screen.getString(R.string.carplay_at_home_in_your_car) })
+        assertTrue(texts(screen).any { it.text == screen.getString(R.string.settings_about_summary) })
         screen.onBackPressedDispatcher.onBackPressed()
         if (expanded) {
             assertEquals("home", ReflectionHelpers.getField<String>(screen, "page"))
@@ -1476,7 +1349,7 @@ class AdaptiveSettingsUiTest {
         val categories = about.parent as LinearLayout
         assertEquals(categories.indexOfChild(about) + 1, categories.indexOfChild(diagnostics))
         assertEquals(categories.indexOfChild(diagnostics) + 1, categories.indexOfChild(advanced))
-        val gap = Math.round(16 * screen.resources.displayMetrics.density)
+        val gap = Math.round(FlymeAutoStyle.BLOCK_GAP_DP * screen.resources.displayMetrics.density)
         assertEquals(gap, (diagnostics.layoutParams as LinearLayout.LayoutParams).bottomMargin)
         assertEquals(gap, (advanced.layoutParams as LinearLayout.LayoutParams).bottomMargin)
     }

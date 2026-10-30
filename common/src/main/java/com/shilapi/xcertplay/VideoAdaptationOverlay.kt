@@ -22,6 +22,7 @@ internal class VideoAdaptationOverlay(private val activity: Activity, private va
     private var closed = false
     private var capturing = false
     private var pendingCapture: org.json.JSONObject? = null
+    private var captureDeadline: Runnable? = null
     private val buttons = mutableListOf<Button>()
     private val palette = DiPlayPalette.of((activity as? AppAppearanceOwner)?.currentAppNight ?: false)
     val root = LinearLayout(activity).apply {
@@ -69,14 +70,17 @@ internal class VideoAdaptationOverlay(private val activity: Activity, private va
     private fun stop(reason: String?) {
         val active = window ?: return
         window = null; handler.removeCallbacks(tick)
-        val result = active.result(reason).put("collectedAt", System.currentTimeMillis()).put("collectorToken", token)
+        val result = active.result(reason).put("collectedAt", System.currentTimeMillis()).put("collectorToken", token).put("sampleId", java.util.UUID.randomUUID().toString())
         if (!result.optBoolean("valid") || closed) {
-            VideoAdaptationStore.append(activity, result)
+            persistAndPublish(result)
             if (!closed) { status.setText(R.string.video_adapt_interrupted); buttons.forEach { it.visibility = View.VISIBLE } }
             return
         }
         pendingCapture = result
         capturing = true; root.visibility = View.INVISIBLE
+        captureDeadline = Runnable {
+            if (pendingCapture === result) finishCapture(result, emptyList(), org.json.JSONObject().put("captureError", "capture_deadline_5s"))
+        }.also { handler.postDelayed(it, 5_000) }
         root.postOnAnimation { root.postOnAnimation {
             if (closed) { capturing = false; return@postOnAnimation }
             val before = runCatching(sample).getOrNull()
@@ -99,6 +103,10 @@ internal class VideoAdaptationOverlay(private val activity: Activity, private va
         } }
     }
     private fun finishCapture(result: org.json.JSONObject, files: List<String>, captureStatus: org.json.JSONObject) {
+        if (pendingCapture !== result) {
+            files.forEach { java.io.File(VideoAdaptationStore.directory(activity), it).delete() }; return
+        }
+        captureDeadline?.let(handler::removeCallbacks); captureDeadline = null
         capturing = false; pendingCapture = null
         if (closed) {
             files.forEach { java.io.File(VideoAdaptationStore.directory(activity), it).delete() }
@@ -110,9 +118,15 @@ internal class VideoAdaptationOverlay(private val activity: Activity, private va
         }
         if (files.isEmpty()) result.getJSONArray("missing").put("capture_unavailable")
         result.put("captures", JSONArray(files)).put("captureStatus", captureStatus)
-        VideoAdaptationStore.append(activity, result)
+        persistAndPublish(result)
         root.visibility = View.VISIBLE; buttons.forEach { it.visibility = View.VISIBLE }
-        status.setText(if (result.optBoolean("valid")) R.string.video_adapt_phase_saved else R.string.video_adapt_interrupted)
+        status.setText(R.string.video_report_writing)
+    }
+    private fun persistAndPublish(result: org.json.JSONObject) {
+        VideoAdaptationStore.append(activity, result)
+        VideoReportPublisher.manual(activity.applicationContext) {
+            if (!closed) status.text = VideoReportPublisher.description(activity)
+        }
     }
     fun close() {
         if (closed) return
@@ -120,7 +134,7 @@ internal class VideoAdaptationOverlay(private val activity: Activity, private va
         stop("host_backgrounded_or_closed")
         pendingCapture?.let {
             it.put("valid", false).getJSONArray("missing").put("capture_interrupted")
-            VideoAdaptationStore.append(activity, it)
+            persistAndPublish(it)
         }
         pendingCapture = null
         handler.removeCallbacksAndMessages(null)

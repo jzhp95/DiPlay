@@ -67,8 +67,14 @@ Check that this file exists:
 mobile/build/outputs/apk/debug/mobile-debug.apk
 ```
 
-The debug application ID is `com.shihab.diplay.hudtest`.
-The release application ID is `com.shihab.diplay`.
+The branch builds only Flyme packages. The debug application ID is `com.shihab.diplay.flyme.test`.
+The release application ID is `com.shihab.diplay.flyme`.
+Both declare `android.uid.system` and enable Flyme EAS metadata; there is no ordinary-package build switch.
+The debug version suffix is `-test`; the base version and version code are unchanged.
+
+The former `com.shihab.diplay.flyme.hudtest` test package is a different Android application.
+Its private settings do not automatically migrate to `.flyme.test`; keep the old installation and export reports before moving.
+This build change does not uninstall the old package or erase its data.
 
 The source APK contains no accessory identity unless you supply runtime authentication assets.
 Standalone CarPlay needs these assets to connect to an iPhone.
@@ -83,7 +89,7 @@ Keep test private keys outside Git.
 3. Set **Module** to `mobile`.
 4. Select this configuration in the toolbar.
 5. Select the Android device.
-6. Click **Run** to install the main debug app.
+6. Build the APK, then use the platform-signing procedure below before installing it on the target head unit. The default Gradle debug signature does not satisfy the system UID requirement.
 
 To build an APK without installation, run `:mobile:assembleDebug` in the Android Studio terminal.
 Select the APK from the `mobile` output directory.
@@ -94,6 +100,13 @@ Run the unit tests, lint checks, and main debug build:
 
 ```sh
 ./gradlew :flyme-eas:testDebugUnitTest :shared:testDebugUnitTest :common:testDebugUnitTest :mobile:lintDebug :mobile:assembleDebug
+```
+
+Also verify both merged manifests without needing release signing credentials:
+
+```sh
+./gradlew :mobile:processDebugMainManifest :mobile:processReleaseMainManifest
+python3 scripts/check_flyme_manifest.py
 ```
 
 Check that Gradle reports `BUILD SUCCESSFUL`.
@@ -128,9 +141,11 @@ Check both files in the APK against your selected local inputs:
 - `assets/offline-mfi/identity.pk8`.
 - `assets/offline-mfi/certificate.p7b`.
 
-Use this APK for a standalone connection test.
-Update the existing test app with the same signing key to keep its settings.
-Different signing keys cannot update the same installed application.
+The APK must be signed with the target platform certificate before installing as a system UID app.
+Run `integrations/flyme-eas/build-apks.sh` (or `build-apks.ps1` on Windows) to build and platform-sign the Flyme test APK.
+Output: `build/car-test-apks/Apple-CarPlay-flyme-test-YYYYMMDD-HHMMSS.apk`.
+Updates with the same new application ID and signing key preserve that installation’s settings.
+Different application IDs do not automatically share settings, even when using a shared UID.
 
 ## Build a release APK
 
@@ -140,7 +155,7 @@ Set these environment variables locally:
 | Variable | Value |
 | --- | --- |
 | `DIPLAY_AUTH_ASSETS_DIR` | Optional absolute-path override for the runtime assets root; otherwise use root `offline-mfi/` |
-| `ANDROID_KEYSTORE_PATH` | Path to your Android signing keystore |
+| `ANDROID_KEYSTORE_PATH` | Path to the target-platform-compatible Android signing keystore |
 | `ANDROID_KEYSTORE_PASSWORD` | Keystore password |
 | `ANDROID_KEY_ALIAS` | Signing key alias |
 | `ANDROID_KEY_PASSWORD` | Signing key password |

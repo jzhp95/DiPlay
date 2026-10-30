@@ -38,4 +38,10 @@ class MainProbeTeardownTest {
             assertFalse(MainProbeTeardown.blocked())
         } finally { released = true; MainProbeTeardown.blocked() }
     }
+    @org.junit.Test fun audioRetirementCannotBeReportedAsACompletedMainProbeTransition() {
+        val result=MainProbeTeardown.await({true},{true},audio={false})
+        org.junit.Assert.assertFalse(result.getBoolean("confirmed"))
+        org.junit.Assert.assertFalse(result.getBoolean("audioReleased"))
+    }
+
 }

@@ -59,6 +59,7 @@ class WheelTestActivity : Activity(), AppAppearanceOwner {
         } ?: intent.getStringExtra("diagnostics_page")?.let { name ->
             DiagnosticsTestLayout.Page.entries.firstOrNull { it.name == name }
         } ?: DiagnosticsTestLayout.Page.WHEEL
+        selectedPage = selectedPage.canonical
         pendingStorageAction = savedInstanceState?.getString("video_storage_action")
         renderAppearance()
     }
@@ -93,14 +94,16 @@ class WheelTestActivity : Activity(), AppAppearanceOwner {
         }, ::action, availableWidthDp = DiagnosticsTestLayout.detailWidthDp(resources.configuration.screenWidthDp))
         mfiLayout = MfiTestLayout(this, palette)
         mfiViews = mfiLayout.build(mfiController::refresh, mfiController::probe, ::finish) {
-            CarPlayBackgroundSession.snapshot()?.controller?.let(PendingReconnect::mark)
+            DiPlaySessionService.liveRuntime?.currentConnection?.controller?.let(PendingReconnect::mark)
             Toast.makeText(this, R.string.saved_for_your_next_connection, Toast.LENGTH_SHORT).show()
         }
         uidLayout = UidTestLayout(this, palette)
         uidViews = uidLayout.build()
-        colorPage = ColorTestPage(this, palette, ::requestAutomaticVideo)
+        colorPage = ColorTestPage(this, palette, ::requestAutomaticVideo, combined = true, requestRepublish = ::requestDecoderRepublish)
         videoPage = VideoAdaptationPage(this, palette, { selectPage(DiagnosticsTestLayout.Page.COLOR) },
-            startAutomatic = ::requestAutomaticVideo, requestStorage = { requestVideoStorage("export") })
+            startAutomatic = ::requestAutomaticVideo, requestStorage = { requestVideoStorage("export") },
+            requestCollectionStorage = { requestVideoStorage("collect") }, combined = true)
+        colorPage!!.attachSampling(videoPage!!.root)
         diagnosticsViews = DiagnosticsTestLayout(this, palette).build(views.root, mfiViews.root, selectedPage, ::selectPage, ::finish, uidViews.root, colorPage!!.root, videoPage!!.root)
         ViewCompat.setOnApplyWindowInsetsListener(diagnosticsViews.root) { view, insets ->
             val safe = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
@@ -109,7 +112,7 @@ class WheelTestActivity : Activity(), AppAppearanceOwner {
         }
         setContentView(diagnosticsViews.root)
         colorPage?.setVisible(foreground && selectedPage == DiagnosticsTestLayout.Page.COLOR)
-        videoPage?.setVisible(foreground && selectedPage == DiagnosticsTestLayout.Page.VIDEO)
+        videoPage?.setVisible(foreground && selectedPage == DiagnosticsTestLayout.Page.COLOR)
         showState(controller.snapshot())
         showMfiState(mfiController.snapshot())
         views.root.post { views.root.scrollTo(0, scrollY) }
@@ -121,7 +124,7 @@ class WheelTestActivity : Activity(), AppAppearanceOwner {
         super.onResume()
         foreground = true
         colorPage?.setVisible(selectedPage == DiagnosticsTestLayout.Page.COLOR)
-        videoPage?.setVisible(selectedPage == DiagnosticsTestLayout.Page.VIDEO)
+        videoPage?.setVisible(selectedPage == DiagnosticsTestLayout.Page.COLOR)
         appearanceObserverRemoval?.invoke()
         appearanceObserverRemoval = AppAppearanceRuntime.observeHost {
             runOnUiThread {
@@ -135,7 +138,8 @@ class WheelTestActivity : Activity(), AppAppearanceOwner {
         if (selectedPage == DiagnosticsTestLayout.Page.UID) uidLayout.show(uidViews, UidDiagnostic.read(this))
     }
 
-    private fun selectPage(page: DiagnosticsTestLayout.Page) {
+    private fun selectPage(requested: DiagnosticsTestLayout.Page) {
+        val page = requested.canonical
         if (page == selectedPage) return
         startGeneration++
         disconnectDialog?.dismiss()
@@ -144,13 +148,17 @@ class WheelTestActivity : Activity(), AppAppearanceOwner {
         if (page != DiagnosticsTestLayout.Page.MFI) mfiController.cancel()
         selectedPage = page
         colorPage?.setVisible(foreground && page == DiagnosticsTestLayout.Page.COLOR)
-        videoPage?.setVisible(foreground && page == DiagnosticsTestLayout.Page.VIDEO)
+        videoPage?.setVisible(foreground && page == DiagnosticsTestLayout.Page.COLOR)
         diagnosticsViews.select(page)
         showState(controller.snapshot())
         if (page == DiagnosticsTestLayout.Page.MFI && foreground) mfiController.refresh()
         if (page == DiagnosticsTestLayout.Page.UID) uidLayout.show(uidViews, UidDiagnostic.read(this))
     }
 
+    private fun requestDecoderRepublish() {
+        if(DiagnosticExportStore.needsStoragePermission(this))requestVideoStorage("republish")
+        else DecoderDiagnosticsService.retry(this)
+    }
     private fun requestAutomaticVideo() {
         if (DiagnosticExportStore.needsStoragePermission(this)) { requestVideoStorage("auto"); return }
         beginAutomaticVideo()
@@ -166,6 +174,8 @@ class WheelTestActivity : Activity(), AppAppearanceOwner {
                 pendingStorageAction = null
                 Toast.makeText(this, R.string.video_auto_storage_denied, Toast.LENGTH_LONG).show()
                 if (action == "auto") beginAutomaticVideo() else if (action == "export") videoPage?.continueExport(allowPrivate = true)
+                else if (action == "collect") videoPage?.continueCollection(allowPrivate = true)
+                else if (action == "republish") DecoderDiagnosticsService.retry(this)
             }
     }
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
@@ -176,6 +186,8 @@ class WheelTestActivity : Activity(), AppAppearanceOwner {
         if (denied) Toast.makeText(this, R.string.video_auto_storage_denied, Toast.LENGTH_LONG).show()
         if (action == "auto") beginAutomaticVideo()
         else if (action == "export") videoPage?.continueExport(allowPrivate = denied)
+        else if (action == "collect") videoPage?.continueCollection(allowPrivate = denied)
+        else if (action == "republish") DecoderDiagnosticsService.retry(this)
     }
     private companion object { const val VIDEO_STORAGE_REQUEST = 4107 }
 

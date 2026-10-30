@@ -24,6 +24,7 @@ class WheelKeyPermissionSetupTest {
 
     @Before fun setup() {
         context.getSharedPreferences("diplay_navigation_wheel", android.content.Context.MODE_PRIVATE).edit().clear().commit()
+        WheelZoomSettings.setSiriKey(context,false)
         WheelZoomSettings.setEnabled(context, false)
         WheelZoomSettings.setJoystick(context, false)
         Settings.Secure.putString(context.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, other)
@@ -104,9 +105,9 @@ class WheelKeyPermissionSetupTest {
     }
 
     @Test fun disablingTheFeaturesDuringTheRestoreGraceStopsTheRequest() {
-        WheelZoomSettings.setEnabled(context, true)
+        WheelZoomSettings.setSiriKey(context, true)
         assertTrue(WheelKeyService.needsRestore(context))
-        WheelZoomSettings.setEnabled(context, false)
+        WheelZoomSettings.setSiriKey(context, false)
         assertFalse(WheelKeyService.needsRestore(context))
         assertFalse(WheelKeyService.applyServiceSettings(context, ::shell) { WheelKeyService.needsRestore(context) })
         assertTrue(commands.isEmpty())

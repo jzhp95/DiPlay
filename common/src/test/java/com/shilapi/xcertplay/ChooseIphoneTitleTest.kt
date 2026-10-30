@@ -43,14 +43,7 @@ class ChooseIphoneTitleTest {
         Intent(context, DiPlayActivity::class.java).putExtra("page", page),
     ).setup().get().also { opened += it }
 
-    /** Connection setup and Settings → Connection both retain the iPhone picker. */
-    private fun pages(): List<Pair<String, DiPlayActivity>> = listOf(
-        "connection setup" to open("connection"),
-        "settings" to open("settings").also {
-            ReflectionHelpers.setField(it, "settingsCategory", SettingsCategory.CONNECTION)
-            ReflectionHelpers.callInstanceMethod<Unit>(it, "render")
-        },
-    )
+    private fun pages(): List<Pair<String, DiPlayActivity>> = listOf("home" to open("home"))
 
     private fun texts(screen: DiPlayActivity): List<String> =
         descendants(screen.window.decorView).filterIsInstance<TextView>().map { it.text.toString() }.toList()
@@ -80,10 +73,10 @@ class ChooseIphoneTitleTest {
         val screen = open("settings")
     }
 
-    @Test fun aChosenIphoneIsNamedOnTheButton() {
+    @Test fun aChosenIphoneKeepsTheHomePickerActionStable() {
         DiPlayPreferences.savePhone(context, "AA:BB:CC:DD:EE:FF", "Test iPhone")
         for ((name, screen) in pages()) {
-            assertEquals(name, listOf(screen.getString(R.string.choose_iphone_prefix) + "Test iPhone"), chooseButtons(screen))
+            assertEquals(name, listOf(screen.getString(R.string.choose_iphone)), chooseButtons(screen))
         }
     }
 

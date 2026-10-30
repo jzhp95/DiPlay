@@ -18,7 +18,7 @@ internal object FlymeWheelIntegration {
             FlymeWheelBridge(context, object : FlymeWheelBridge.Host {
                 override fun diagnostic(message: String) { DetailedDebugLog.record("flyme-eas", message) }
                 override fun ready() = !controller.isClosed() && CarPlayBackgroundSession.active &&
-                    CarPlayBackgroundSession.snapshot()?.controller === controller
+                    DiPlaySessionService.liveRuntime?.currentConnection?.controller === controller
                 override fun canHandleVoiceKey() = ready() && !inCall(context)
                 override fun voiceKey(keyCode: Int) {
                     if (!canHandleVoiceKey()) return

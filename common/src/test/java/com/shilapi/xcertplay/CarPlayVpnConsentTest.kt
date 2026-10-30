@@ -39,23 +39,23 @@ class CarPlayVpnConsentTest {
         VpnConsentTestShadow.consent = Intent().setClassName(
             "com.android.vpndialogs", "com.android.vpndialogs.ConfirmDialog",
         )
-        CarPlayBackgroundSession.clear()
+        BackgroundSessionFixture.clear()
         activity = Robolectric.buildActivity(CarPlayHostActivity::class.java).get()
-        ReflectionHelpers.setField(activity, "stageStatusView", TextView(activity))
+        HostSessionFixture.setField(activity, "stageStatusView", TextView(activity))
         invoke("initializeSessionLog")
         replaceLauncher { launches += 1 }
     }
 
     @After fun tearDown() {
-        ReflectionHelpers.getField<AtomicBoolean>(activity, "shuttingDown").set(true)
-        ReflectionHelpers.getField<Handler>(activity, "mainHandler").removeCallbacksAndMessages(null)
-        ReflectionHelpers.getField<ExecutorService>(activity, "teardownExecutor").shutdownNow()
-        ReflectionHelpers.getField<ExecutorService>(activity, "airPlayCommandExecutor").shutdownNow()
-        CarPlayBackgroundSession.clear()
+        HostSessionFixture.getField<AtomicBoolean>(activity, "shuttingDown").set(true)
+        HostSessionFixture.getField<Handler>(activity, "mainHandler").removeCallbacksAndMessages(null)
+        HostSessionFixture.getField<ExecutorService>(activity, "teardownExecutor").shutdownNow()
+        HostSessionFixture.getField<ExecutorService>(activity, "airPlayCommandExecutor").shutdownNow()
+        BackgroundSessionFixture.clear()
     }
 
     @Test fun missingConsentDialogDoesNotCrashOrLeaveAuthorizationPending() {
-        ReflectionHelpers.setField(activity, "vpnReady", true)
+        HostSessionFixture.setField(activity, "vpnReady", true)
         replaceLauncher { throw ActivityNotFoundException("Missing OEM VPN dialog") }
 
         invoke("requestVpnConsent")
@@ -74,7 +74,7 @@ class CarPlayVpnConsentTest {
     }
 
     @Test fun deniedPrepareDoesNotCrashOrLeaveStaleAuthorization() {
-        ReflectionHelpers.setField(activity, "vpnReady", true)
+        HostSessionFixture.setField(activity, "vpnReady", true)
         VpnConsentTestShadow.failure = SecurityException("OEM blocked VPN preparation")
         invoke("requestVpnConsent")
         assertUnavailable()
@@ -114,7 +114,7 @@ class CarPlayVpnConsentTest {
             ReflectionHelpers.ClassParameter.from(Int::class.javaPrimitiveType, Activity.RESULT_OK))
         assertFalse(field("vpnReady"))
         assertFalse(field("awaitingVpnConsent"))
-        assertNull(ReflectionHelpers.getField<Any?>(activity, "controller"))
+        assertNull(HostSessionFixture.getField<Any?>(activity, "controller"))
     }
 
     @Test fun resultOfPendingConsentCompletesOrDeniesAuthorization() {
@@ -131,7 +131,7 @@ class CarPlayVpnConsentTest {
     }
 
     private fun replaceLauncher(launch: (Intent) -> Unit) {
-        ReflectionHelpers.setField(activity, "vpnConsent", object : ActivityResultLauncher<Intent>() {
+        HostSessionFixture.setField(activity, "vpnConsent", object : ActivityResultLauncher<Intent>() {
             override fun launch(input: Intent, options: ActivityOptionsCompat?) = launch(input)
             override fun unregister() = Unit
             override fun getContract() = ActivityResultContracts.StartActivityForResult()
@@ -141,15 +141,14 @@ class CarPlayVpnConsentTest {
     private fun assertUnavailable() {
         assertFalse(field("vpnReady"))
         assertFalse(field("awaitingVpnConsent"))
-        assertNull(ReflectionHelpers.getField<Any?>(activity, "controller"))
-        val message = ReflectionHelpers.getField<TextView>(activity, "stageStatusView").text.toString()
-        assertTrue(message.contains("VPN authorization"))
-        assertTrue(message.contains("Return to Apple CarPlay"))
+        assertNull(HostSessionFixture.getField<Any?>(activity, "controller"))
+        val message = HostSessionFixture.getField<TextView>(activity, "stageStatusView").text.toString()
+        assertEquals(activity.getString(com.shilapi.xcertplay.host.R.string.vpn_authorization_unavailable),message)
         assertFalse(message.contains("Exception"))
         assertFalse(message.contains("adb shell"))
     }
 
-    private fun field(name: String): Boolean = ReflectionHelpers.getField(activity, name)
+    private fun field(name: String): Boolean = HostSessionFixture.getField(activity, name)
     private fun log() = File(activity.filesDir, "logs/diplay.log").readText()
     private fun invoke(name: String) {
         try { activity.javaClass.getDeclaredMethod(name).apply { isAccessible = true }.invoke(activity) }

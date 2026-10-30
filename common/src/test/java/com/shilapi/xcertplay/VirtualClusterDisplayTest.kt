@@ -24,8 +24,7 @@ class VirtualClusterDisplayTest {
     @After fun tearDown() {
         MapMirrors.streamAspect = MapMirrors.PHYSICAL_STREAM_ASPECT
         for (name in listOf("teardownExecutor", "airPlayCommandExecutor")) {
-            val executor = activity.javaClass.getDeclaredField(name).apply { isAccessible = true }
-                .get(activity) as ExecutorService
+            val executor = HostSessionFixture.getField<Any?>(activity,name) as ExecutorService
             executor.shutdownNow()
         }
     }

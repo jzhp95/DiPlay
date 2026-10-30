@@ -31,7 +31,7 @@ class WheelKeyService : AccessibilityService() {
     /** A remapped media key is handled by the same accessibility input filter as the Siri key. */
     internal var sendMedia: (Int) -> Boolean = { index ->
         FlymeWheelIntegration.allowHardware(index) &&
-            CarPlayBackgroundSession.snapshot()?.controller?.sendMediaButton(index) == true
+            DiPlaySessionService.liveRuntime?.currentConnection?.controller?.sendMediaButton(index) == true
     }
     private val handler = Handler(Looper.getMainLooper())
     private var doubleSiriFirstPressWasInCall = false
@@ -57,11 +57,11 @@ class WheelKeyService : AccessibilityService() {
     }
     // This read is nonblocking: no ADB, input-device query or network lock in the periodic poll.
     internal var navigationPlayback: () -> com.shilapi.xcertplay.media.NavigationPlaybackSnapshot = { NavigationPlayback.snapshot() }
-    internal var mapRoute: () -> Any? = { CarPlayBackgroundSession.snapshot()?.controller?.dashboardMapRoute() }
-    internal var session: () -> Any? = { CarPlayBackgroundSession.snapshot()?.controller?.activeAirPlaySessionToken() }
-    internal var knob: (AirPlayKnobState) -> Boolean = { CarPlayBackgroundSession.snapshot()?.controller?.sendKnob(it) == true }
+    internal var mapRoute: () -> Any? = { DiPlaySessionService.liveRuntime?.currentConnection?.controller?.dashboardMapRoute() }
+    internal var session: () -> Any? = { DiPlaySessionService.liveRuntime?.currentConnection?.controller?.activeAirPlaySessionToken() }
+    internal var knob: (AirPlayKnobState) -> Boolean = { DiPlaySessionService.liveRuntime?.currentConnection?.controller?.sendKnob(it) == true }
     internal var routeActive: () -> Boolean = { CarPlayGlance.snapshot().maneuverType != null }
-    internal var requestSiri: () -> Boolean = { CarPlayBackgroundSession.snapshot()?.controller?.requestSiri() == true }
+    internal var requestSiri: () -> Boolean = { DiPlaySessionService.liveRuntime?.currentConnection?.controller?.requestSiri() == true }
 
     // With the auto-off setting the joystick ends a while after the last press and when a route starts,
     // so the keys go back to music and volume without a thought.
@@ -233,7 +233,7 @@ class WheelKeyService : AccessibilityService() {
             // close it. DiPlay only observes the pair and opens Siri after the configured delay.
             return false
         }
-        val controller = CarPlayBackgroundSession.snapshot()?.controller
+        val controller = DiPlaySessionService.liveRuntime?.currentConnection?.controller
         val action = keys.onKey(
             role = role.takeIf { enabled },
             down = down,

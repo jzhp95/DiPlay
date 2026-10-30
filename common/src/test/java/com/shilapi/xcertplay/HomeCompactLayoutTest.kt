@@ -12,7 +12,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [29])
+@Config(sdk = [28])
 class HomeCompactLayoutTest {
     @Config(qualifiers = "en-w900dp-h400dp-land")
     @Test fun compactLandscapeKeepsWirelessAndUsbInSeparateColumns() {
@@ -47,7 +47,7 @@ class HomeCompactLayoutTest {
         assertFalse(descendants(root).filterIsInstance<TextView>().any {
             it.text == activity.getString(R.string.a_familiar_drive)
         })
-        assertTrue(text(R.string.home_usb_carplay).visibility == View.VISIBLE)
+        assertTrue(text(R.string.home_wired_connection).visibility == View.VISIBLE)
         assertTrue(text(R.string.choose_iphone).visibility == View.VISIBLE)
         controller.pause().stop().destroy()
     }

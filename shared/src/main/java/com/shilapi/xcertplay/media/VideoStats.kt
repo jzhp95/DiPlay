@@ -69,7 +69,7 @@ internal class VideoStats(
         if (received == 0 && touchSamples == 0) { windowStartNs = now; return null }
         val touchAvgMs = if (touchSamples == 0) -1 else touchLatencySumNs / touchSamples / 1_000_000
         val line = ("video stats$label rx=%.1ffps shown=%.1ffps maxGap=%dms kbps=%d recoveries=%d " +
-            "touch2frame avg=%dms max=%dms n=%d touchSendMax=%dms").format(
+            "physicalTouchLatency=unknown unassociatedFrameGapAvg=%dms unassociatedFrameGapMax=%dms n=%d touchSendMax=%dms").format(
             received / seconds, rendered / seconds, maxArrivalGapNs / 1_000_000,
             (bytes * 8 / 1000 / seconds).toLong(), recoveries,
             touchAvgMs, maxTouchLatencyNs / 1_000_000, touchSamples, TouchLatencyProbe.maxSendNs / 1_000_000,

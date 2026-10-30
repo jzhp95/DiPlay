@@ -31,7 +31,12 @@ class VideoAdaptationOverlayTest {
         VideoAdaptationRegistry.current()?.let(VideoAdaptationRegistry::finish)
         VideoAdaptationStore.clear(activity)
     }
-    @After fun cleanup() { overlay?.close(); VideoAdaptationStore.clear(activity) }
+    @After fun cleanup() {
+        overlay?.close()
+        val deadline = System.nanoTime() + 5_000_000_000L
+        while (VideoReportPublisher.busy() && System.nanoTime() < deadline) Thread.sleep(10)
+        VideoAdaptationStore.clear(activity)
+    }
     private fun build(sample: () -> VideoAdaptationSample?) {
         val token = VideoAdaptationRegistry.begin()
         overlay = VideoAdaptationOverlay(activity, token, sample, { null to null }, {})
@@ -44,6 +49,23 @@ class VideoAdaptationOverlayTest {
         val now = SystemClock.elapsedRealtimeNanos()
         return VideoAdaptationSample(key, now, LiveVideoCounters(now / 1_000_000_000, now / 1_000_000_000,
             0, 0, now / 1000), 10, JSONObject().put("viewport", "1920x1080"))
+    }
+    @Test fun twentySecondsAutomaticallyCreatesAPublicZipEvenAfterTheOverlayCloses() {
+        org.robolectric.Shadows.shadowOf(activity.application).grantPermissions(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        build { point() }; start()
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(21))
+        overlay!!.close()
+        val deadline = System.nanoTime() + 5_000_000_000L
+        while (VideoReportPublisher.busy() && System.nanoTime() < deadline) Thread.sleep(10)
+        val state = VideoReportPublisher.latest(activity)
+        assertEquals("public", state.getString("status"))
+        val file = java.io.File(state.getString("path"))
+        try {
+            java.util.zip.ZipFile(file).use { zip ->
+                val data = JSONObject(zip.getInputStream(zip.getEntry("report.json")).bufferedReader().readText())
+                assertEquals(20.0, data.getJSONArray("samples").getJSONObject(0).getJSONObject("summary").getDouble("durationSeconds"), 0.001)
+            }
+        } finally { file.delete() }
     }
     @Test fun unavailableMainScreenDoesNotStartOrManufactureAResult() {
         build { null }; start()

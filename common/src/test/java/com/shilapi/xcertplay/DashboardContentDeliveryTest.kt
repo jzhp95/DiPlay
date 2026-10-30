@@ -52,9 +52,9 @@ class DashboardContentDeliveryTest {
             listener.onSessionActive(phone)
         }
         fun awaitCommands() {
-            val executor = controller.javaClass.getDeclaredField("touchExecutor").apply { isAccessible = true }
-                .get(controller) as ExecutorService
-            executor.submit {}.get(3, TimeUnit.SECONDS)
+            val done=CountDownLatch(1)
+            enqueueInput(controller){done.countDown()}
+            assertTrue(done.await(3,TimeUnit.SECONDS))
         }
         override fun close() {
             controller.close()
@@ -96,8 +96,7 @@ class DashboardContentDeliveryTest {
     private fun blockQueue(controller: CarPlayController): CountDownLatch {
         val entered = CountDownLatch(1)
         val release = CountDownLatch(1)
-        val field = controller.javaClass.getDeclaredField("touchExecutor").apply { isAccessible = true }
-        (field.get(controller) as ExecutorService).execute { entered.countDown(); release.await(3, TimeUnit.SECONDS) }
+        enqueueInput(controller){entered.countDown();release.await(3,TimeUnit.SECONDS)}
         assertTrue(entered.await(3, TimeUnit.SECONDS))
         return release
     }
@@ -381,6 +380,10 @@ class DashboardContentDeliveryTest {
     }
 
     companion object {
+        private fun enqueueInput(controller:CarPlayController,action:()->Unit){
+            val queue=controller.javaClass.getDeclaredField("touchExecutor").apply{isAccessible=true}.get(controller)
+            queue.javaClass.getDeclaredMethod("execute",Function0::class.java).invoke(queue,action)
+        }
         private fun set(target: Any, name: String, value: Any?) {
             target.javaClass.getDeclaredField(name).apply { isAccessible = true }.set(target, value)
         }

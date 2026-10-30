@@ -23,7 +23,7 @@ class PhoneBluetoothReceiverTest {
         DiPlayPreferences.saveConnectOnPhoneBluetooth(app, false)
         app.getSharedPreferences("diplay_phone_wake", Context.MODE_PRIVATE).edit().clear().commit()
         app.getSharedPreferences("diplay_phone_wake_diagnostics", Context.MODE_PRIVATE).edit().clear().commit()
-        CarPlayBackgroundSession.clear()
+        BackgroundSessionFixture.clear()
         // Saved in lowercase on purpose: the receiver must match the (always uppercase) device
         // address case-insensitively; Robolectric refuses to build a lowercase remote device.
         DiPlayPreferences.savePhone(app, selected.lowercase(), "iPhone")
@@ -50,7 +50,7 @@ class PhoneBluetoothReceiverTest {
         receiver.onReceive(context, event(selected))
         assertEquals(1, launches.size)
         assertEquals(DiPlayActivity::class.java.name, launches.single().component?.className)
-        assertTrue(launches.single().getBooleanExtra(PhoneBluetoothReceiver.EXTRA_AUTO_CONNECT, false))
+        assertEquals(PhoneBluetoothReceiver.launchToken, launches.single().getStringExtra(PhoneBluetoothReceiver.EXTRA_AUTO_CONNECT))
         assertTrue(PhoneWakeDiagnostics.report(app).contains("result=startActivity-returned"))
     }
 }

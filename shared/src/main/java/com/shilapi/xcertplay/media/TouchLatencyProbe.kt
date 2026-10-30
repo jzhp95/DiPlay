@@ -10,11 +10,6 @@ internal object TouchLatencyProbe {
         if (sendDurationNs > maxSendNs) maxSendNs = sendDurationNs
     }
 
-    /** Returns touch-to-frame latency for the first frame after a touch, or -1. */
-    fun onFrame(nowNs: Long): Long {
-        val touch = pendingTouchNs
-        if (touch == 0L) return -1
-        pendingTouchNs = 0L
-        return nowNs - touch
-    }
+    /** Arrival order cannot associate a frame with a touch; physical/causal latency is unknown. */
+    fun onFrame(nowNs:Long):Long {pendingTouchNs=0L;return -1L}
 }

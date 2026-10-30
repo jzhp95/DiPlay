@@ -36,8 +36,8 @@ internal object MapMirrors {
     private val aspectListeners = CopyOnWriteArraySet<() -> Unit>()
     private val streamListeners = CopyOnWriteArraySet<(Boolean) -> Unit>()
 
-    /** Set by the CarPlay screen: applies one mirror to its current media sink. */
-    var sink: ((String, Surface?) -> Unit)? = null
+    /** Set by the service resource owner; no Activity is retained. */
+    @Volatile var sink: ((String, Surface?) -> Unit)? = null
 
     /** The CarPlay screen has a new media sink: give it every mirror. */
     fun reapply() {
@@ -67,8 +67,9 @@ internal object MapMirrors {
     /** Whether a launcher shows the map (see [MapEmbedService]), so the centre card is not needed. */
     val launcherShowsMap: Boolean get() = surfaces.keys.any { it != CARD }
 
-    fun setStreamActive(active: Boolean) {
+    fun setStreamActive(active: Boolean, current:()->Boolean={true}) {
         main.post {
+            if(!current())return@post
             if (streamActive == active) return@post
             streamActive = active
             streamListeners.forEach { it(active) }

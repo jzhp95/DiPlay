@@ -54,7 +54,8 @@ internal class MicrophoneUplink(
     @Volatile private var opusEncoder: MicrophoneOpusEncoder? = null
     @Volatile private var effects: List<AudioEffect> = emptyList()
     @Volatile private var echoCanceller: CallEchoCanceller? = null
-    private var thread: Thread? = null
+    @Volatile private var thread: Thread? = null
+    internal fun captureExited():Boolean=thread?.isAlive!=true
 
     fun start(): Boolean {
         if (!running.compareAndSet(false, true)) return true

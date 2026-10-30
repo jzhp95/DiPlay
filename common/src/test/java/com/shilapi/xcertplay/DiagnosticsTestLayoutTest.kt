@@ -57,7 +57,7 @@ class DiagnosticsTestLayoutTest {
             val density = context.resources.displayMetrics.density
             val w = (width * density).toInt(); val h = (height * density).toInt()
             val prefix = "$width-$densityDpi-1.5-${if (night) "dark" else "light"}${if (rtl) "-rtl" else ""}"
-            for (page in DiagnosticsTestLayout.Page.entries) {
+            for (page in DiagnosticsTestLayout.Page.entries.filter { it != DiagnosticsTestLayout.Page.VIDEO }) {
                 ui.select(page)
                 measure(ui.root, w, h)
                 val detail = when (page) {
@@ -68,9 +68,9 @@ class DiagnosticsTestLayoutTest {
                     DiagnosticsTestLayout.Page.VIDEO -> video
                 }
                 val menus = visible(ui.root).filterIsInstance<Button>().filter {
-                    it.text == "方控测试" || it.text == "MFi 认证测试" || it.text == "UID 检测" || it.text == "画面颜色" || it.text == "视频适配"
+                    it.text == "方控测试" || it.text == "MFi 认证测试" || it.text == "UID 检测" || it.text == "解码测试"
                 }.toList()
-                assertEquals(if (width < 600) 1 else 5, menus.size)
+                assertEquals(if (width < 600) 1 else 4, menus.size)
                 menus.forEach { menu ->
                     val menuBounds = bounds(ui.root, menu)
                     val detailBounds = bounds(ui.root, detail)
@@ -81,7 +81,7 @@ class DiagnosticsTestLayoutTest {
                         assertTrue("Compact picker must stay above details", menuBounds.bottom <= detailBounds.top)
                         menu.performClick()
                         val dialog = org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog()
-                        for (index in DiagnosticsTestLayout.Page.entries.indices) {
+                        for (index in 0 until 4) {
                             dialog.listView.performItemClick(null, index, index.toLong())
                         }
                         dialog.dismiss()
@@ -94,7 +94,7 @@ class DiagnosticsTestLayoutTest {
                 assertEquals("Scrolling details cannot move the menu", menuTop, bounds(ui.root, menus.first()).top)
                 screenshot(ui.root, w, h, "$prefix-${page.name.lowercase()}-bottom")
             }
-            assertEquals(DiagnosticsTestLayout.Page.entries.toSet(), clicks.toSet())
+            assertEquals(DiagnosticsTestLayout.Page.entries.filter { it != DiagnosticsTestLayout.Page.VIDEO }.toSet(), clicks.toSet())
             visible(ui.root).filterIsInstance<Button>().single { it.text == context.getString(R.string.back) }.performClick()
             assertEquals(1, backs)
         }

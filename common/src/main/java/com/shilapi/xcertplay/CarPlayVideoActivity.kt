@@ -74,7 +74,7 @@ class CarPlayVideoActivity : Activity() {
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
         val http = DefaultHttpDataSource.Factory().setAllowCrossProtocolRedirects(true)
-        val sources = IphoneResolvingDataSource.Factory(DefaultDataSource.Factory(this, http))
+        val sources = IphoneResolvingDataSource.Factory(DefaultDataSource.Factory(this, http), CarPlayVideo.sessionUrlResolver())
         player = ExoPlayer.Builder(this).setMediaSourceFactory(DefaultMediaSourceFactory(sources)).build()
         player.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(state: Int) {
@@ -87,6 +87,7 @@ class CarPlayVideoActivity : Activity() {
             override fun onTimelineChanged(timeline: Timeline, reason: Int) = logEncryption()
 
             override fun onPlayerError(error: PlaybackException) {
+                if (CarPlayVideo.activity !== this@CarPlayVideoActivity) return
                 Log.w(TAG, "player error ${error.errorCodeName}: ${causes(error)}")
                 CarPlayVideo.onPlayerFailed(
                     when (error.errorCode) {
@@ -140,7 +141,7 @@ class CarPlayVideoActivity : Activity() {
             FlymePressFeedback.install(this)
             setOnClickListener { onClick(); showControls() }
         }
-        playPause = round(Media3R.drawable.exo_icon_play, "", primary = true) { CarPlayVideo.setPlaying(!CarPlayVideo.playing) }
+        playPause = round(Media3R.drawable.exo_icon_play, "", primary = true) { if (CarPlayVideo.activity === this) CarPlayVideo.setPlaying(!CarPlayVideo.playing) }
         val buttons = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
@@ -257,6 +258,7 @@ class CarPlayVideoActivity : Activity() {
     }
 
     fun load() {
+        if (CarPlayVideo.activity !== this) return
         val url = CarPlayVideo.url ?: return
         if (url == loadedUrl) return
         loadedUrl = url
@@ -273,6 +275,7 @@ class CarPlayVideoActivity : Activity() {
     }
 
     fun applyRate() {
+        if (CarPlayVideo.activity !== this) return
         player.playWhenReady = CarPlayVideo.playing
         if (controls.visibility == View.VISIBLE) updatePlayPause()
     }
@@ -285,6 +288,7 @@ class CarPlayVideoActivity : Activity() {
     }
 
     fun applySeek() {
+        if (CarPlayVideo.activity !== this) return
         val target = CarPlayVideo.pendingSeekMillis ?: return
         player.seekTo(target.toLong()) // ExoPlayer seeks to the exact position
         CarPlayVideo.pendingSeekMillis = null

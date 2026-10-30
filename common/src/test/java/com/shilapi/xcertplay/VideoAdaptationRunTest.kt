@@ -82,10 +82,14 @@ class VideoAdaptationRunTest {
         VideoAdaptationRegistry.current()?.let(VideoAdaptationRegistry::finish)
         val token = VideoAdaptationRegistry.begin(10)
         assertEquals(token, VideoAdaptationRegistry.current(20))
-        assertNull(VideoAdaptationRegistry.current(900_011))
         VideoAdaptationRegistry.finish("forged")
-        assertEquals(token, VideoAdaptationRegistry.current(30))
+        assertEquals(token,VideoAdaptationRegistry.current(30))
+        assertNull(VideoAdaptationRegistry.current(900_011))
+        assertNull("expired ownership must not revive after the clock changes",VideoAdaptationRegistry.current(30))
+        val replacement=VideoAdaptationRegistry.begin(40)
+        assertNotEquals(token,replacement)
         VideoAdaptationRegistry.finish(token)
-        assertNull(VideoAdaptationRegistry.current(30))
+        assertEquals(replacement,VideoAdaptationRegistry.current(50))
+        VideoAdaptationRegistry.finish(replacement)
     }
 }

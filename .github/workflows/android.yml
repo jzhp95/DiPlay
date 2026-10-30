@@ -24,16 +24,37 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - name: Local authentication asset staging boundary
         run: ./scripts/check_local_auth_assets.sh
-      - name: Unit tests, lint and source-only debug build
-        run: ./gradlew :flyme-eas:testDebugUnitTest :shared:testDebugUnitTest :common:testDebugUnitTest :mobile:lintDebug :mobile:assembleDebug --stacktrace
-      - name: Flyme system UID Manifest configuration
-        run: ./gradlew -PflymeSystem=true :mobile:processDebugMainManifest --stacktrace
+      - name: Flyme debug and release package identities
+        run: |
+          ./gradlew :mobile:processDebugMainManifest :mobile:processReleaseMainManifest --stacktrace
+          python3 scripts/check_flyme_manifest.py
+      - name: Unit tests, lint and source-only Flyme debug build
+        run: |
+          mkdir -p build/architecture-validation
+          java -version 2> build/architecture-validation/java.txt
+          sdkmanager --list_installed > build/architecture-validation/android-sdk.txt
+          set +e
+          ./gradlew :flyme-eas:testDebugUnitTest :shared:testDebugUnitTest :common:testDebugUnitTest :mobile:lintDebug :mobile:assembleDebug --continue --console=plain --stacktrace > build/architecture-validation/checks.log 2>&1
+          status=$?
+          cat build/architecture-validation/checks.log
+          printf '%s\n' "$status" > build/architecture-validation/command-exit.txt
+          exit "$status"
+      - name: Summarize complete validation evidence
+        if: always()
+        run: python3 scripts/summarize_architecture_validation.py --command-exit-file build/architecture-validation/command-exit.txt --output build/architecture-validation/validation-results.json
       - name: Test reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-reports
           path: |
+            build/architecture-validation/
+            integrations/flyme-eas/build/test-results/
+            integrations/flyme-eas/build/reports/tests/
+            shared/build/test-results/
+            common/build/test-results/
+            mobile/build/outputs/apk/
+            mobile/build/intermediates/merged_manifests/
             shared/build/reports/tests/
             common/build/reports/tests/
             common/build/reports/album-artwork-ui/

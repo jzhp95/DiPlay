@@ -37,11 +37,11 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.shihab.diplay"
+        applicationId = "com.shihab.diplay.flyme"
         minSdk = 28
         targetSdk = 37
-        versionCode = 43
-        versionName = "0.2.24"
+        versionCode = 45
+        versionName = "0.2.26"
 
     }
 
@@ -64,8 +64,8 @@ android {
 
     buildTypes {
         debug {
-            applicationIdSuffix = ".hudtest"
-            versionNameSuffix = "-hud-test"
+            applicationIdSuffix = ".test"
+            versionNameSuffix = "-test"
         }
         release {
             optimization {
@@ -145,15 +145,4 @@ tasks.register("assembleStandaloneDebug") {
     group = "build"
     description = "Build a standalone car-test APK with explicitly provisioned authentication."
     dependsOn(verifyStandaloneAuthentication, "assembleDebug")
-}
-
-apply(from = rootProject.file("integrations/flyme-eas/mobile.gradle.kts"))
-if (providers.gradleProperty("flymeSystem").orNull == "true") {
-    val flymeManifest = checkNotNull(extra["flymeEasMainManifest"]) {
-        "Flyme EAS build script did not export its Manifest provider"
-    }
-    android {
-        defaultConfig { applicationId = "com.shihab.diplay.flyme" }
-        sourceSets.getByName("main").manifest.srcFile(flymeManifest)
-    }
 }

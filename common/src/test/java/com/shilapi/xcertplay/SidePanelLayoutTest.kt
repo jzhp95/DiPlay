@@ -47,7 +47,7 @@ class SidePanelLayoutTest {
         (get("mainHandler") as Handler).removeCallbacksAndMessages(null)
         (get("teardownExecutor") as ExecutorService).shutdownNow()
         (get("airPlayCommandExecutor") as ExecutorService).shutdownNow()
-        CarPlayBackgroundSession.clear()
+        BackgroundSessionFixture.clear()
         sink.close()
     }
 
@@ -91,7 +91,7 @@ class SidePanelLayoutTest {
         areas.use(selected)
         val display = CarPlaySessionDisplay(2560, 1440, Surface.ROTATION_0, true, true, 2560, 1440, areas)
         val controller = mock(CarPlayController::class.java)
-        CarPlayBackgroundSession.store(controller, sink, 2560, 1440, Any(), display) {}
+        BackgroundSessionFixture.store(controller, sink, 2560, 1440, Any(), display) {}
         set("sidePanelShown", false)
         panel.visibility = View.GONE
         assertEquals(true, activity.javaClass.getDeclaredMethod("adoptBackgroundSession")
@@ -108,8 +108,6 @@ class SidePanelLayoutTest {
     }
 
     private fun exact(size: Int) = View.MeasureSpec.makeMeasureSpec(size, View.MeasureSpec.EXACTLY)
-    private fun get(name: String): Any? = activity.javaClass.getDeclaredField(name)
-        .apply { isAccessible = true }.get(activity)
-    private fun set(name: String, value: Any?) = activity.javaClass.getDeclaredField(name)
-        .apply { isAccessible = true }.set(activity, value)
+    private fun get(name: String): Any? = HostSessionFixture.getField<Any?>(activity, name)
+    private fun set(name: String, value: Any?) = HostSessionFixture.setField(activity, name, value)
 }

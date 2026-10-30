@@ -34,16 +34,16 @@ In DiPlay settings, under the dashboard map, turn on **Dashboard map on the cent
 - **Draw over other apps**: the settings screen offers it, or over ADB:
 
   ```bash
-  adb shell appops set com.shihab.diplay SYSTEM_ALERT_WINDOW allow
+  adb shell appops set com.shihab.diplay.flyme.test SYSTEM_ALERT_WINDOW allow
   ```
 
 - **Usage Access**, so the card shows only on home screens. Without it, the card shows over every app:
 
   ```bash
-  adb shell appops set com.shihab.diplay GET_USAGE_STATS allow
+  adb shell appops set com.shihab.diplay.flyme.test GET_USAGE_STATS allow
   ```
 
-(Test builds use the package `com.shihab.diplay.hudtest`.)
+The commands above target Flyme test builds (`com.shihab.diplay.flyme.test`). Release builds use `com.shihab.diplay.flyme`; substitute that ID when granting permissions to a release installation.
 
 The card is a separate decoder for the same stream, so the dashboard keeps its map. While the card shows the map, "Dashboard map only in Small and Full navi" does not pause the stream. If a launcher embeds the map (section 3), the card stays hidden.
 

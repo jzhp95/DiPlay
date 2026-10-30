@@ -34,7 +34,13 @@
             <data android:mimeType="*/*" />
         </intent>
     </queries>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <application>
+        <service android:name="com.shilapi.xcertplay.DecoderDiagnosticsService" android:exported="false" android:foregroundServiceType="dataSync" />
+        <service android:name="com.shilapi.xcertplay.DecoderDiagnosticsWorkerService" android:exported="false" android:process=":decoder_diagnostics" />
+        <activity android:name="com.shilapi.xcertplay.DecoderDiagnosticsActivity" android:exported="false"
+            android:process=":decoder_diagnostics" android:theme="@style/Theme.Xcertplay"
+            android:configChanges="orientation|screenSize|screenLayout|density|fontScale|uiMode" />
         <service android:name="com.shilapi.xcertplay.CarHotspotBootService"
             android:permission="android.permission.BIND_JOB_SERVICE" android:exported="true" />
         <activity android:name="com.shilapi.xcertplay.WheelTestActivity" android:exported="false" android:configChanges="uiMode|orientation|screenSize|smallestScreenSize|screenLayout|density|fontScale" />

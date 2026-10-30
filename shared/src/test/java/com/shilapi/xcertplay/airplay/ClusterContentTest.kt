@@ -14,7 +14,7 @@ import org.robolectric.annotation.Config
 @Config(sdk = [29], manifest = Config.NONE)
 class ClusterContentTest {
     private fun session(initialUrl: String, onTeardown: (AirPlaySession) -> Unit = {}): AirPlaySession = AirPlaySession(
-        socket = Socket(),
+        socket = LoopbackControlSocket(),
         config = AirPlayConfig(deviceName = "test", deviceId = "02:00:00:00:00:02", btMac = "02:00:00:00:00:01",
             sourceVersion = "1", main = AirPlayDisplayConfig(widthPixels = 800, heightPixels = 480),
             cluster = AirPlayDisplayConfig(widthPixels = 1600, heightPixels = 600, initialUrl = initialUrl)),

@@ -27,11 +27,11 @@ class CarPlayVideoStreamOwnershipTest {
             val config = byteArrayOf(1, 0x42, 0, 0x1e, 0xff.toByte(), 0xe1.toByte(), 0, 4,
                 0x67, 0x42, 0xc0.toByte(), 0x1e, 1, 0, 2, 0x68, 0xce.toByte())
             actual.onVideoConfig(110, config)
-            val field = actual.javaClass.getDeclaredField("lastVideoConfig").apply { isAccessible = true }
-            assertTrue((field.get(actual) as Map<*, *>).containsKey(110))
+            val field = actual.video.javaClass.getDeclaredField("lastVideoConfig").apply { isAccessible = true }
+            assertTrue((field.get(actual.video) as Map<*, *>).containsKey(110))
             inactive.clear()
             engine.onSessionClosed(old)
-            assertTrue("Old session must not erase the current session video config", (field.get(actual) as Map<*, *>).containsKey(110))
+            assertTrue("Old session must not erase the current session video config", (field.get(actual.video) as Map<*, *>).containsKey(110))
             assertTrue("Old session must not stop current video", inactive.isEmpty())
         } finally {
             engine.onSessionClosed(old); engine.onSessionClosed(current)
@@ -111,7 +111,7 @@ class CarPlayVideoStreamOwnershipTest {
 
     private fun session(): AirPlaySession {
         val session = AirPlaySession(
-            socket = Socket(),
+            socket = LoopbackControlSocket(),
             config = AirPlayConfig(
                 deviceName = "test", deviceId = "02:00:00:00:00:02", btMac = "02:00:00:00:00:01",
                 sourceVersion = "1.0", main = AirPlayDisplayConfig(widthPixels = 800, heightPixels = 480),

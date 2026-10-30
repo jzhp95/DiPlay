@@ -93,10 +93,9 @@ class CarPlayHostThemeDiagnosticsTest {
 
     private fun configuration(mode: Int) = Configuration().apply { uiMode = mode }
 
-    private fun getField(name: String): Any? = activity.javaClass.getDeclaredField(name)
-        .apply { isAccessible = true }.get(activity)
+    private fun getField(name: String): Any? = HostSessionFixture.getField<Any?>(activity, name)
 
     private fun setField(name: String, value: Any) {
-        activity.javaClass.getDeclaredField(name).apply { isAccessible = true }.set(activity, value)
+        HostSessionFixture.setField(activity, name, value)
     }
 }

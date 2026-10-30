@@ -51,11 +51,11 @@ class CarButtonImagePickerTest {
     @Test fun homeChoiceFallsBackOnlyWhenDocumentPickerIsMissingAndReportsFinalFailure() = withHome { activity ->
         val events = mutableListOf<String>()
         var contentMissing = false
-        ReflectionHelpers.setField(activity, "iconDocumentPicker", launcher(ActivityResultContracts.OpenDocument()) {
+        HostSessionFixture.setField(activity, "iconDocumentPicker", launcher(ActivityResultContracts.OpenDocument()) {
             events.add("document")
             throw ActivityNotFoundException("No document picker")
         })
-        ReflectionHelpers.setField(activity, "iconPicker", launcher(ActivityResultContracts.GetContent()) {
+        HostSessionFixture.setField(activity, "iconPicker", launcher(ActivityResultContracts.GetContent()) {
             assertEquals("image/*", it)
             events.add("content")
             if (contentMissing) throw ActivityNotFoundException("No content picker")
@@ -72,13 +72,13 @@ class CarButtonImagePickerTest {
     @Test fun hostChoiceUsesDocumentPickerAndSameCropFlowThenClearsCancellationState() = withHost { activity ->
         var documentIntent: Intent? = null
         var cropIntent: Intent? = null
-        ReflectionHelpers.setField(activity, "imageDocumentPicker", launcher(ActivityResultContracts.OpenDocument()) {
+        HostSessionFixture.setField(activity, "imageDocumentPicker", launcher(ActivityResultContracts.OpenDocument()) {
             documentIntent = ActivityResultContracts.OpenDocument().createIntent(activity, it)
         })
-        ReflectionHelpers.setField(activity, "imagePicker", launcher(ActivityResultContracts.GetContent()) {
+        HostSessionFixture.setField(activity, "imagePicker", launcher(ActivityResultContracts.GetContent()) {
             fail("A successful document launch must not also open the content picker")
         })
-        ReflectionHelpers.setField(activity, "imageCrop", launcher(ActivityResultContracts.StartActivityForResult()) {
+        HostSessionFixture.setField(activity, "imageCrop", launcher(ActivityResultContracts.StartActivityForResult()) {
             cropIntent = it
         })
         val buttons = hostButtons(activity)
@@ -100,11 +100,11 @@ class CarButtonImagePickerTest {
     @Test fun hostFallbackKeepsExternalStateUntilCancelButFinalFailureClearsIt() = withHost { activity ->
         val events = mutableListOf<String>()
         var contentMissing = false
-        ReflectionHelpers.setField(activity, "imageDocumentPicker", launcher(ActivityResultContracts.OpenDocument()) {
+        HostSessionFixture.setField(activity, "imageDocumentPicker", launcher(ActivityResultContracts.OpenDocument()) {
             events.add("document")
             throw ActivityNotFoundException("No document picker")
         })
-        ReflectionHelpers.setField(activity, "imagePicker", launcher(ActivityResultContracts.GetContent()) {
+        HostSessionFixture.setField(activity, "imagePicker", launcher(ActivityResultContracts.GetContent()) {
             assertEquals("image/*", it)
             events.add("content")
             if (contentMissing) throw ActivityNotFoundException("No content picker")
@@ -168,19 +168,22 @@ class CarButtonImagePickerTest {
         val sink = mock(AndroidMediaSink::class.java)
         val previousName = AirPlayPersistence.loadOemLabel(activity)
         var stops = 0
-        CarPlayBackgroundSession.store(session, sink, 800, 480, Any(),
+        BackgroundSessionFixture.store(session, sink, 800, 480, Any(),
             CarPlaySessionDisplay(800, 480, Surface.ROTATION_0, false, false, 800, 480)) {
             stops++
         }
-        CarPlayBackgroundSession.active = true
+        BackgroundSessionFixture.setActive(true)
         PendingReconnect.clear()
         try {
-            ReflectionHelpers.setField(activity, "page", "settings")
-            ReflectionHelpers.setField(activity, "settingsCategory", SettingsCategory.VEHICLE)
+            HostSessionFixture.setField(activity, "page", "settings")
+            HostSessionFixture.setField(activity, "settingsCategory", SettingsCategory.VEHICLE)
             ReflectionHelpers.callInstanceMethod<Unit>(activity, "render")
-            val bar = ReflectionHelpers.getField<View>(activity, "reconnectBar")
+            val bar = HostSessionFixture.getField<View>(activity, "reconnectBar")
             assertEquals(View.GONE, bar.visibility)
-            val name = views(activity.window.decorView).filterIsInstance<Button>().single {
+            val controls=android.widget.LinearLayout(activity)
+            ReflectionHelpers.callInstanceMethod<Unit>(activity,"carButtonControls",
+                ReflectionHelpers.ClassParameter(android.widget.LinearLayout::class.java,controls))
+            val name = views(controls).filterIsInstance<Button>().single {
                 it.text.startsWith(activity.getString(R.string.car_button_name) + " · ")
             }
             name.performClick()
@@ -192,7 +195,7 @@ class CarButtonImagePickerTest {
             assertEquals("My car", AirPlayPersistence.loadOemLabel(activity))
             assertTrue(PendingReconnect.isPending(session))
             assertEquals(View.VISIBLE, bar.visibility)
-            assertSame(session, CarPlayBackgroundSession.snapshot()?.controller)
+            assertSame(session, BackgroundSessionFixture.snapshot()?.controller)
             assertEquals(0, stops)
             assertNull(shadowOf(activity).nextStartedActivity)
         } finally {
@@ -226,7 +229,7 @@ class CarButtonImagePickerTest {
     }
 
     private fun externalActivity(activity: CarPlayHostActivity): Boolean =
-        ReflectionHelpers.getField(activity, "externalActivityInProgress")
+        HostSessionFixture.getField(activity, "externalActivityInProgress")
 
     private fun <I, O> launcher(contract: ActivityResultContract<I, O>, onLaunch: (I) -> Unit) =
         object : ActivityResultLauncher<I>() {
@@ -236,7 +239,7 @@ class CarButtonImagePickerTest {
         }
 
     private fun withHome(check: (DiPlayActivity) -> Unit) {
-        CarPlayBackgroundSession.clear()
+        BackgroundSessionFixture.clear()
         val controller = Robolectric.buildActivity(DiPlayActivity::class.java)
         val activity = controller.get()
         activity.setTheme(android.R.style.Theme_Material_NoActionBar)
@@ -245,7 +248,7 @@ class CarButtonImagePickerTest {
             check(activity)
         } finally {
             controller.pause().stop().destroy()
-            CarPlayBackgroundSession.clear()
+            BackgroundSessionFixture.clear()
         }
     }
 
@@ -254,10 +257,10 @@ class CarButtonImagePickerTest {
         activity.setTheme(android.R.style.Theme_Material_NoActionBar)
         try { check(activity) } finally {
             for (name in listOf("teardownExecutor", "airPlayCommandExecutor")) {
-                ReflectionHelpers.getField<ExecutorService>(activity, name).shutdownNow()
+                HostSessionFixture.getField<ExecutorService>(activity, name).shutdownNow()
             }
-            ReflectionHelpers.getField<Handler>(activity, "mainHandler").removeCallbacksAndMessages(null)
-            CarPlayBackgroundSession.clear()
+            HostSessionFixture.getField<Handler>(activity, "mainHandler").removeCallbacksAndMessages(null)
+            BackgroundSessionFixture.clear()
         }
     }
 

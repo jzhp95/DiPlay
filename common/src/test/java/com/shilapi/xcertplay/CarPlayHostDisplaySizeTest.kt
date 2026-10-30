@@ -41,6 +41,7 @@ import org.robolectric.shadows.ShadowLog
 @Config(sdk = [29], shadows = [VpnConsentTestShadow::class])
 @LooperMode(LooperMode.Mode.PAUSED)
 class CarPlayHostDisplaySizeTest {
+    private var initialGeneration=0
     private lateinit var activity: CarPlayHostActivity
     private lateinit var controllerConstruction: MockedConstruction<CarPlayController>
     private val sizeClass = Class.forName("com.shilapi.xcertplay.CarPlayHostActivity\$DisplaySize")
@@ -49,7 +50,12 @@ class CarPlayHostDisplaySizeTest {
         // Reconnect now verifies the real VPN grant as well as the cached host flag.
         VpnConsentTestShadow.consent = null
         VpnConsentTestShadow.failure = null
+        BackgroundSessionFixture.clear()
         activity = Robolectric.buildActivity(CarPlayHostActivity::class.java).get()
+        org.robolectric.Shadows.shadowOf(activity.application).grantPermissions(
+            android.Manifest.permission.ACCESS_FINE_LOCATION,android.Manifest.permission.ACCESS_COARSE_LOCATION,
+            android.Manifest.permission.RECORD_AUDIO,android.Manifest.permission.BLUETOOTH_CONNECT,
+            android.Manifest.permission.BLUETOOTH_SCAN,android.Manifest.permission.NEARBY_WIFI_DEVICES)
         AirPlayPersistence.saveAdaptPipResolution(activity, false)
         AirPlayPersistence.saveHarmanFullscreen(activity, false)
         // Source-only tests have no provisioned local authentication identity.
@@ -60,8 +66,7 @@ class CarPlayHostDisplaySizeTest {
         }
         (getField("teardownExecutor") as ExecutorService).shutdownNow()
         setField("teardownExecutor", PausedExecutorService())
-        CarPlayBackgroundSession::class.java.getDeclaredField("owner").apply { isAccessible = true }
-            .set(CarPlayBackgroundSession, activity)
+        BackgroundSessionFixture.claimOwner(activity)
         setField("activeDisplaySize", size(1920, 990))
     }
 
@@ -78,9 +83,7 @@ class CarPlayHostDisplaySizeTest {
         (getField("sink") as? AndroidMediaSink)?.close()
         (getField("teardownExecutor") as ExecutorService).shutdownNow()
         (getField("airPlayCommandExecutor") as ExecutorService).shutdownNow()
-        CarPlayBackgroundSession::class.java.getDeclaredField("authenticationRetiringController")
-            .apply { isAccessible = true }.set(CarPlayBackgroundSession, null)
-        CarPlayBackgroundSession.clear()
+        BackgroundSessionFixture.clear()
         controllerConstruction.close()
     }
 
@@ -90,7 +93,7 @@ class CarPlayHostDisplaySizeTest {
         assertEquals(size(1920, 942), getField("activeDisplaySize"))
         applySize(1920, 990)
         assertSame(display, getField("sessionDisplay"))
-        assertEquals(0, getField("restartGeneration"))
+        assertEquals(initialGeneration, getField("restartGeneration"))
         assertFalse(getField("handshakeResetInProgress") as Boolean)
         assertEquals(2, keepLogs())
     }
@@ -99,7 +102,7 @@ class CarPlayHostDisplaySizeTest {
         val display = startSession()
         applySize(700, 990)
         assertSame(display, getField("sessionDisplay"))
-        assertEquals(0, getField("restartGeneration"))
+        assertEquals(initialGeneration, getField("restartGeneration"))
         assertEquals(1, keepLogs())
     }
 
@@ -107,8 +110,9 @@ class CarPlayHostDisplaySizeTest {
         AirPlayPersistence.saveAdaptPipResolution(activity, true)
         val display = startSession()
         applySize(700, 990)
-        assertEquals(1, getField("restartGeneration"))
-        assertNull(getField("sessionDisplay"))
+        assertEquals(initialGeneration,getField("restartGeneration"))
+        assertEquals(com.shilapi.xcertplay.session.RuntimePhase.STOPPING,DiPlaySessionService.liveRuntime?.snapshot()?.phase)
+        assertNotNull("Retiring sessions keep their negotiated display until replacement",getField("sessionDisplay"))
     }
 
     @Test fun resumingASquareCanvasInTheSameWindowDoesNotReconnect() {
@@ -124,7 +128,7 @@ class CarPlayHostDisplaySizeTest {
 
         assertSame(display, getField("sessionDisplay"))
         assertEquals(size(1920, 1080), getField("activeDisplaySize"))
-        assertEquals(0, getField("restartGeneration"))
+        assertEquals(initialGeneration, getField("restartGeneration"))
         assertNull(getField("pendingDisplaySize"))
     }
 
@@ -134,8 +138,9 @@ class CarPlayHostDisplaySizeTest {
 
         applySize(700, 1080)
 
-        assertEquals(1, getField("restartGeneration"))
-        assertNull(getField("sessionDisplay"))
+        assertEquals(initialGeneration,getField("restartGeneration"))
+        assertEquals(com.shilapi.xcertplay.session.RuntimePhase.STOPPING,DiPlaySessionService.liveRuntime?.snapshot()?.phase)
+        assertNotNull("Retiring sessions keep their negotiated display until replacement",getField("sessionDisplay"))
     }
 
 
@@ -143,16 +148,18 @@ class CarPlayHostDisplaySizeTest {
         startSession(windowWidth = 700)
         applySize(1920, 990)
         assertEquals(size(1920, 990), getField("activeDisplaySize"))
-        assertEquals(1, getField("restartGeneration"))
+        assertEquals(initialGeneration,getField("restartGeneration"))
+        assertEquals(com.shilapi.xcertplay.session.RuntimePhase.STOPPING,DiPlaySessionService.liveRuntime?.snapshot()?.phase)
         assertTrue(getField("handshakeResetInProgress") as Boolean)
-        assertNull(getField("sessionDisplay"))
+        assertNotNull("Retiring sessions keep their negotiated display until replacement",getField("sessionDisplay"))
     }
 
     @Test fun connectingInAReducedHeightWindowRebuildsWhenTheCameraCloses() {
         startSession(windowHeight = 942)
         applySize(1920, 990)
-        assertEquals(1, getField("restartGeneration"))
-        assertNull(getField("sessionDisplay"))
+        assertEquals(initialGeneration,getField("restartGeneration"))
+        assertEquals(com.shilapi.xcertplay.session.RuntimePhase.STOPPING,DiPlaySessionService.liveRuntime?.snapshot()?.phase)
+        assertNotNull("Retiring sessions keep their negotiated display until replacement",getField("sessionDisplay"))
     }
 
     @Test fun aScaledDownCanvasKeepsTheSessionWhenTheOriginalWindowReturns() {
@@ -160,36 +167,40 @@ class CarPlayHostDisplaySizeTest {
         applySize(700, 990)
         applySize(1920, 990)
         assertSame(display, getField("sessionDisplay"))
-        assertEquals(0, getField("restartGeneration"))
+        assertEquals(initialGeneration, getField("restartGeneration"))
     }
 
     @Test fun aScaledUpCanvasStillRebuildsWhenTheStartupWindowGrows() {
         startSession(windowWidth = 700, canvasWidth = 1400, canvasHeight = 1980)
         applySize(1000, 990)
-        assertEquals(1, getField("restartGeneration"))
-        assertNull(getField("sessionDisplay"))
+        assertEquals(initialGeneration,getField("restartGeneration"))
+        assertEquals(com.shilapi.xcertplay.session.RuntimePhase.STOPPING,DiPlaySessionService.liveRuntime?.snapshot()?.phase)
+        assertNotNull("Retiring sessions keep their negotiated display until replacement",getField("sessionDisplay"))
     }
 
     @Test fun actualScreenRotationStillRebuildsTheSession() {
         startSession(rotation = Surface.ROTATION_90)
         applySize(990, 1920)
-        assertEquals(1, getField("restartGeneration"))
+        assertEquals(initialGeneration,getField("restartGeneration"))
+        assertEquals(com.shilapi.xcertplay.session.RuntimePhase.STOPPING,DiPlaySessionService.liveRuntime?.snapshot()?.phase)
         assertTrue(getField("handshakeResetInProgress") as Boolean)
-        assertNull(getField("sessionDisplay"))
+        assertNotNull("Retiring sessions keep their negotiated display until replacement",getField("sessionDisplay"))
     }
 
     @Test fun rotationIsHandledEvenIfTheViewSizeIsUnchanged() {
         startSession(rotation = Surface.ROTATION_180)
         scheduleSize(1920, 990)
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(600))
-        assertEquals(1, getField("restartGeneration"))
+        assertEquals(initialGeneration,getField("restartGeneration"))
+        assertEquals(com.shilapi.xcertplay.session.RuntimePhase.STOPPING,DiPlaySessionService.liveRuntime?.snapshot()?.phase)
     }
 
     @Test fun anExplicitBarLayoutChangeStillRebuildsTheSession() {
         startSession()
         setField("hideTopBar", false)
         applySize(1920, 942)
-        assertEquals(1, getField("restartGeneration"))
+        assertEquals(initialGeneration,getField("restartGeneration"))
+        assertEquals(com.shilapi.xcertplay.session.RuntimePhase.STOPPING,DiPlaySessionService.liveRuntime?.snapshot()?.phase)
     }
 
     @Test fun resumingReadsSavedBarsAndRebuildsEvenWhenTheWindowSizeIsUnchanged() {
@@ -208,7 +219,8 @@ class CarPlayHostDisplaySizeTest {
         assertEquals(true, getField("hideTopBar"))
         assertEquals(false, getField("hideBottomBar"))
         assertWindowBars(true, false)
-        assertEquals(1, getField("restartGeneration"))
+        assertEquals(initialGeneration,getField("restartGeneration"))
+        assertEquals(com.shilapi.xcertplay.session.RuntimePhase.STOPPING,DiPlaySessionService.liveRuntime?.snapshot()?.phase)
         assertTrue(getField("handshakeResetInProgress") as Boolean)
     }
 
@@ -219,7 +231,7 @@ class CarPlayHostDisplaySizeTest {
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(600))
 
         assertSame(display, getField("sessionDisplay"))
-        assertEquals(0, getField("restartGeneration"))
+        assertEquals(initialGeneration, getField("restartGeneration"))
     }
 
     @Test fun resumingWhileEditingDoesNotOverwriteTheBarPreview() {
@@ -234,7 +246,7 @@ class CarPlayHostDisplaySizeTest {
         assertEquals(true, getField("hideBottomBar"))
         assertWindowBars(false, true)
         assertTrue(AirPlayPersistence.loadHideTopBar(activity))
-        assertEquals(0, getField("restartGeneration"))
+        assertEquals(initialGeneration, getField("restartGeneration"))
     }
 
     @Test fun fullscreenApplicationSupportsAllFourBarCombinations() {
@@ -263,7 +275,7 @@ class CarPlayHostDisplaySizeTest {
         assertEquals(true, invoke("showTemporarySystemBars"))
         assertWindowBars(false, false)
         assertEquals(display, getField("sessionDisplay"))
-        assertEquals(0, getField("restartGeneration"))
+        assertEquals(initialGeneration, getField("restartGeneration"))
         // Transient visibility must not change the persistent CarPlay fullscreen selection.
         assertTrue(getField("hideTopBar") as Boolean)
         assertTrue(getField("hideBottomBar") as Boolean)
@@ -371,14 +383,14 @@ class CarPlayHostDisplaySizeTest {
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(600))
         assertEquals(size(1920, 990), getField("activeDisplaySize"))
         assertNull(getField("pendingDisplaySize"))
-        assertEquals(0, getField("restartGeneration"))
+        assertEquals(initialGeneration, getField("restartGeneration"))
     }
 
-    @Test fun anOngoingHandshakeResetOnlyRecordsTheNewSize() {
-        setField("handshakeResetInProgress", true)
+    @Test fun editingSettingsRecordsTheNewSizeWithoutRenegotiating() {
+        setField("menuOpen", true)
         applySize(700, 990)
         assertEquals(size(700, 990), getField("activeDisplaySize"))
-        assertEquals(0, getField("restartGeneration"))
+        assertEquals(initialGeneration, getField("restartGeneration"))
     }
 
     @Test @Config(sdk = [30]) fun rotatingBackDuringTeardownStartsWithTheLatestSize() {
@@ -391,7 +403,7 @@ class CarPlayHostDisplaySizeTest {
         finishTeardown()
 
         assertSessionSize(2250, 1080)
-        assertEquals(1, getField("restartGeneration"))
+        assertEquals(initialGeneration+1, getField("restartGeneration"))
         assertFalse(getField("handshakeResetInProgress") as Boolean)
     }
 
@@ -402,12 +414,12 @@ class CarPlayHostDisplaySizeTest {
         scheduleSize(2250, 1080)
 
         finishTeardown()
-        assertNull(getField("sessionDisplay"))
+        assertNotNull("Retiring sessions keep their negotiated display until replacement",getField("sessionDisplay"))
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(600))
 
         assertSessionSize(2250, 1080)
         assertNull(getField("pendingDisplaySize"))
-        assertEquals(1, getField("restartGeneration"))
+        assertEquals(initialGeneration+1, getField("restartGeneration"))
     }
 
     @Test @Config(sdk = [30]) fun cancellingAPendingRotationResumesStartup() {
@@ -416,13 +428,14 @@ class CarPlayHostDisplaySizeTest {
         applySize(1080, 2250)
         scheduleSize(2250, 1080)
         finishTeardown()
-        assertNull(getField("sessionDisplay"))
+        assertNotNull("Retiring sessions keep their negotiated display until replacement",getField("sessionDisplay"))
 
         scheduleSize(1080, 2250)
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(600))
 
         assertSessionSize(1080, 2250)
         assertNull(getField("pendingDisplaySize"))
-        assertEquals(1, getField("restartGeneration"))
+        assertEquals(initialGeneration+1, getField("restartGeneration"))
     }
 
     @Test @Config(sdk = [30]) fun aPendingSameSizeRotationResumesAfterTeardown() {
@@ -432,93 +445,17 @@ class CarPlayHostDisplaySizeTest {
         activity.javaClass.getDeclaredMethod("restartCarPlay", String::class.java)
             .apply { isAccessible = true }.invoke(activity, "Test reconnect")
         finishTeardown()
-        assertNull(getField("sessionDisplay"))
+        assertNotNull("Retiring sessions keep their negotiated display until replacement",getField("sessionDisplay"))
 
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(600))
 
         assertSessionSize(1920, 990)
         assertNull(getField("pendingDisplaySize"))
-        assertEquals(1, getField("restartGeneration"))
+        assertEquals(initialGeneration+1, getField("restartGeneration"))
     }
 
-    @Test @Config(sdk = [30]) fun authenticationRecoveryWaitsForOldResourcesBeforeStartingAgain() {
-        allowStartup()
-        AirPlayPersistence.saveMfiTarget(activity, MfiTarget.AUTO)
-        startSession()
-        activity.javaClass.getDeclaredMethod("startCarPlay", sizeClass)
-            .apply { isAccessible = true }.invoke(activity, size(1920, 990))
-        val old = controllerConstruction.constructed().last()
-        org.mockito.Mockito.`when`(old.awaitClosed(4_000L)).thenReturn(true)
-        org.mockito.Mockito.`when`(old.awaitClosed(0)).thenReturn(true)
-        val report = activity.javaClass.getDeclaredMethod("createStatusReporter", Int::class.javaPrimitiveType)
-            .apply { isAccessible = true }.invoke(activity, 0) as (com.shilapi.xcertplay.orchestration.CarPlayStatus) -> Unit
-        report(com.shilapi.xcertplay.orchestration.CarPlayStatus.Failed("MFi failed", authenticationFailure = true))
-        assertEquals(1, controllerConstruction.constructed().size)
-        activity.javaClass.getDeclaredMethod("restartCarPlay", String::class.java)
-            .apply { isAccessible = true }.invoke(activity, "Authentication recovery")
-        assertNull(getField("controller"))
-        assertEquals(1, controllerConstruction.constructed().size)
-        finishTeardown()
-        assertEquals(2, controllerConstruction.constructed().size)
-    }
-
-    @Test @Config(sdk = [30]) fun authenticationRecoveryCannotStartOverAnUnreleasedController() {
-        allowStartup()
-        AirPlayPersistence.saveMfiTarget(activity, MfiTarget.AUTO)
-        startSession()
-        activity.javaClass.getDeclaredMethod("startCarPlay", sizeClass)
-            .apply { isAccessible = true }.invoke(activity, size(1920, 990))
-        val report = activity.javaClass.getDeclaredMethod("createStatusReporter", Int::class.javaPrimitiveType)
-            .apply { isAccessible = true }.invoke(activity, 0) as (com.shilapi.xcertplay.orchestration.CarPlayStatus) -> Unit
-        report(com.shilapi.xcertplay.orchestration.CarPlayStatus.Failed("MFi failed", authenticationFailure = true))
-        activity.javaClass.getDeclaredMethod("restartCarPlay", String::class.java)
-            .apply { isAccessible = true }.invoke(activity, "Authentication recovery")
-        finishTeardown() // Mock awaitClosed defaults to false.
-        assertNull(getField("controller"))
-        assertTrue(getField("startupRetryStopped") as Boolean)
-        activity.javaClass.getDeclaredMethod("maybeStartCarPlay").apply { isAccessible = true }.invoke(activity)
-        assertEquals(1, controllerConstruction.constructed().size)
-        // A manual retry resets the budget, but must still wait for the same retiring controller.
-        setField("startupRetryStopped", false)
-        setField("authenticationRetryUsed", false)
-        activity.javaClass.getDeclaredMethod("restartCarPlay", String::class.java)
-            .apply { isAccessible = true }.invoke(activity, "Manual authentication retry")
-        finishTeardown()
-        assertTrue(getField("startupRetryStopped") as Boolean)
-        assertEquals(1, controllerConstruction.constructed().size)
-        val old = controllerConstruction.constructed().first()
-        org.mockito.Mockito.`when`(old.awaitClosed(4_000L)).thenReturn(true)
-        org.mockito.Mockito.`when`(old.awaitClosed(0)).thenReturn(true)
-        setField("startupRetryStopped", false)
-        activity.javaClass.getDeclaredMethod("restartCarPlay", String::class.java)
-            .apply { isAccessible = true }.invoke(activity, "Manual retry after release")
-        finishTeardown()
-        assertEquals(2, controllerConstruction.constructed().size)
-    }
-
-    @Test @Config(sdk = [30]) fun menuAuthenticationFailureKeepsTheGateAcrossOwners() {
-        allowStartup()
-        AirPlayPersistence.saveMfiTarget(activity, MfiTarget.AUTO)
-        startSession()
-        activity.javaClass.getDeclaredMethod("startCarPlay", sizeClass)
-            .apply { isAccessible = true }.invoke(activity, size(1920, 990))
-        val old = controllerConstruction.constructed().single()
-        setField("menuOpen", true)
-        val report = activity.javaClass.getDeclaredMethod("createStatusReporter", Int::class.javaPrimitiveType)
-            .apply { isAccessible = true }.invoke(activity, 0) as (com.shilapi.xcertplay.orchestration.CarPlayStatus) -> Unit
-        report(com.shilapi.xcertplay.orchestration.CarPlayStatus.Failed("MFi failed", authenticationFailure = true))
-        setField("menuOpen", false)
-        setField("authenticationRetryUsed", false) // Apply and reconnect is an explicit manual retry.
-        activity.javaClass.getDeclaredMethod("restartCarPlay", String::class.java)
-            .apply { isAccessible = true }.invoke(activity, "Settings saved; reconnecting")
-        finishTeardown()
-        assertTrue(getField("startupRetryStopped") as Boolean)
-        assertTrue(CarPlayBackgroundSession.authenticationTeardownPending())
-        CarPlayBackgroundSession.clear()
-        assertTrue("A replacement host must keep waiting", CarPlayBackgroundSession.authenticationTeardownPending())
-        org.mockito.Mockito.`when`(old.awaitClosed(0)).thenReturn(true)
-        assertFalse(CarPlayBackgroundSession.authenticationTeardownPending())
-    }
+    // Authentication retirement and retry gates are exercised by SessionRuntimeStateTest and
+    // SessionAuthenticationReleaseTest; display fixtures never mutate the service's private budget.
 
     @Test @Config(sdk = [30]) fun teardownRechecksStartupPrerequisites() {
         allowStartup()
@@ -530,7 +467,7 @@ class CarPlayHostDisplaySizeTest {
         finishTeardown()
 
         assertNull(getField("controller"))
-        assertNull(getField("sessionDisplay"))
+        assertNotNull("Retiring sessions keep their negotiated display until replacement",getField("sessionDisplay"))
         assertFalse(getField("handshakeResetInProgress") as Boolean)
     }
 
@@ -538,14 +475,14 @@ class CarPlayHostDisplaySizeTest {
         setField("activeDisplaySize", null)
         applySize(1920, 990)
         assertEquals(size(1920, 990), getField("activeDisplaySize"))
-        assertEquals(0, getField("restartGeneration"))
+        assertEquals(initialGeneration, getField("restartGeneration"))
         assertEquals(0, keepLogs())
     }
 
     @Test fun resizeWithoutASessionRecordsTheSizeWithoutAnotherTeardown() {
         applySize(700, 990)
         assertEquals(size(700, 990), getField("activeDisplaySize"))
-        assertEquals(0, getField("restartGeneration"))
+        assertEquals(initialGeneration, getField("restartGeneration"))
         assertFalse(getField("handshakeResetInProgress") as Boolean)
     }
 
@@ -575,6 +512,45 @@ class CarPlayHostDisplaySizeTest {
         assertEquals(false, getField("touchOutsideContent"))
     }
 
+    @Test fun aCameraWindowCancelledBeforeDebounceKeepsTheHealthyConnection() {
+        startSession()
+        val owner=DiPlaySessionService.liveRuntime!!
+        val original=owner.currentConnection
+        scheduleSize(700,990);scheduleSize(1920,990)
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(600))
+        assertSame(original,owner.currentConnection)
+        assertEquals(com.shilapi.xcertplay.session.RuntimePhase.STARTING,owner.snapshot().phase)
+        assertFalse(owner.configurationRequired)
+    }
+
+    @Test fun aWindowChangeWhileTheMenuIsOpenCannotApproveTheOldSnapshot() {
+        startSession()
+        val owner=DiPlaySessionService.liveRuntime!!
+        val original=owner.currentRequest
+        setField("menuOpen",true)
+        scheduleSize(2000,990)
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(600))
+        assertTrue(owner.configurationRequired)
+        assertSame(original,owner.currentRequest)
+        invoke("cancelSettingsEdits")
+        assertFalse(owner.configurationRequired)
+        assertEquals(2000,owner.currentRequest?.display?.windowWidth)
+        assertEquals(com.shilapi.xcertplay.session.RuntimePhase.STOPPING,owner.snapshot().phase)
+    }
+
+    @Test fun closingTheMenuBeforeDebounceWaitsForTheLatestWindow() {
+        startSession()
+        val owner=DiPlaySessionService.liveRuntime!!
+        val original=owner.currentRequest
+        setField("menuOpen",true);scheduleSize(2000,990)
+        invoke("cancelSettingsEdits")
+        assertTrue(owner.configurationRequired)
+        assertSame(original,owner.currentRequest)
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(600))
+        assertFalse(owner.configurationRequired)
+        assertEquals(2000,owner.currentRequest?.display?.windowWidth)
+    }
+
     @Test fun adoptingABackgroundSessionPreservesItsCanvasOnResize() {
         val display = CarPlaySessionDisplay(1536, 792, Surface.ROTATION_0, true, true, 1920, 990)
         val sink = AndroidMediaSink()
@@ -587,23 +563,26 @@ class CarPlayHostDisplaySizeTest {
             AirPlayIdentity.generate(), PairingStore(), object : AirPlaySessionListener {},
             object : AirPlayMediaHandler {}, {})
         try {
-            CarPlayBackgroundSession.store(controller, sink, 1920, 990, Any(), display) {}
+            setField("airPlayIdentity",AirPlayIdentity.generate())
+            BackgroundSessionFixture.store(controller, sink, 1920, 990, Any(), display) {}
             val adopted = activity.javaClass.getDeclaredMethod("adoptBackgroundSession")
                 .apply { isAccessible = true }.invoke(activity)
             assertEquals(true, adopted)
+            initialGeneration=getField("restartGeneration") as Int
             applySize(700, 990)
             assertSame(controller, getField("controller"))
             assertSame(sink, getField("sink"))
             assertEquals(display, getField("sessionDisplay"))
-            assertEquals(display, CarPlayBackgroundSession.snapshot()?.display)
+            assertEquals(display, BackgroundSessionFixture.snapshot()?.display)
             assertFalse(controller.isClosed())
-            assertEquals(0, getField("restartGeneration"))
+            assertEquals(initialGeneration, getField("restartGeneration"))
             applySize(1920, 990)
             assertSame(display, getField("sessionDisplay"))
-            assertEquals(0, getField("restartGeneration"))
+            assertEquals(initialGeneration, getField("restartGeneration"))
             applySize(2000, 990)
-            assertEquals(1, getField("restartGeneration"))
-            assertNull(getField("sessionDisplay"))
+            assertEquals(initialGeneration,getField("restartGeneration"))
+        assertEquals(com.shilapi.xcertplay.session.RuntimePhase.BLOCKED_RELEASE,DiPlaySessionService.liveRuntime?.snapshot()?.phase)
+            assertNotNull("Retiring sessions keep their negotiated display until replacement",getField("sessionDisplay"))
         } finally {
             controller.close()
             controller.awaitClosed(1000)
@@ -614,16 +593,19 @@ class CarPlayHostDisplaySizeTest {
 
 
     private fun startSession(
-        rotation: Int = Surface.ROTATION_0,
-        windowWidth: Int = 1920,
-        windowHeight: Int = 990,
-        canvasWidth: Int = windowWidth,
-        canvasHeight: Int = windowHeight,
-    ): CarPlaySessionDisplay =
-        CarPlaySessionDisplay(canvasWidth, canvasHeight, rotation, true, true, windowWidth, windowHeight).also {
-            setField("activeDisplaySize", size(windowWidth, windowHeight))
-            setField("sessionDisplay", it)
-        }
+        rotation:Int=Surface.ROTATION_0,windowWidth:Int=1920,windowHeight:Int=990,
+        canvasWidth:Int=windowWidth,canvasHeight:Int=windowHeight,
+    ):CarPlaySessionDisplay {
+        setField("airPlayIdentity",AirPlayIdentity.generate())
+        setField("vpnReady",true);setField("microphonePermissionResolved",true)
+        val display=CarPlaySessionDisplay(canvasWidth,canvasHeight,rotation,true,true,windowWidth,windowHeight)
+        setField("activeDisplaySize",size(windowWidth,windowHeight));setField("sessionDisplay",display)
+        val controller=org.mockito.Mockito.mock(CarPlayController::class.java)
+        val sink=org.mockito.Mockito.mock(AndroidMediaSink::class.java)
+        BackgroundSessionFixture.store(controller,sink,windowWidth,windowHeight,activity,display){done->done()}
+        initialGeneration=getField("restartGeneration") as Int
+        return display
+    }
 
     private fun keepLogs(): Int = ShadowLog.getLogsForTag("xcertplay-usb").count {
         it.msg.contains("keeping CarPlay session")
@@ -674,8 +656,7 @@ class CarPlayHostDisplaySizeTest {
         }
     }
 
-    private fun getField(name: String): Any? = activity.javaClass.getDeclaredField(name)
-        .apply { isAccessible = true }.get(activity)
+    private fun getField(name: String): Any? = HostSessionFixture.getField<Any?>(activity, name)
 
     private fun invoke(name: String): Any? = activity.javaClass.getDeclaredMethod(name)
         .apply { isAccessible = true }.invoke(activity)
@@ -692,6 +673,6 @@ class CarPlayHostDisplaySizeTest {
         .filterIsInstance<Switch>().single { it.contentDescription == activity.getString(label) }
 
     private fun setField(name: String, value: Any?) {
-        activity.javaClass.getDeclaredField(name).apply { isAccessible = true }.set(activity, value)
+        HostSessionFixture.setField(activity, name, value)
     }
 }

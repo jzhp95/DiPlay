@@ -54,6 +54,13 @@ internal class ColorTestRun {
             for (range in listOf("full", "limited")) add(Case(
                 "MTK 硬解颜色转换 · H264 · ${if (range == "full") "全范围" else "有限范围"}",
                 "h264_$range", true, hardwareYuv = true))
+            for (asset in listOf("h264_clarity1080", "h264_motion1080")) {
+                val name = if (asset.contains("clarity")) "1080p 细线与灰阶" else "1080p 60fps 运动"
+                add(Case("$name · 默认纹理", asset, false))
+                add(Case("$name · 默认直接", asset, true))
+                add(Case("$name · 软件直出", asset, true, forceSoftware = true))
+                add(Case("$name · MTK 颜色转换", asset, true, hardwareYuv = true))
+            }
         }
     }
 }

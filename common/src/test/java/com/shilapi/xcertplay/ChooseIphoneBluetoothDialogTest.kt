@@ -109,6 +109,6 @@ class ChooseIphoneBluetoothDialogTest {
         val screen = open()
         val shown = texts(choosePhone(screen))
         assertTrue(shown.toString(), screen.getString(R.string.pair_your_iphone) in shown)
-        assertFalse(shown.toString(), screen.getString(R.string.turn_on_bluetooth) in shown)
+        assertTrue(shown.toString(), screen.getString(R.string.open_bluetooth) in shown)
     }
 }

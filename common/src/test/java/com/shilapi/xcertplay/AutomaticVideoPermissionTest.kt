@@ -19,6 +19,43 @@ import org.robolectric.util.ReflectionHelpers
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28])
 class AutomaticVideoPermissionTest {
+    @org.junit.Before fun isolatedDiagnosticStore() {
+        DiagnosticStoreFixture.reset()
+        DiagnosticStoreFixture.recover(RuntimeEnvironment.getApplication())
+    }
+    @org.junit.After fun closeDiagnosticStore() { DiagnosticStoreFixture.reset() }
+
+    @Test fun manualCollectorAlsoRequestsStorageBeforeLeavingTheMergedPage() {
+        val context = RuntimeEnvironment.getApplication()
+        context.getSharedPreferences("automatic_video_suite_v1", 0).edit().clear().commit()
+        shadowOf(context).denyPermissions(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        val session = org.mockito.Mockito.mock(com.shilapi.xcertplay.orchestration.CarPlayController::class.java)
+        val sink = com.shilapi.xcertplay.media.AndroidMediaSink()
+        BackgroundSessionFixture.store(session, sink, 1920, 1080, Any(),
+            CarPlaySessionDisplay(1920, 1080, 0, false, false, 1920, 1080)) {}
+        val controller = Robolectric.buildActivity(WheelTestActivity::class.java,
+            Intent().putExtra("diagnostics_page", "VIDEO")).setup()
+        try {
+            fun descendants(view: View): Sequence<View> = sequence {
+                yield(view); if (view is ViewGroup) for (i in 0 until view.childCount) yieldAll(descendants(view.getChildAt(i)))
+            }
+            val activity = controller.get()
+            descendants(activity.window.decorView).filterIsInstance<Button>()
+                .single { it.text == activity.getString(R.string.video_adapt_start) }.performClick()
+            assertEquals(listOf(Manifest.permission.WRITE_EXTERNAL_STORAGE), shadowOf(activity).lastRequestedPermission.requestedPermissions.toList())
+            assertNull(VideoAdaptationRegistry.current())
+        } finally { BackgroundSessionFixture.clear(); sink.close(); controller.pause().stop().destroy() }
+    }
+    @Test fun republishRequestsPermissionWithoutRestartingMeasurements() {
+        val context=RuntimeEnvironment.getApplication();shadowOf(context).denyPermissions(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        val controller=Robolectric.buildActivity(WheelTestActivity::class.java,Intent().putExtra("diagnostics_page","COLOR")).setup()
+        try{
+            val activity=controller.get()
+            ReflectionHelpers.callInstanceMethod<Void>(activity,"requestDecoderRepublish")
+            assertEquals(listOf(Manifest.permission.WRITE_EXTERNAL_STORAGE),shadowOf(activity).lastRequestedPermission.requestedPermissions.toList())
+            assertEquals("republish",ReflectionHelpers.getField<String>(activity,"pendingStorageAction"))
+        }finally{controller.pause().stop().destroy()}
+    }
     @Test fun oneClickRequestsPublicStorageAndDenialContinuesWithExplicitPrivateFallback() {
         val context = RuntimeEnvironment.getApplication()
         context.getSharedPreferences("automatic_video_suite_v1", 0).edit().clear().commit()
@@ -31,8 +68,7 @@ class AutomaticVideoPermissionTest {
             fun descendants(view: View): Sequence<View> = sequence {
                 yield(view); if (view is ViewGroup) for (i in 0 until view.childCount) yieldAll(descendants(view.getChildAt(i)))
             }
-            descendants(page.root).filterIsInstance<Button>()
-                .single { it.text == activity.getString(R.string.video_auto_start) }.performClick()
+            ReflectionHelpers.callInstanceMethod<Unit>(activity,"requestAutomaticVideo")
             val request = shadowOf(activity).lastRequestedPermission
             assertEquals(listOf(Manifest.permission.WRITE_EXTERNAL_STORAGE), request.requestedPermissions.toList())
             assertFalse(AutomaticVideoSuite.active(activity))

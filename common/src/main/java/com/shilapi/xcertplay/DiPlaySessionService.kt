@@ -15,11 +15,16 @@ import com.shilapi.xcertplay.host.R
 
 /** Keeps an explicitly started connection alive when another car app is in the foreground. */
 class DiPlaySessionService : Service() {
-    override fun onBind(intent: Intent?): IBinder? = null
+    private lateinit var runtime:com.shilapi.xcertplay.session.SessionRuntime
+    internal inner class LocalBinder:android.os.Binder(){val runtime get()=this@DiPlaySessionService.runtime}
+    override fun onCreate(){
+        super.onCreate()
+        runtime=liveRuntime ?: com.shilapi.xcertplay.session.SessionRuntime.create(com.shilapi.xcertplay.session.SessionFactory(applicationContext)).also{liveRuntime=it}
+    }
+    override fun onBind(intent: Intent?): IBinder = LocalBinder()
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
-            CarPlayBackgroundSession.stop()
-            stopSelf()
+            runtime.stop("notification_disconnect"){stopSelf()}
             return START_NOT_STICKY
         }
         val manager = getSystemService(NotificationManager::class.java)
@@ -46,14 +51,16 @@ class DiPlaySessionService : Service() {
             }
             startForeground(1, notification, types)
         } else startForeground(1, notification)
+        runtime.foregroundReady(true)
         return START_NOT_STICKY
     }
+    override fun onDestroy(){runtime.foregroundReady(false);runtime.stop("service_destroyed"){};super.onDestroy()}
     override fun onTaskRemoved(rootIntent: Intent?) {
         com.shilapi.xcertplay.hud.CarPlayNavigationState.endNow()
-        CarPlayBackgroundSession.stop()
-        stopSelf()
+        runtime.stop("task_removed"){stopSelf()}
     }
     companion object {
+        @Volatile internal var liveRuntime:com.shilapi.xcertplay.session.SessionRuntime?=null
         const val ACTION_STOP = "com.shihab.diplay.DISCONNECT"
         private const val CHANNEL = "diplay_connection"
     }

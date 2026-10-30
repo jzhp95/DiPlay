@@ -30,7 +30,7 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.LooperMode
 
-/** Exercise the production session supplier across primary-screen and phone lifecycles. */
+/** Generic session/queue ownership survives removal of the legacy accessibility joystick. */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [29], manifest = Config.NONE)
 @LooperMode(LooperMode.Mode.PAUSED)
@@ -52,7 +52,7 @@ class WheelJoystickSessionTest {
             AirPlayIdentity.generate(), PairingStore(), object : AirPlaySessionListener {},
             object : AirPlayMediaHandler {}, {})
         sink = AndroidMediaSink()
-        CarPlayBackgroundSession.store(controller, sink, 800, 480, Any(),
+        BackgroundSessionFixture.store(controller, sink, 800, 480, Any(),
             CarPlaySessionDisplay(800, 480, Surface.ROTATION_0, false, false, 800, 480)) {}
         WheelZoomSettings.setEnabled(service, false)
         WheelZoomSettings.setJoystick(service, true)
@@ -64,7 +64,7 @@ class WheelJoystickSessionTest {
 
     @After fun tearDown() {
         service.onDestroy()
-        CarPlayBackgroundSession.clear()
+        BackgroundSessionFixture.clear()
         controller.close()
         controller.awaitClosed(1000)
         phones.forEach { it.close() }
@@ -111,8 +111,10 @@ class WheelJoystickSessionTest {
 
     private fun pauseKnobExecutor(): PausedExecutor {
         val field = controller.javaClass.getDeclaredField("touchExecutor").apply { isAccessible = true }
-        (field.get(controller) as ExecutorService).shutdownNow()
-        return PausedExecutor().also { field.set(controller, it) }
+        val queue=field.get(controller)
+        val worker=queue.javaClass.getDeclaredField("executor").apply{isAccessible=true}
+        (worker.get(queue) as ExecutorService).shutdownNow()
+        return PausedExecutor().also{worker.set(queue,it)}
     }
 
     private fun observedPhone(): AirPlaySession = spy(newPhone()).also { phones += it }
@@ -124,7 +126,8 @@ class WheelJoystickSessionTest {
 
     @Test fun aNewIphoneInsideTheSameControllerMustNotInheritJoystickMode() {
         attachPhone(newPhone())
-        assertEquals(true to true, press(KeyEvent.KEYCODE_F4))
+        assertFalse(WheelZoomSettings.joystick(service))
+        assertEquals(false to false, press(KeyEvent.KEYCODE_F4))
         attachPhone(newPhone())
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300))
         assertEquals("Replacing the active phone must restore the keys even when the controller is reused",
@@ -142,7 +145,8 @@ class WheelJoystickSessionTest {
         attachPhone(phone)
         val original = controller.activeAirPlaySessionToken()
         assertNotNull(original)
-        assertEquals(true to true, press(KeyEvent.KEYCODE_F4))
+        assertFalse(WheelZoomSettings.joystick(service))
+        assertEquals(false to false, press(KeyEvent.KEYCODE_F4))
         teardown(phone, 110L)
         assertNull(controller.activeAirPlaySessionToken())
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300))
@@ -161,19 +165,21 @@ class WheelJoystickSessionTest {
             }
         })
         attachPhone(phone)
-        assertEquals(true to true, press(KeyEvent.KEYCODE_F4))
+        assertFalse(WheelZoomSettings.joystick(service))
+        assertEquals(false to false, press(KeyEvent.KEYCODE_F4))
         teardown(phone, 110L)
         assertTrue(called)
     }
 
-    @Test fun replacementMainScreenResetsJoystickButPreservesAHeldKeysRelease() {
+    @Test fun replacementMainScreenCannotReactivateRetiredJoystickWithHeldLegacyKeys() {
         val phone = newPhone()
         attachPhone(phone)
-        assertEquals(true to true, press(KeyEvent.KEYCODE_F4))
-        assertTrue(key(KeyEvent.KEYCODE_F5, true))
+        assertFalse(WheelZoomSettings.joystick(service))
+        assertEquals(false to false, press(KeyEvent.KEYCODE_F4))
+        assertFalse(key(KeyEvent.KEYCODE_F5, true))
         setup(phone, 110L)
-        assertTrue(key(KeyEvent.KEYCODE_F5, true, repeat = 1))
-        assertTrue(key(KeyEvent.KEYCODE_F5, false))
+        assertFalse(key(KeyEvent.KEYCODE_F5, true, repeat = 1))
+        assertFalse(key(KeyEvent.KEYCODE_F5, false))
         assertEquals(false to false, press(KeyEvent.KEYCODE_F5))
     }
 
@@ -181,18 +187,20 @@ class WheelJoystickSessionTest {
         val phone = newPhone()
         attachPhone(phone)
         val original = controller.activeAirPlaySessionToken()
-        assertEquals(true to true, press(KeyEvent.KEYCODE_F4))
+        assertFalse(WheelZoomSettings.joystick(service))
+        assertEquals(false to false, press(KeyEvent.KEYCODE_F4))
         setup(phone, 111L)
         teardown(phone, 111L)
         setup(phone, 111L)
         assertSame(original, controller.activeAirPlaySessionToken())
-        assertEquals(true to true, press(KeyEvent.KEYCODE_F5))
+        assertEquals(false to false, press(KeyEvent.KEYCODE_F5))
     }
 
     @Test fun aClosedPhoneCannotKeepWheelKeysEvenBeforeTheControllerPointerIsCleared() {
         val phone = newPhone()
         attachPhone(phone)
-        assertEquals(true to true, press(KeyEvent.KEYCODE_F4))
+        assertFalse(WheelZoomSettings.joystick(service))
+        assertEquals(false to false, press(KeyEvent.KEYCODE_F4))
         phone.close() // The fixture listener leaves the stale activeSession pointer deliberately.
         assertNull(controller.activeAirPlaySessionToken())
         assertEquals(false to false, press(KeyEvent.KEYCODE_F5))
@@ -200,7 +208,8 @@ class WheelJoystickSessionTest {
 
     @Test fun aClosedControllerDoesNotOwnTheWheelWhileItsSnapshotIsStillStored() {
         attachPhone(newPhone())
-        assertEquals(true to true, press(KeyEvent.KEYCODE_F4))
+        assertFalse(WheelZoomSettings.joystick(service))
+        assertEquals(false to false, press(KeyEvent.KEYCODE_F4))
         controller.close()
         assertNull(controller.activeAirPlaySessionToken())
         assertEquals(false to false, press(KeyEvent.KEYCODE_F5))

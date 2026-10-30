@@ -1,0 +1,845 @@
+{
+  "version": 1,
+  "referenceBasis": "FFmpeg independent decode of actual encoded files; numerical hypotheses only, uncalibrated pass thresholds",
+  "width": 1920,
+  "height": 1080,
+  "fps": 30,
+  "files": {
+    "h264_light_full": {
+      "frames": 45,
+      "sha256": "e2d5f06a1d5e9f07e01e70267207fa7c320a3613cf23f0a54c4eb057cac288df",
+      "bytes": 6084,
+      "theme": "light",
+      "range": "full",
+      "patches": [
+        {
+          "nominal": 0,
+          "referenceMean": 0.0,
+          "rect": [
+            24,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 4,
+          "referenceMean": 4.0,
+          "rect": [
+            120,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 8,
+          "referenceMean": 8.0,
+          "rect": [
+            216,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 12,
+          "referenceMean": 12.0,
+          "rect": [
+            312,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 16,
+          "referenceMean": 16.0,
+          "rect": [
+            408,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 20,
+          "referenceMean": 20.0,
+          "rect": [
+            504,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 224,
+          "referenceMean": 224.0,
+          "rect": [
+            600,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 228,
+          "referenceMean": 228.0,
+          "rect": [
+            696,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 232,
+          "referenceMean": 232.0,
+          "rect": [
+            792,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 234,
+          "referenceMean": 234.0,
+          "rect": [
+            888,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 235,
+          "referenceMean": 235.0,
+          "rect": [
+            984,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 236,
+          "referenceMean": 236.0,
+          "rect": [
+            1080,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 238,
+          "referenceMean": 238.0,
+          "rect": [
+            1176,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 240,
+          "referenceMean": 240.0,
+          "rect": [
+            1272,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 242,
+          "referenceMean": 242.0,
+          "rect": [
+            1368,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 244,
+          "referenceMean": 244.0,
+          "rect": [
+            1464,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 248,
+          "referenceMean": 248.0,
+          "rect": [
+            1560,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 252,
+          "referenceMean": 252.0,
+          "rect": [
+            1656,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 254,
+          "referenceMean": 254.0,
+          "rect": [
+            1752,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 255,
+          "referenceMean": 255.0,
+          "rect": [
+            1848,
+            80,
+            48,
+            160
+          ]
+        }
+      ]
+    },
+    "h264_light_limited": {
+      "frames": 45,
+      "sha256": "4c9e230a0eb51e3d61b4f17e4c3b188851d559a5bfb6a8f99dde7c2be56d6f35",
+      "bytes": 6093,
+      "theme": "light",
+      "range": "limited",
+      "patches": [
+        {
+          "nominal": 0,
+          "referenceMean": 0.0,
+          "rect": [
+            24,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 4,
+          "referenceMean": 3.0,
+          "rect": [
+            120,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 8,
+          "referenceMean": 8.0,
+          "rect": [
+            216,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 12,
+          "referenceMean": 12.0,
+          "rect": [
+            312,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 16,
+          "referenceMean": 16.0,
+          "rect": [
+            408,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 20,
+          "referenceMean": 20.0,
+          "rect": [
+            504,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 224,
+          "referenceMean": 224.0,
+          "rect": [
+            600,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 228,
+          "referenceMean": 228.0,
+          "rect": [
+            696,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 232,
+          "referenceMean": 232.0,
+          "rect": [
+            792,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 234,
+          "referenceMean": 234.0,
+          "rect": [
+            888,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 235,
+          "referenceMean": 235.0,
+          "rect": [
+            984,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 236,
+          "referenceMean": 236.0,
+          "rect": [
+            1080,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 238,
+          "referenceMean": 238.0,
+          "rect": [
+            1176,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 240,
+          "referenceMean": 240.0,
+          "rect": [
+            1272,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 242,
+          "referenceMean": 242.0,
+          "rect": [
+            1368,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 244,
+          "referenceMean": 245.0,
+          "rect": [
+            1464,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 248,
+          "referenceMean": 248.0,
+          "rect": [
+            1560,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 252,
+          "referenceMean": 252.0,
+          "rect": [
+            1656,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 254,
+          "referenceMean": 254.0,
+          "rect": [
+            1752,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 255,
+          "referenceMean": 255.0,
+          "rect": [
+            1848,
+            80,
+            48,
+            160
+          ]
+        }
+      ]
+    },
+    "h264_dark_full": {
+      "frames": 45,
+      "sha256": "54a3d57400c562f63f350e8b28c0fcc7ae2a667cd589324f4b62481d8b8540d5",
+      "bytes": 6085,
+      "theme": "dark",
+      "range": "full",
+      "patches": [
+        {
+          "nominal": 0,
+          "referenceMean": 0.0,
+          "rect": [
+            24,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 4,
+          "referenceMean": 4.0,
+          "rect": [
+            120,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 8,
+          "referenceMean": 8.0,
+          "rect": [
+            216,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 12,
+          "referenceMean": 12.0,
+          "rect": [
+            312,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 16,
+          "referenceMean": 16.0,
+          "rect": [
+            408,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 20,
+          "referenceMean": 20.0,
+          "rect": [
+            504,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 224,
+          "referenceMean": 224.0,
+          "rect": [
+            600,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 228,
+          "referenceMean": 228.0,
+          "rect": [
+            696,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 232,
+          "referenceMean": 232.0,
+          "rect": [
+            792,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 234,
+          "referenceMean": 234.0,
+          "rect": [
+            888,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 235,
+          "referenceMean": 235.0,
+          "rect": [
+            984,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 236,
+          "referenceMean": 236.0,
+          "rect": [
+            1080,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 238,
+          "referenceMean": 238.0,
+          "rect": [
+            1176,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 240,
+          "referenceMean": 240.0,
+          "rect": [
+            1272,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 242,
+          "referenceMean": 242.0,
+          "rect": [
+            1368,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 244,
+          "referenceMean": 244.0,
+          "rect": [
+            1464,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 248,
+          "referenceMean": 248.0,
+          "rect": [
+            1560,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 252,
+          "referenceMean": 252.0,
+          "rect": [
+            1656,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 254,
+          "referenceMean": 254.0,
+          "rect": [
+            1752,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 255,
+          "referenceMean": 255.0,
+          "rect": [
+            1848,
+            80,
+            48,
+            160
+          ]
+        }
+      ]
+    },
+    "h264_dark_limited": {
+      "frames": 45,
+      "sha256": "b3f3a03d1c93c3d9a74ae1668f887e8930ca2034e3d202142d5fa8471ae27095",
+      "bytes": 6163,
+      "theme": "dark",
+      "range": "limited",
+      "patches": [
+        {
+          "nominal": 0,
+          "referenceMean": 0.0,
+          "rect": [
+            24,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 4,
+          "referenceMean": 3.0,
+          "rect": [
+            120,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 8,
+          "referenceMean": 8.0,
+          "rect": [
+            216,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 12,
+          "referenceMean": 12.0,
+          "rect": [
+            312,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 16,
+          "referenceMean": 16.0,
+          "rect": [
+            408,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 20,
+          "referenceMean": 20.0,
+          "rect": [
+            504,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 224,
+          "referenceMean": 224.0,
+          "rect": [
+            600,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 228,
+          "referenceMean": 228.0,
+          "rect": [
+            696,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 232,
+          "referenceMean": 232.0,
+          "rect": [
+            792,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 234,
+          "referenceMean": 234.0,
+          "rect": [
+            888,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 235,
+          "referenceMean": 235.0,
+          "rect": [
+            984,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 236,
+          "referenceMean": 236.0,
+          "rect": [
+            1080,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 238,
+          "referenceMean": 238.0,
+          "rect": [
+            1176,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 240,
+          "referenceMean": 240.0,
+          "rect": [
+            1272,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 242,
+          "referenceMean": 242.0,
+          "rect": [
+            1368,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 244,
+          "referenceMean": 245.0,
+          "rect": [
+            1464,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 248,
+          "referenceMean": 248.0,
+          "rect": [
+            1560,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 252,
+          "referenceMean": 252.0,
+          "rect": [
+            1656,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 254,
+          "referenceMean": 254.0,
+          "rect": [
+            1752,
+            80,
+            48,
+            160
+          ]
+        },
+        {
+          "nominal": 255,
+          "referenceMean": 255.0,
+          "rect": [
+            1848,
+            80,
+            48,
+            160
+          ]
+        }
+      ]
+    }
+  }
+}

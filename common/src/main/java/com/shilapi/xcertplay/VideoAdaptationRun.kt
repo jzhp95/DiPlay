@@ -75,14 +75,22 @@ internal object VideoAdaptationRegistry {
     const val EXTRA = "video_adaptation_token"
     private var token: String? = null
     private var started = 0L
+    private var lease: com.shilapi.xcertplay.diagnostics.DiagnosticLease.Ticket? = null
     @Synchronized fun begin(now: Long = SystemClock.elapsedRealtime()): String {
         check(current(now) == null) { "collection already active" }
-        return UUID.randomUUID().toString().also { token = it; started = now }
+        return UUID.randomUUID().toString().also {
+            lease=checkNotNull(com.shilapi.xcertplay.diagnostics.DiagnosticLease.acquire(it,DiPlaySessionService.liveRuntime?.currentConnection?.controller)){"diagnostic already active"}
+            token=it;started=now
+        }
     }
-    @Synchronized fun current(now: Long = SystemClock.elapsedRealtime()): String? =
-        token?.takeIf { now - started in 0..900_000 }
+    @Synchronized fun current(now: Long = SystemClock.elapsedRealtime()): String? {
+        if(token!=null && now-started !in 0..900_000)finish(checkNotNull(token))
+        return token
+    }
     @Synchronized fun accepts(value: String?): Boolean = value != null && value == current()
-    @Synchronized fun finish(value: String) { if (token == value) token = null }
+    @Synchronized fun finish(value: String) { if (token == value) {
+        token=null;lease?.let{com.shilapi.xcertplay.diagnostics.DiagnosticLease.release(it,true)};lease=null
+    } }
 }
 
 internal object VideoAdaptationStore {
@@ -131,6 +139,9 @@ internal object VideoAdaptationStore {
             missing.add("部分视频与颜色证据缺失，详见报告")
         val deviceGaps = value.optJSONObject("device")?.optJSONArray("missing")
         if (deviceGaps != null && deviceGaps.length() > 0) missing.add("设备存在不可读项，详见报告")
+        val extended = value.optJSONObject("device")?.optJSONObject("systemInformation")?.optJSONArray("unavailable")
+        if (extended != null && extended.length() > 0) missing.add("部分扩展硬件信息不可读，报告含原因")
+        if (value.optJSONObject("device")?.optBoolean("collectionIncomplete") == true) missing.add("设备信息采集未完成，报告含已读部分")
         return missing
     }
 }

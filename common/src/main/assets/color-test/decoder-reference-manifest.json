@@ -1,0 +1,65 @@
+{
+  "h264_clarity1080": {
+    "stream": {
+      "width": 1920,
+      "height": 1080,
+      "color_range": "tv",
+      "color_space": "bt709",
+      "r_frame_rate": "60/1"
+    },
+    "sha256": "37fc31072994c3dec35a03bf0eb8607939202611fc928b629d9fa4fdabc78629",
+    "csdSha256": "fc3239c8576a429003dcadedcc17fecddeb3b841fa1d21e4e82aa80323e579d6",
+    "purpose": "static_grayscale_and_1_2_4_8_pixel_patterns",
+    "durationSeconds": 3,
+    "physicalDisplayVerdict": "not_measured",
+    "referenceGeometry": {
+      "topGrayRampRows": [
+        0,
+        160
+      ],
+      "stripeRows": [
+        160,
+        480
+      ],
+      "stripeBandWidth": 480,
+      "stripeWidths": [
+        1,
+        2,
+        4,
+        8
+      ],
+      "checkerRows": [
+        480,
+        800
+      ],
+      "bottomGrayRows": [
+        800,
+        1080
+      ],
+      "bottomGrayValues": [
+        192,
+        208,
+        224,
+        232,
+        240,
+        248,
+        252,
+        255
+      ]
+    }
+  },
+  "h264_motion1080": {
+    "stream": {
+      "width": 1920,
+      "height": 1080,
+      "color_range": "tv",
+      "color_space": "bt709",
+      "r_frame_rate": "60/1"
+    },
+    "sha256": "5fd006748f102fee13c5f2ed9165352332b96d124f359af39166e57108fa3adf",
+    "csdSha256": "bad90d457bc275282f95268fc2a08bc1a868987b95ae0a2028a8f1e0dae520e7",
+    "purpose": "synthetic_1080p60_motion_decoder_stress",
+    "durationSeconds": 3,
+    "physicalDisplayVerdict": "not_measured"
+  }
+}

@@ -19,12 +19,13 @@ class HomeConnectionChoiceTest {
         val app = RuntimeEnvironment.getApplication()
         app.getSharedPreferences("diplay", 0).edit().clear().commit()
         app.getSharedPreferences("xcertplay_airplay", 0).edit().clear().commit()
-        CarPlayBackgroundSession.clear()
+        BackgroundSessionFixture.clear()
         // A session exists, but the last selected transport is wired.
         var stops = 0
         val stop: ((() -> Unit) -> Unit) = { stops++; it() }
-        ReflectionHelpers.setField(CarPlayBackgroundSession, "stopAction", stop)
+        BackgroundSessionFixture.storeStop(stop)
         AirPlayPersistence.saveWirelessEnabled(app, false)
+        AirPlayPersistence.saveWirelessHotspotMode(app,com.shilapi.xcertplay.orchestration.WirelessHotspotMode.WIFI_P2P)
         val activity = Robolectric.buildActivity(DiPlayActivity::class.java).get()
         activity.setTheme(android.R.style.Theme_Material_NoActionBar)
         try {
@@ -34,13 +35,16 @@ class HomeConnectionChoiceTest {
             ReflectionHelpers.callInstanceMethod<Unit>(activity, "home",
                 ReflectionHelpers.ClassParameter(LinearLayout::class.java, LinearLayout(activity)))
             ReflectionHelpers.getField<Button>(activity, "connectButton").performClick()
-            assertEquals("connection", ReflectionHelpers.getField<String>(activity, "page"))
+            assertTrue("Wireless prerequisites must be shown before replacing the wired session",
+                org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog()?.isShowing==true)
+            assertEquals("home",ReflectionHelpers.getField<String>(activity,"page"))
+            assertFalse(AirPlayPersistence.loadWirelessEnabled(app))
             assertNull(shadowOf(activity).nextStartedActivity)
             assertTrue(CarPlayBackgroundSession.hasSession())
             assertEquals(0, stops)
         } finally {
             activity.finish()
-            CarPlayBackgroundSession.clear()
+            BackgroundSessionFixture.clear()
             app.getSharedPreferences("xcertplay_airplay", 0).edit().clear().commit()
         }
     }

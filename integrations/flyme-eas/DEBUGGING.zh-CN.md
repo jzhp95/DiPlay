@@ -1,6 +1,6 @@
 # 车机连接与方控调试
 
-原来的 `build-apks.sh` / `build-apks.ps1` 会构建包含此功能的普通版和 UID 版，不需要另加构建参数。APK 文件名带本轮构建时间；请把实际测试的文件名与报告一起提供，便于定位代码版本。Flyme EAS 方控请优先复测已经在该车走通的 UID 版。
+`build-apks.sh` / `build-apks.ps1` 只构建 Flyme 测试版，包名为 `com.shihab.diplay.flyme.test`，不需要另加构建参数。APK 文件名为 `Apple-CarPlay-flyme-test-构建时间.apk`；请把实际文件名与报告一起提供。旧 `.flyme.hudtest` 包的私有设置不会自动迁移，保留旧安装及已有报告。
 
 ## 上车测试步骤
 

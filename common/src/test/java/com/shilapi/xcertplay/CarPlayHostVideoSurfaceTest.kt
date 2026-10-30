@@ -79,9 +79,9 @@ class CarPlayHostVideoSurfaceTest {
     }
 
     private fun field(activity: CarPlayHostActivity, name: String): Any? =
-        activity.javaClass.getDeclaredField(name).apply { isAccessible = true }.get(activity)
+        HostSessionFixture.getField<Any?>(activity, name)
 
     private fun set(activity: CarPlayHostActivity, name: String, value: Any) {
-        activity.javaClass.getDeclaredField(name).apply { isAccessible = true }.set(activity, value)
+        HostSessionFixture.setField(activity, name, value)
     }
 }

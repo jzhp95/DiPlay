@@ -32,11 +32,11 @@ class DefaultConnectionModeTest {
     @Before fun clearPreferences() {
         app.getSharedPreferences("diplay", 0).edit().clear().commit()
         app.getSharedPreferences("xcertplay_airplay", 0).edit().clear().commit()
-        CarPlayBackgroundSession.clear()
+        BackgroundSessionFixture.clear()
     }
 
     @After fun cleanup() {
-        CarPlayBackgroundSession.clear()
+        BackgroundSessionFixture.clear()
     }
 
     @Test fun initialLaunchUsesTheFixedDefaultInsteadOfTheLastManualTransport() {
@@ -51,7 +51,7 @@ class DefaultConnectionModeTest {
             val controller = Robolectric.buildActivity(DiPlayActivity::class.java, Intent(Intent.ACTION_MAIN)).create()
             val activity = controller.get()
             // Source-only test builds have no authentication assets; exercise the startup decision.
-            ReflectionHelpers.setField(activity, "setupError", null)
+            HostSessionFixture.setField(activity, "setupError", null)
             controller.start().resume()
             shadowOf(Looper.getMainLooper()).idle()
             assertEquals(expectedWireless, AirPlayPersistence.loadWirelessEnabled(app))
@@ -69,7 +69,7 @@ class DefaultConnectionModeTest {
         val controller = Robolectric.buildActivity(DiPlayActivity::class.java,
             Intent().putExtra("page", "settings")).create()
         val activity = controller.get()
-        ReflectionHelpers.setField(activity, "setupError", null)
+        HostSessionFixture.setField(activity, "setupError", null)
         controller.start().resume()
         shadowOf(Looper.getMainLooper()).idle()
         assertTrue(AirPlayPersistence.loadWirelessEnabled(app))

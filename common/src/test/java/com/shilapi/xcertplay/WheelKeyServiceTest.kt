@@ -48,7 +48,7 @@ class WheelKeyServiceTest {
     @After fun tearDown() {
         service.onDestroy()
         CarPlayPhoneState.end()
-        CarPlayBackgroundSession.clear()
+        BackgroundSessionFixture.clear()
     }
 
     private val knobs = mutableListOf<com.shilapi.xcertplay.airplay.AirPlayKnobState>()

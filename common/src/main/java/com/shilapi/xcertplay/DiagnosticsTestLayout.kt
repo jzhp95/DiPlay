@@ -12,11 +12,14 @@ import com.shilapi.xcertplay.host.R
 
 /** Navigation stays outside the independently scrolling detail pages, including narrow windows. */
 internal class DiagnosticsTestLayout(private val context: Context, private val palette: DiPlayPalette) {
-    enum class Page { WHEEL, MFI, UID, COLOR, VIDEO }
+    enum class Page { WHEEL, MFI, UID, COLOR, VIDEO;
+        val canonical get() = if (this == VIDEO) COLOR else this
+    }
     class Views(val root: LinearLayout, private val pages: Map<Page, ScrollView>,
         private val menu: Map<Page, Button>, private val palette: DiPlayPalette,
         private val picker: Button? = null, private val titles: Map<Page, Int> = emptyMap()) {
-        fun select(page: Page) {
+        fun select(requested: Page) {
+            val page = requested.canonical
             titles[page]?.let { title -> picker?.text = picker?.context?.getString(title) }
             pages.forEach { (item, view) -> view.visibility = if (item == page) View.VISIBLE else View.GONE }
             menu.forEach { (item, button) ->
@@ -28,9 +31,9 @@ internal class DiagnosticsTestLayout(private val context: Context, private val p
         }
     }
     fun build(wheel: ScrollView, mfi: ScrollView, selected: Page, changed: (Page) -> Unit, back: () -> Unit = {}, uid: ScrollView = UidTestLayout(context, palette).build().root, color: ScrollView = ScrollView(context), video: ScrollView = ScrollView(context)): Views {
-        val pages = linkedMapOf(Page.WHEEL to wheel, Page.MFI to mfi, Page.UID to uid, Page.COLOR to color, Page.VIDEO to video)
+        val pages = linkedMapOf(Page.WHEEL to wheel, Page.MFI to mfi, Page.UID to uid, Page.COLOR to color)
         val titles = linkedMapOf(Page.WHEEL to R.string.wheel_test_title, Page.MFI to R.string.diagnostics_mfi_title,
-            Page.UID to R.string.diagnostics_uid_title, Page.COLOR to R.string.color_test_title, Page.VIDEO to R.string.video_adapt_title)
+            Page.UID to R.string.diagnostics_uid_title, Page.COLOR to R.string.decoder_test_title)
         val compact = FlymeAutoStyle.compact(context)
         val root = LinearLayout(context).apply {
             orientation = if (compact) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
@@ -53,7 +56,7 @@ internal class DiagnosticsTestLayout(private val context: Context, private val p
             setPadding(0, gap, 0, gap)
             gravity = Gravity.CENTER
         }, LinearLayout.LayoutParams(-1, -2))
-        val menu = listOf(Page.WHEEL to R.string.wheel_test_title, Page.MFI to R.string.diagnostics_mfi_title, Page.UID to R.string.diagnostics_uid_title, Page.COLOR to R.string.color_test_title, Page.VIDEO to R.string.video_adapt_title).associate { (page, title) ->
+        val menu = listOf(Page.WHEEL to R.string.wheel_test_title, Page.MFI to R.string.diagnostics_mfi_title, Page.UID to R.string.diagnostics_uid_title, Page.COLOR to R.string.decoder_test_title).associate { (page, title) ->
             page to Button(context).apply {
                 setText(title)
                 setOnClickListener { changed(page) }

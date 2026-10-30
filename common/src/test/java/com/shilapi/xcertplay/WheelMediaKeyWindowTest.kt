@@ -40,7 +40,7 @@ class WheelMediaKeyWindowTest {
 
     @Before fun setUp() {
         CarPlayPhoneState.end()
-        CarPlayBackgroundSession.clear()
+        BackgroundSessionFixture.clear()
         host = Robolectric.buildActivity(CarPlayHostActivity::class.java).get()
         host.getSharedPreferences("diplay_wheel_map_zoom", Context.MODE_PRIVATE).edit().clear().commit()
         host.getSharedPreferences("xcertplay_airplay", Context.MODE_PRIVATE).edit().clear().commit()
@@ -54,12 +54,12 @@ class WheelMediaKeyWindowTest {
 
     @After fun tearDown() {
         for (name in listOf("teardownExecutor", "airPlayCommandExecutor")) {
-            (host.javaClass.getDeclaredField(name).apply { isAccessible = true }.get(host) as ExecutorService).shutdownNow()
+            (HostSessionFixture.getField<Any?>(host, name) as ExecutorService).shutdownNow()
         }
         (host.javaClass.getDeclaredField("mainHandler").apply { isAccessible = true }.get(host) as Handler)
             .removeCallbacksAndMessages(null)
         CarPlayPhoneState.end()
-        CarPlayBackgroundSession.clear()
+        BackgroundSessionFixture.clear()
         host.getSharedPreferences("xcertplay_airplay", Context.MODE_PRIVATE).edit().clear().commit()
     }
 
@@ -210,8 +210,7 @@ class WheelMediaKeyWindowTest {
         verify(controller, never()).sendMediaButton(anyInt())
     }
 
-    private fun field(name: String, value: Any?) = host.javaClass.getDeclaredField(name)
-        .apply { isAccessible = true }.set(host, value)
+    private fun field(name: String, value: Any?) = HostSessionFixture.setField(host, name, value)
 
     private fun key(code: Int, down: Boolean, repeat: Int = 0) =
         KeyEvent(1_000, 1_000, if (down) KeyEvent.ACTION_DOWN else KeyEvent.ACTION_UP,

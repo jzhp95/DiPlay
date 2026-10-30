@@ -70,7 +70,11 @@ class CarHotspotOffConnectTest {
         ReflectionHelpers.setField(home, "setupError", null)
         assertTrue(carHotspotOff(home))
         ReflectionHelpers.callInstanceMethod<Unit>(home, "connect", ReflectionHelpers.ClassParameter.from(Boolean::class.java, true))
-        val dialog = ShadowAlertDialog.getLatestAlertDialog()
+        val deadline=System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(5)
+        while(ShadowAlertDialog.getLatestAlertDialog()==null && System.nanoTime()<deadline){
+            Thread.yield();shadowOf(Looper.getMainLooper()).idle()
+        }
+        val dialog = requireNotNull(ShadowAlertDialog.getLatestAlertDialog())
         assertEquals(home.getString(R.string.car_hotspot_is_off), shadowOf(dialog).title)
 
         dialog.getButton(AlertDialog.BUTTON_NEUTRAL).performClick()

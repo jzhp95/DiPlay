@@ -292,7 +292,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         settingsCategory = savedInstanceState?.getString("settings_category")
             ?.let { runCatching { SettingsCategory.valueOf(it) }.getOrNull() }
             ?: SettingsCategory.OVERVIEW
-        page = if (returningToSession) "home" else savedInstanceState?.getString("page") ?: intent.getStringExtra("page")
+        page = if (returningToSession) "home" else savedInstanceState?.getString("page") ?: requestedPage(intent)
             ?: "home"
         render()
         handleWirelessRecovery()
@@ -321,7 +321,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             page = "home"; render(); openProjection(); return
         }
         // Home remains the default unless the driver explicitly enables launcher auto-entry.
-        page = intent.getStringExtra("page") ?: "home"; render()
+        page = requestedPage(intent) ?: "home"; render()
         handleWirelessRecovery()
         if (consumeBluetoothAutoConnectIntent(intent)) {
             if (initialLaunch) {
@@ -332,7 +332,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         }
     }
     private fun consumeBluetoothAutoConnectIntent(intent: Intent): Boolean {
-        val requested = intent.getBooleanExtra(PhoneBluetoothReceiver.EXTRA_AUTO_CONNECT, false)
+        val requested = intent.getStringExtra(PhoneBluetoothReceiver.EXTRA_AUTO_CONNECT)==PhoneBluetoothReceiver.launchToken
         intent.removeExtra(PhoneBluetoothReceiver.EXTRA_AUTO_CONNECT)
         return requested && DiPlayPreferences.connectOnPhoneBluetooth(this) &&
             DiPlayPreferences.phoneAddress(this) != null && setupError == null &&
@@ -416,7 +416,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             initialLaunch = false
             startCarHotspotOnLaunch()
             if (setupError == null && !CarPlayBackgroundSession.hasSession() &&
-                DiPlayPreferences.autoConnect(this) && intent.getStringExtra("page") == null) {
+                DiPlayPreferences.autoConnect(this) && requestedPage(intent) == null) {
                 handler.post { connect(DiPlayPreferences.autoConnectWireless(this)) }
             }
         }
@@ -1697,7 +1697,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                     AirPlayPersistence.loadNavigationAudioAttenuationDb(this))
             gainSlider.onSave = { db ->
                 AirPlayPersistence.saveNavigationAudioAttenuationDb(this, db)
-                CarPlayBackgroundSession.snapshot()?.sink?.setNavigationAttenuationDb(db)
+                DiPlaySessionService.liveRuntime?.currentConnection?.sink?.setNavigationAttenuationDb(db)
                 gainSlider.slider.contentDescription = gainTitle + ": " +
                     getString(R.string.settings_navigation_attenuation_value, db)
             }
@@ -2663,13 +2663,13 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
 
     // Saved without dropping CarPlay; the reconnect bar lets the driver choose when.
     private fun markReconnectNeeded() {
-        CarPlayBackgroundSession.snapshot()?.controller?.let(PendingReconnect::mark)
+        DiPlaySessionService.liveRuntime?.currentConnection?.controller?.let(PendingReconnect::mark)
         refreshReconnectBar()
     }
 
     private fun refreshReconnectBar() {
         reconnectBar?.visibility =
-            if (PendingReconnect.isPending(CarPlayBackgroundSession.snapshot()?.controller)) View.VISIBLE else View.GONE
+            if (PendingReconnect.isPending(DiPlaySessionService.liveRuntime?.currentConnection?.controller)) View.VISIBLE else View.GONE
     }
 
     private fun reconnectBar(): View = row().apply {
@@ -2948,7 +2948,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             val from = CarPlayDock.load(this)
             val to = docks[it]
             CarPlayDock.save(this, to)
-            val session = CarPlayBackgroundSession.snapshot()
+            val session = DiPlaySessionService.liveRuntime?.currentConnection
             val areas = session?.display?.viewAreas
             val target = to.edge?.let { areas?.withDock(it) }
             if (CarPlayDock.movesLive(from, to) && areas != null && target != null) {
@@ -4063,6 +4063,9 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
     private val FOCUS_RING get() = palette.focusRing
 
     companion object {
+        private val INTENT_PAGES=setOf("home","settings","connection","setup","wireless-recovery")
+        private fun requestedPage(intent:Intent):String?=intent.getStringExtra("page")?.takeIf{it in INTENT_PAGES}
+
         private fun alignedTextCentreY(
             view: TextView,
             text: CharSequence,

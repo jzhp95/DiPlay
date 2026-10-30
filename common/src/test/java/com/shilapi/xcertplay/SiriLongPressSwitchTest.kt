@@ -23,7 +23,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.util.ReflectionHelpers
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [29], qualifiers = "en-w1000dp-h700dp-land")
+@Config(sdk = [28], qualifiers = "en-w1000dp-h700dp-land")
 class SiriLongPressSwitchTest {
     private val context: Context = RuntimeEnvironment.getApplication()
     private val opened = mutableListOf<DiPlayActivity>()
@@ -75,19 +75,18 @@ class SiriLongPressSwitchTest {
         assertTrue(texts(screen).toString(), screen.getString(R.string.wheel_siri_key) in texts(screen))
     }
 
-    @Test fun aBydHeadUnitHasTheSwitchWithTheWheelKeys() {
+    @Test fun retiredVendorPackageDoesNotRestoreTheLongPressSwitch() {
         installBydSettingsPackage()
         val screen = vehicleSettings()
         val shown = texts(screen)
         val title = screen.getString(R.string.wheel_siri_long_press_only)
-        assertTrue(shown.toString(), title in shown)
-        assertEquals(shown.indexOf(screen.getString(R.string.wheel_siri_long_press_only_description)), shown.indexOf(title) + 1)
-        assertTrue(title in searchTitles(screen))
+        assertFalse(shown.toString(), title in shown)
+        assertFalse(title in searchTitles(screen))
     }
 
-    @Test fun aSwitchAlreadyOnStaysWhereItCanBeTurnedOff() {
+    @Test fun legacyPreferenceDoesNotRestoreTheRemovedVendorControl() {
         WheelZoomSettings.setSiriLongPressOnly(context, true)
         val screen = vehicleSettings()
-        assertTrue(texts(screen).toString(), screen.getString(R.string.wheel_siri_long_press_only) in texts(screen))
+        assertFalse(texts(screen).toString(), screen.getString(R.string.wheel_siri_long_press_only) in texts(screen))
     }
 }

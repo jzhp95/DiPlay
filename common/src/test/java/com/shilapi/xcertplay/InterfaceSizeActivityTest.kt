@@ -32,7 +32,7 @@ class InterfaceSizeActivityTest {
     @Config(sdk = [28], qualifiers = "en-sw800dp-w1280dp-h800dp-land-mdpi")
     fun fixedScalingKeepsFreshWindowDimensionsAndTheSelectedSettingsCategory() {
         val app = RuntimeEnvironment.getApplication()
-        CarPlayBackgroundSession.clear()
+        BackgroundSessionFixture.clear()
         InterfaceSize.save(app, 150)
         val controller = Robolectric.buildActivity(DiPlayActivity::class.java)
         val activity = controller.get()
@@ -94,7 +94,7 @@ class InterfaceSizeActivityTest {
     @LooperMode(LooperMode.Mode.PAUSED)
     fun aRealSystemDensityChangeRecreatesAtTheNewScaledDensityAndKeepsSettings() {
         val app = RuntimeEnvironment.getApplication()
-        CarPlayBackgroundSession.clear()
+        BackgroundSessionFixture.clear()
         InterfaceSize.save(app, 150)
         val controller = Robolectric.buildActivity(DiPlayActivity::class.java)
         val activity = controller.get()
@@ -136,7 +136,7 @@ class InterfaceSizeActivityTest {
 
     @Test
     fun scaledSettingsKeepTheChosenLanguageBeforeAndroid13() {
-        CarPlayBackgroundSession.clear()
+        BackgroundSessionFixture.clear()
         RuntimeEnvironment.getApplication().getSharedPreferences("diplay", 0).edit()
             .putString("app_language", "ar").commit()
         val controller = Robolectric.buildActivity(DiPlayActivity::class.java)

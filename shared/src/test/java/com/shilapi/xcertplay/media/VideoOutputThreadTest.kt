@@ -101,7 +101,7 @@ class VideoOutputThreadTest {
     }
 
     private fun mainDecoder(sink: AndroidMediaSink): Any =
-        checkNotNull(sink.field<Map<Int, Any>>("videoDecoders")[MAIN]) { "no main decoder" }
+        checkNotNull(sink.video.field<Map<Int, Any>>("videoDecoders")[MAIN]) { "no main decoder" }
 
     @Suppress("UNCHECKED_CAST")
     private fun <T> Any.field(name: String): T {

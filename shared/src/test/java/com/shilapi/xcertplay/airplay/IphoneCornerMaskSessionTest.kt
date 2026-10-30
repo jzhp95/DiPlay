@@ -14,7 +14,7 @@ class IphoneCornerMaskSessionTest {
 
     private fun session(native: Boolean, received: MutableList<Pair<ByteArray, Int>>): AirPlaySession =
         AirPlaySession(
-            socket = Socket(),
+            socket = LoopbackControlSocket(),
             config = AirPlayConfig("test", "02:00:00:00:00:02", "02:00:00:00:00:01", "366.0",
                 main = AirPlayDisplayConfig(1280, 720, mainDisplayCornerMasks = true,
                     useIphoneCornerMask = native)),

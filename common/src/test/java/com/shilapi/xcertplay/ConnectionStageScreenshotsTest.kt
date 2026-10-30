@@ -31,15 +31,15 @@ class ConnectionStageScreenshotsTest {
             Triple(900, 400, false), Triple(400, 800, true))) for (night in listOf(false, true)) {
             RuntimeEnvironment.setQualifiers("${if (rtl) "ar-rSA-ldrtl" else "zh-rCN"}-w${width}dp-h${height}dp-${if (night) "night" else "notnight"}-mdpi")
             RuntimeEnvironment.setFontScale(1.5f)
-            CarPlayBackgroundSession.clear()
+            BackgroundSessionFixture.clear()
             val activity = Robolectric.buildActivity(CarPlayHostActivity::class.java).get()
             try {
-                ReflectionHelpers.setField(activity, "appNight", night)
-                ReflectionHelpers.setField(activity, "wirelessEnabled", true)
+                HostSessionFixture.setField(activity, "appNight", night)
+                HostSessionFixture.setField(activity, "wirelessEnabled", true)
                 val root = ReflectionHelpers.callInstanceMethod<ViewGroup>(activity, "buildContentView")
                 val reporter = ReflectionHelpers.callInstanceMethod<(CarPlayStatus) -> Unit>(activity,
                     "createStatusReporter", ClassParameter.from(Int::class.javaPrimitiveType,
-                        ReflectionHelpers.getField<Int>(activity, "restartGeneration")))
+                        HostSessionFixture.getField<Int>(activity, "restartGeneration")))
                 reporter(CarPlayStatus.OpeningDataPaths)
                 repeat(3) {
                     forceLayout(root)
@@ -47,7 +47,7 @@ class ConnectionStageScreenshotsTest {
                         View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY))
                     root.layout(0, 0, width, height)
                 }
-                val phase = ReflectionHelpers.getField<TextView>(activity, "connectionStageView")
+                val phase = HostSessionFixture.getField<TextView>(activity, "connectionStageView")
                 assertEquals(activity.getString(R.string.connection_stage_current,
                     activity.getString(R.string.opening_usb_data_paths)), phase.text.toString())
                 assertEquals(View.VISIBLE, phase.visibility)
@@ -60,11 +60,11 @@ class ConnectionStageScreenshotsTest {
                     .outputStream().use { image.compress(Bitmap.CompressFormat.PNG, 100, it) }
                 image.recycle()
             } finally {
-                ReflectionHelpers.getField<AtomicBoolean>(activity, "shuttingDown").set(true)
-                ReflectionHelpers.getField<Handler>(activity, "mainHandler").removeCallbacksAndMessages(null)
-                ReflectionHelpers.getField<ExecutorService>(activity, "teardownExecutor").shutdownNow()
-                ReflectionHelpers.getField<ExecutorService>(activity, "airPlayCommandExecutor").shutdownNow()
-                CarPlayBackgroundSession.clear()
+                HostSessionFixture.getField<AtomicBoolean>(activity, "shuttingDown").set(true)
+                HostSessionFixture.getField<Handler>(activity, "mainHandler").removeCallbacksAndMessages(null)
+                HostSessionFixture.getField<ExecutorService>(activity, "teardownExecutor").shutdownNow()
+                HostSessionFixture.getField<ExecutorService>(activity, "airPlayCommandExecutor").shutdownNow()
+                BackgroundSessionFixture.clear()
             }
         }
     }

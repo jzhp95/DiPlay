@@ -27,9 +27,9 @@ class ExperimentalAudioOutputTest {
         audioType: String = "media", payload: Int = 96, block: (AndroidMediaSink, Any, MutableList<String>) -> Unit) {
         val reports = mutableListOf<String>()
         val sink = AndroidMediaSink(experimentalAudio = config, onAudioDiagnostic = reports::add)
-        val create = AndroidMediaSink::class.java.getDeclaredMethod("audioRenderer", AudioStreamId::class.java,
+        val create = AndroidAudioPipeline::class.java.getDeclaredMethod("audioRenderer", AudioStreamId::class.java,
             AudioFormat::class.java).apply { isAccessible = true }
-        val renderer = requireNotNull(create.invoke(sink, AudioStreamId(payload, audioType),
+        val renderer = requireNotNull(create.invoke(sink.audio, AudioStreamId(payload, audioType),
             AudioFormat(AudioCodecKind.LPCM, 48_000, 1, payload, audioType)))
         try {
             invoke(renderer, "createTrack")

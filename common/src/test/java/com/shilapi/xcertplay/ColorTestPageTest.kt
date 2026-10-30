@@ -1,5 +1,6 @@
 package com.shilapi.xcertplay
 
+import com.shilapi.xcertplay.host.R
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.view.View
@@ -33,7 +34,7 @@ class ColorTestPageTest {
             val activity = controller.get()
             try {
                 val buttons = all(activity.window.decorView).filterIsInstance<Button>().toList()
-                if (width >= 600) buttons.single { it.text == "画面颜色" }.performClick()
+                if (width >= 600) buttons.single { it.text == "解码测试" }.performClick()
                 else {
                     buttons.single { it.text == "方控测试" && it.visibility == View.VISIBLE }.performClick()
                     ShadowAlertDialog.getLatestAlertDialog().listView.performItemClick(null, 3, 3L)
@@ -43,6 +44,8 @@ class ColorTestPageTest {
                 root.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(800, View.MeasureSpec.EXACTLY))
                 root.layout(0, 0, width, 800)
                 assertTrue(all(page.root).filterIsInstance<Button>().any { it.text == "开始／继续测试" })
+                val automatic = all(page.root).filterIsInstance<Button>().single { it.text == activity.getString(R.string.video_auto_start) }
+                assertTrue("Automatic start must be visible without scrolling", automatic.getGlobalVisibleRect(android.graphics.Rect()))
                 assertFalse(page.run.rendered)
                 assertTrue(page.run.results.isEmpty())
                 val settings = CarPlayPicture.preferences(activity).all.toMap()
@@ -67,6 +70,17 @@ class ColorTestPageTest {
                 assertFalse(page.run.rendered)
                 assertEquals(settings, CarPlayPicture.preferences(activity).all)
             } finally { controller.pause().stop().destroy() }
+        }
+    }
+    @Test fun nativeClarityAndMotionAssetsAreOfflineAndHaveAvcConfiguration() {
+        val assets = RuntimeEnvironment.getApplication().assets
+        val manifest = org.json.JSONObject(assets.open("color-test/decoder-reference-manifest.json").bufferedReader().readText())
+        for (name in listOf("h264_clarity1080", "h264_motion1080")) {
+            val stream = manifest.getJSONObject(name).getJSONObject("stream")
+            assertEquals(1920, stream.getInt("width")); assertEquals(1080, stream.getInt("height"))
+            assertEquals("60/1", stream.getString("r_frame_rate"))
+            assets.openFd("color-test/$name.mp4").use { assertTrue(it.length > 1000) }
+            assertEquals(1, assets.open("color-test/$name.csd").use { it.read() })
         }
     }
     @Test fun fixturesCanBeReadOfflineAndContainBothCodecConfigurationTypes() {

@@ -19,9 +19,9 @@ class WheelTestActivityTest {
     @Test fun aLiveCarPlaySessionRequiresAnExplicitDisconnectChoice() {
         var stops = 0
         val owner = CarPlayBackgroundSession
-        val previous = ReflectionHelpers.getField<Any?>(owner, "stopAction")
+        val previous = DiPlaySessionService.liveRuntime
         val stopAction: ((() -> Unit) -> Unit) = { stops++ }
-        ReflectionHelpers.setField(owner, "stopAction", stopAction)
+        BackgroundSessionFixture.storeStop(stopAction)
         val activity = Robolectric.buildActivity(WheelTestActivity::class.java).setup()
         try {
             val screen = activity.get()
@@ -34,7 +34,7 @@ class WheelTestActivityTest {
             assertFalse(probe.snapshot().running)
         } finally {
             activity.pause().stop().destroy()
-            ReflectionHelpers.setField(owner, "stopAction", previous)
+            DiPlaySessionService.liveRuntime=previous
         }
     }
 
@@ -153,10 +153,10 @@ class WheelTestActivityTest {
 
     @Test fun changingToMfiInvalidatesAPendingDisconnectAndStart() {
         val owner = CarPlayBackgroundSession
-        val previous = ReflectionHelpers.getField<Any?>(owner, "stopAction")
+        val previous = DiPlaySessionService.liveRuntime
         var completion: (() -> Unit)? = null
         val stopAction: ((() -> Unit) -> Unit) = { completion = it }
-        ReflectionHelpers.setField(owner, "stopAction", stopAction)
+        BackgroundSessionFixture.storeStop(stopAction)
         val activity = Robolectric.buildActivity(WheelTestActivity::class.java).setup()
         try {
             val screen = activity.get()
@@ -169,12 +169,12 @@ class WheelTestActivityTest {
             org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
             assertNotNull("测试应等待现有 CarPlay 会话释放", completion)
             menu(screen, "MFi 认证测试").performClick()
-            ReflectionHelpers.setField(owner, "stopAction", null)
+            BackgroundSessionFixture.clear()
             completion!!.invoke()
             assertFalse("菜单已切换时，延迟完成回调不能重新开启方控焦点", probe.snapshot().running)
         } finally {
             activity.pause().stop().destroy()
-            ReflectionHelpers.setField(owner, "stopAction", previous)
+            DiPlaySessionService.liveRuntime=previous
         }
     }
 

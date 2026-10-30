@@ -37,7 +37,7 @@ class WheelKeyServiceReportTest {
 
     @After fun tearDown() {
         service.onDestroy()
-        CarPlayBackgroundSession.clear()
+        BackgroundSessionFixture.clear()
         WheelKeyLog.reset()
     }
 
@@ -71,11 +71,12 @@ class WheelKeyServiceReportTest {
 
     @Test fun aKeyDiPlayKeepsIsListedWithWhatItDid() {
         service.mapRoute = { "map" }
-        WheelZoomSettings.setEnabled(service, true)
-        WheelZoomSettings.assign(service, WheelZoomSettings.Role.MODE, WheelKey(KeyEvent.KEYCODE_F1, 0, "?"))
+        WheelZoomSettings.setSiriKey(service,true)
+        service.session={"phone"};service.requestSiri={true}
+        WheelZoomSettings.assign(service, WheelZoomSettings.Role.SIRI, WheelKey(KeyEvent.KEYCODE_F1, 0, "?"))
         assertTrue(press(KeyEvent.KEYCODE_F1))
         assertEquals(
-            listOf("wheel key service connected", "zoom mode on", "key 131/0 device 7 kept"),
+            listOf("wheel key service connected", "Siri key sent=true", "key 131/0 device 7 kept"),
             entries(),
         )
         assertTrue(report().first(), report().first().contains(" presses=1 kept=1 leftToHeadUnit=0 "))
@@ -181,6 +182,6 @@ class WheelKeyServiceReportTest {
         assertTrue(lines[serviceLine + 1], lines[serviceLine + 1].startsWith("Wheel keys since Apple CarPlay started: presses=1 "))
         assertTrue(lines[serviceLine + 2], lines[serviceLine + 2].endsWith("  wheel key service connected"))
         assertTrue(lines[serviceLine + 3], lines[serviceLine + 3].endsWith("  key 137/0 device 7 left to the head unit"))
-        assertEquals("", lines[serviceLine + 4])
+        assertTrue(lines[serviceLine+4].startsWith("Flyme EAS (source 36)"))
     }
 }

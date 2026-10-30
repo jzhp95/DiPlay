@@ -34,7 +34,7 @@ class AppUpdateRemovedTest {
             controller.setup() // Old versions read the cached release during onCreate.
             val content = render(activity, "home")
             assertFalse(texts(content).contains("Update available"))
-            assertTrue(texts(content).contains(activity.getString(R.string.settings)))
+            assertTrue(texts(activity.window.decorView).contains(activity.getString(R.string.settings)))
         } finally {
             preferences.edit().clear().commit()
             controller.pause().stop().destroy()

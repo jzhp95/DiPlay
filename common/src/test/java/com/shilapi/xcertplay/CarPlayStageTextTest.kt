@@ -27,18 +27,18 @@ class CarPlayStageTextTest {
     private lateinit var activity: CarPlayHostActivity
 
     @Before fun setUp() {
-        CarPlayBackgroundSession.clear()
+        BackgroundSessionFixture.clear()
         activity = Robolectric.buildActivity(CarPlayHostActivity::class.java).get()
-        ReflectionHelpers.setField(activity, "stageStatusView", TextView(activity))
-        ReflectionHelpers.setField(activity, "connectionStageView", TextView(activity))
+        HostSessionFixture.setField(activity, "stageStatusView", TextView(activity))
+        HostSessionFixture.setField(activity, "connectionStageView", TextView(activity))
     }
 
     @After fun tearDown() {
-        ReflectionHelpers.getField<AtomicBoolean>(activity, "shuttingDown").set(true)
-        ReflectionHelpers.getField<Handler>(activity, "mainHandler").removeCallbacksAndMessages(null)
-        ReflectionHelpers.getField<ExecutorService>(activity, "teardownExecutor").shutdownNow()
-        ReflectionHelpers.getField<ExecutorService>(activity, "airPlayCommandExecutor").shutdownNow()
-        CarPlayBackgroundSession.clear()
+        HostSessionFixture.getField<AtomicBoolean>(activity, "shuttingDown").set(true)
+        HostSessionFixture.getField<Handler>(activity, "mainHandler").removeCallbacksAndMessages(null)
+        HostSessionFixture.getField<ExecutorService>(activity, "teardownExecutor").shutdownNow()
+        HostSessionFixture.getField<ExecutorService>(activity, "airPlayCommandExecutor").shutdownNow()
+        BackgroundSessionFixture.clear()
     }
 
     @Test @Config(qualifiers = "en") fun englishStages() = stagesFollowTheConnection()
@@ -65,19 +65,19 @@ class CarPlayStageTextTest {
     private fun assertStage(expected: Int, status: CarPlayStatus) {
         val reporter = ReflectionHelpers.callInstanceMethod<(CarPlayStatus) -> Unit>(
             activity, "createStatusReporter",
-            ClassParameter.from(Int::class.javaPrimitiveType, ReflectionHelpers.getField<Int>(activity, "restartGeneration")),
+            ClassParameter.from(Int::class.javaPrimitiveType, HostSessionFixture.getField<Int>(activity, "restartGeneration")),
         )
         reporter(status)
-        val shown = ReflectionHelpers.getField<TextView>(activity, "stageStatusView").text.toString()
+        val shown = HostSessionFixture.getField<TextView>(activity, "stageStatusView").text.toString()
         assertEquals(status.toString(), activity.getString(expected), shown)
     }
 
     @Test fun actualStatusReporterPublishesSpecificPhaseAndRejectsAnOldController() {
-        val generation = ReflectionHelpers.getField<Int>(activity, "restartGeneration")
+        val generation = HostSessionFixture.getField<Int>(activity, "restartGeneration")
         fun reporter(value: Int) = ReflectionHelpers.callInstanceMethod<(CarPlayStatus) -> Unit>(
             activity, "createStatusReporter", ClassParameter.from(Int::class.javaPrimitiveType, value))
         reporter(generation)(CarPlayStatus.OpeningDataPaths)
-        val caption = ReflectionHelpers.getField<TextView>(activity, "connectionStageView")
+        val caption = HostSessionFixture.getField<TextView>(activity, "connectionStageView")
         assertEquals(activity.getString(R.string.connection_stage_current,
             activity.getString(R.string.opening_usb_data_paths)), caption.text.toString())
         reporter(generation - 1)(CarPlayStatus.MfiReady)
@@ -85,13 +85,13 @@ class CarPlayStageTextTest {
             activity.getString(R.string.opening_usb_data_paths)), caption.text.toString())
     }
     @Test fun protocolProgressUpdatesTheRealCaptionButAnOldControllerCannotOverwriteIt() {
-        val generation = ReflectionHelpers.getField<Int>(activity, "restartGeneration")
+        val generation = HostSessionFixture.getField<Int>(activity, "restartGeneration")
         fun listener(value: Int) = ReflectionHelpers.callInstanceMethod<com.shilapi.xcertplay.airplay.AirPlaySessionListener>(
             activity, "createSessionListener", ClassParameter.from(Int::class.javaPrimitiveType, value))
         val active = listener(generation)
         active.onDebugLog("iap2 authentication accepted")
         org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
-        val caption = ReflectionHelpers.getField<TextView>(activity, "connectionStageView")
+        val caption = HostSessionFixture.getField<TextView>(activity, "connectionStageView")
         val authenticated = activity.getString(R.string.connection_stage_current,
             activity.getString(R.string.connection_stage_authenticated))
         assertEquals(authenticated, caption.text.toString())
@@ -104,7 +104,7 @@ class CarPlayStageTextTest {
         listener(generation - 1).onDebugLog("airplay rx RECORD / cseq=1 body=0")
         org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
         assertEquals(media, caption.text.toString())
-        ReflectionHelpers.getField<AtomicBoolean>(activity, "shuttingDown").set(true)
+        HostSessionFixture.getField<AtomicBoolean>(activity, "shuttingDown").set(true)
         active.onDebugLog("airplay rx RECORD / cseq=6 body=0")
         org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
         assertEquals(media, caption.text.toString())

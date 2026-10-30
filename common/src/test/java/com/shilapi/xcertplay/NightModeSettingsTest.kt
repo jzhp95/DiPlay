@@ -20,7 +20,7 @@ class NightModeSettingsTest {
         val activity = controller.get()
         activity.getSharedPreferences("xcertplay_airplay", 0).edit()
             .putString("app_appearance", "light").putString("carplay_night_mode", "schedule").commit()
-        CarPlayBackgroundSession.clear()
+        BackgroundSessionFixture.clear()
         controller.setup().visible()
         try {
             val retired = listOf(R.string.settings_app_appearance, R.string.carplay_night_mode,
@@ -42,7 +42,7 @@ class NightModeSettingsTest {
             assertEquals(CarPlayNightMode.SYSTEM, AirPlayPersistence.loadCarPlayNightMode(activity))
         } finally {
             controller.pause().stop().destroy()
-            CarPlayBackgroundSession.clear()
+            BackgroundSessionFixture.clear()
             activity.getSharedPreferences("xcertplay_airplay", 0).edit().clear().commit()
         }
     }

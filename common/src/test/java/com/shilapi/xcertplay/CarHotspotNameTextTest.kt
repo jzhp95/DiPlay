@@ -65,10 +65,13 @@ class CarHotspotNameTextTest {
         if (view is ViewGroup) for (index in 0 until view.childCount) yieldAll(descendants(view.getChildAt(index)))
     }
 
-    @Test fun theHomePageDoesNotQuoteAHotspotNameThatWasNeverSaved() {
+    @Test fun theHomePageUsesTheResolvedSystemProfileBeforeAnyManualEdit() {
         val home = open()
         val shown = texts(home)
-        assertTrue(shown.toString(), home.getString(R.string.hotspot_details_off) in shown)
+        val name=AirPlayPersistence.loadManualHotspotSsid(home)
+        val expected=if(name.isBlank())home.getString(R.string.hotspot_details_off)
+            else home.getString(R.string.msg_car_hotspot_off,name)
+        assertTrue(shown.toString(),expected in shown)
         assertFalse(shown.toString(), home.getString(R.string.msg_car_hotspot_off, "") in shown)
         assertFalse(shown.toString(), shown.any { "“”" in it })
     }

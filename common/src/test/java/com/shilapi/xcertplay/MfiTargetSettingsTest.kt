@@ -24,7 +24,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowAlertDialog
 import org.robolectric.util.ReflectionHelpers
 
-/** With the CH341 removed CarPlay cannot connect, so its own menu cannot switch back to Local (#696). */
+/** The overview no longer changes the provisioned authentication backend. */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28, 33], qualifiers = "en", manifest = Config.NONE)
 class MfiTargetSettingsTest {
@@ -37,44 +37,25 @@ class MfiTargetSettingsTest {
         activity = controller.get()
         activity.setTheme(android.R.style.Theme_Material_NoActionBar)
         activity.getSharedPreferences("xcertplay_airplay", 0).edit().clear().commit()
-        CarPlayBackgroundSession.clear()
+        BackgroundSessionFixture.clear()
         controller.setup().visible()
     }
 
     @After fun tearDown() {
         controller.pause().stop().destroy()
-        CarPlayBackgroundSession.clear()
+        BackgroundSessionFixture.clear()
     }
 
-    @Test fun connectionSettingsSwitchFromCh341BackToLocalWithoutConnecting() {
-        AirPlayPersistence.saveMfiTarget(activity, MfiTarget.USB_CH341)
-        renderConnection()
-        assertEquals("${activity.getString(R.string.mfi_certificate_signing_target)} · ${activity.getString(R.string.usb_ch341)}",
-            targetButton().text.toString())
-        assertTrue(views(page).filterIsInstance<TextView>().any {
-            it.text == activity.getString(R.string.settings_mfi_target_description)
-        })
-
-        targetButton().performClick()
-        val dialog = ShadowAlertDialog.getLatestAlertDialog()
-        assertEquals(activity.getString(R.string.local_offline), dialog.listView.adapter.getItem(1))
-        dialog.listView.performItemClick(null, 1, 1)
-        dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
-        shadowOf(Looper.getMainLooper()).idle()
-
-        assertEquals(MfiTarget.LOCAL, AirPlayPersistence.loadMfiTarget(activity))
-        assertEquals("${activity.getString(R.string.mfi_certificate_signing_target)} · ${activity.getString(R.string.local_offline)}",
-            targetButton().text.toString())
-    }
-
-    @Test fun expertTargetsSetOutsideTheTwoChoicesAreNotOverwritten() {
-        AirPlayPersistence.saveMfiTarget(activity, MfiTarget.REMOTE)
-        renderConnection()
-
-        assertTrue(views(page).filterIsInstance<Button>().none {
-            it.text.startsWith(activity.getString(R.string.mfi_certificate_signing_target))
-        })
-        assertEquals(MfiTarget.REMOTE, AirPlayPersistence.loadMfiTarget(activity))
+    @Test fun overviewKeepsExistingAuthenticationChoiceWithoutOfferingTheRetiredSelector() {
+        for(target in listOf(MfiTarget.USB_CH341,MfiTarget.LOCAL,MfiTarget.AUTO,MfiTarget.REMOTE)){
+            AirPlayPersistence.saveMfiTarget(activity,target)
+            renderConnection()
+            assertTrue(views(page).filterIsInstance<Button>().none {
+                it.text.startsWith(activity.getString(R.string.mfi_certificate_signing_target))
+            })
+            assertEquals(target,AirPlayPersistence.loadMfiTarget(activity))
+            assertTrue(!CarPlayBackgroundSession.hasSession())
+        }
     }
 
     private fun renderConnection() {

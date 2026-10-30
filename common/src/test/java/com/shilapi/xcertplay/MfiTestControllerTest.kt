@@ -68,10 +68,10 @@ class MfiTestControllerTest {
 
     @Test fun anActiveCarPlaySessionBlocksProbeWithoutRequestingPermissionOrDisconnecting() {
         val owner = CarPlayBackgroundSession
-        val previous = ReflectionHelpers.getField<Any?>(owner, "stopAction")
+        val previous = DiPlaySessionService.liveRuntime
         var disconnected = false
         val stopAction: ((() -> Unit) -> Unit) = { disconnected = true }
-        ReflectionHelpers.setField(owner, "stopAction", stopAction)
+        BackgroundSessionFixture.storeStop(stopAction)
         val context = ProbeContext(temporary.newFolder())
         val controller = MfiTestController(context) {}
         try {
@@ -81,7 +81,7 @@ class MfiTestControllerTest {
             assertFalse(disconnected)
         } finally {
             controller.close()
-            ReflectionHelpers.setField(owner, "stopAction", previous)
+            DiPlaySessionService.liveRuntime=previous
         }
     }
 
@@ -158,6 +158,15 @@ class MfiTestControllerTest {
         override fun registerReceiver(receiver: BroadcastReceiver?, filter: IntentFilter): Intent? {
             if (receiver != null) receivers[receiver] = filter
             return super.registerReceiver(receiver, filter)
+        }
+        override fun registerReceiver(receiver:BroadcastReceiver?,filter:IntentFilter,permission:String?,handler:android.os.Handler?):Intent? {
+            if(receiver!=null)receivers[receiver]=filter
+            if(permission!=null)assertEquals("${packageName}.USB_PERMISSION_RESULT",permission)
+            return super.registerReceiver(receiver,filter,permission,handler)
+        }
+        override fun registerReceiver(receiver:BroadcastReceiver?,filter:IntentFilter,flags:Int):Intent? {
+            if(receiver!=null)receivers[receiver]=filter
+            return super.registerReceiver(receiver,filter,flags)
         }
         override fun unregisterReceiver(receiver: BroadcastReceiver) {
             receivers.remove(receiver)

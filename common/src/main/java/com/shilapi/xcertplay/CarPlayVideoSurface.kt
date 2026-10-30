@@ -18,8 +18,8 @@ internal fun carPlayVideoSurfaceMode(
     directVideoOutput: Boolean = false,
     textureUnsafeDecoder: Boolean = false,
 ): CarPlayVideoSurfaceMode =
-    if (hardwareAccelerated && !smoothVideo && !directVideoOutput && !textureUnsafeDecoder) CarPlayVideoSurfaceMode.TEXTURE
-    else CarPlayVideoSurfaceMode.SURFACE
+    if(com.shilapi.xcertplay.media.VideoPlanResolver.surface(hardwareAccelerated,smoothVideo,directVideoOutput,textureUnsafeDecoder)==
+        com.shilapi.xcertplay.media.VideoOutput.TEXTURE)CarPlayVideoSurfaceMode.TEXTURE else CarPlayVideoSurfaceMode.SURFACE
 
 /** An installed video decoder, in MediaCodecList order. */
 internal data class VideoDecoderInfo(val name: String, val types: List<String>)

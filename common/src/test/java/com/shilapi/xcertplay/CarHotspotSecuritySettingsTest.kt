@@ -27,11 +27,12 @@ import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowAlertDialog
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [29], manifest = Config.NONE)
+@Config(sdk = [28], manifest = Config.NONE)
 class CarHotspotSecuritySettingsTest {
     private val app get() = RuntimeEnvironment.getApplication()
     private lateinit var activity: Activity
     private lateinit var ui: CarHotspotSettingsUi
+    private lateinit var fake:CarHotspotOperations
     private val profile = CarHotspotProfile("Car hotspot", "12345678", ManualHotspotSecurity.WPA2)
 
     @Before fun setup() {
@@ -40,7 +41,7 @@ class CarHotspotSecuritySettingsTest {
         activity = Robolectric.buildActivity(Activity::class.java).setup().get()
         activity.setTheme(android.R.style.Theme_Material_NoActionBar)
         CarHotspotProfiles.saveSaved(app, profile)
-        val fake = object : CarHotspotOperations {
+        fake = object : CarHotspotOperations {
             override fun read(): CarHotspotProfile? = null
             override fun apply(profile: CarHotspotProfile, cancelled: () -> Boolean) =
                 CarHotspotControlResult(!cancelled(), !cancelled(), profile, "test")
@@ -60,6 +61,7 @@ class CarHotspotSecuritySettingsTest {
     @Test fun editingCredentialsPreservesSavedWpa3Modes() {
         for (mode in listOf(ManualHotspotSecurity.WPA3, ManualHotspotSecurity.WPA3_TRANSITION)) {
             CarHotspotProfiles.saveSaved(app, profile.copy(security = mode))
+            ui.close();ui=CarHotspotSettingsUi(activity,changed={},redraw={},controller=fake)
             val card = card()
             editHotspotDraft(activity, card, R.string.hotspot_password, "87654321")
             button(card, R.string.settings_hotspot_save).performClick()
@@ -68,21 +70,21 @@ class CarHotspotSecuritySettingsTest {
         }
     }
 
-    @Test fun selectingWpa3SavesOnlyWhenStartupOptionsAreConfirmed() {
-        val dialog = startupOptions()
-        chooseSecurity(dialog, "WPA3")
-        assertEquals(ManualHotspotSecurity.WPA2, AirPlayPersistence.loadManualHotspotSecurity(app))
-        dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
-        assertEquals(ManualHotspotSecurity.WPA3, AirPlayPersistence.loadManualHotspotSecurity(app))
+    @Test fun selectingWpa3RequiresAnExplicitCardSave() {
+        val root=card();chooseSecurity(root,"WPA3")
+        assertEquals(profile,CarHotspotProfiles.saved(app))
+        button(root,R.string.settings_hotspot_save).performClick()
+        assertEquals(ManualHotspotSecurity.WPA3,CarHotspotProfiles.saved(app)?.security)
     }
-
-    @Test fun cancellingStartupOptionsDoesNotSaveTheSecurityChoice() {
-        val dialog = startupOptions()
-        chooseSecurity(dialog, "WPA3")
-        dialog.getButton(AlertDialog.BUTTON_NEGATIVE).performClick()
-        assertEquals(profile, CarHotspotProfiles.saved(app))
+    @Test fun cancellingTheSecurityChoiceLeavesTheProfileUnchanged() {
+        val root=card()
+        descendants(root).filterIsInstance<Button>().single{it.text.startsWith(activity.getString(R.string.settings_hotspot_security)+" · ")}.performClick()
+        val choice=ShadowAlertDialog.getLatestAlertDialog()
+        choice.listView.performItemClick(null,3,3)
+        choice.getButton(AlertDialog.BUTTON_NEGATIVE).performClick()
+        button(root,R.string.settings_hotspot_save).performClick()
+        assertEquals(profile,CarHotspotProfiles.saved(app))
     }
-
     @Test fun emptyPasswordUsesOpenAndRetypingBeforeSavePreservesTheProtectedMode() {
         CarHotspotProfiles.saveSaved(app, profile.copy(security = ManualHotspotSecurity.WPA3))
         val card = card()
@@ -91,6 +93,7 @@ class CarHotspotSecuritySettingsTest {
         button(card, R.string.settings_hotspot_save).performClick()
         assertEquals(ManualHotspotSecurity.WPA3, AirPlayPersistence.loadManualHotspotSecurity(app))
         editHotspotDraft(activity, card, R.string.hotspot_password, "")
+        chooseSecurity(card,activity.getString(R.string.open))
         button(card, R.string.settings_hotspot_save).performClick()
         assertEquals(ManualHotspotSecurity.OPEN, AirPlayPersistence.loadManualHotspotSecurity(app))
         assertEquals("", AirPlayPersistence.loadManualHotspotPassphrase(app))
@@ -103,41 +106,15 @@ class CarHotspotSecuritySettingsTest {
         button(card, R.string.settings_hotspot_save).performClick()
         assertEquals(profile, CarHotspotProfiles.saved(app))
         assertEquals("eth0.3", AirPlayPersistence.loadManualHotspotInterface(app))
-        val cancelled = interfaceOptions(card)
-        inputs(cancelled.window!!.decorView).single().setText("eth0.4")
-        cancelled.getButton(AlertDialog.BUTTON_NEGATIVE).performClick()
-        assertEquals("eth0.3", AirPlayPersistence.loadManualHotspotInterface(app))
-        val edited = interfaceOptions(card)
-        inputs(edited.window!!.decorView).single().setText("  eth0.4  ")
-        edited.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
-        shadowOf(Looper.getMainLooper()).idle()
-        assertEquals("eth0.4", AirPlayPersistence.loadManualHotspotInterface(app))
-        val automatic = interfaceOptions(card)
-        inputs(automatic.window!!.decorView).single().setText("")
-        automatic.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
-        shadowOf(Looper.getMainLooper()).idle()
-        assertEquals("", AirPlayPersistence.loadManualHotspotInterface(app))
-        val updated = card()
-        assertTrue(descendants(updated).filterIsInstance<Button>().any {
-            it.text == activity.getString(R.string.settings_hotspot_interface_short) + " · " +
-                activity.getString(R.string.settings_hotspot_interface_auto)
+        assertFalse(descendants(card).filterIsInstance<Button>().any{
+            it.text.startsWith(activity.getString(R.string.settings_hotspot_interface_short)+" · ")
         })
+        assertEquals("eth0.3",AirPlayPersistence.loadManualHotspotInterface(app))
     }
 
     private fun card() = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL; ui.build(this) }
-    private fun startupOptions(): AlertDialog {
-        button(card(), R.string.settings_hotspot_start).performClick()
-        shadowOf(Looper.getMainLooper()).idle()
-        return ShadowAlertDialog.getLatestAlertDialog()
-    }
-    private fun interfaceOptions(card: View): AlertDialog {
-        descendants(card).filterIsInstance<Button>().single {
-            it.text.startsWith(activity.getString(R.string.settings_hotspot_interface_short) + " · ")
-        }.performClick()
-        return ShadowAlertDialog.getLatestAlertDialog()
-    }
-    private fun chooseSecurity(dialog: AlertDialog, name: String) {
-        descendants(dialog.window!!.decorView).filterIsInstance<Button>().single {
+    private fun chooseSecurity(root: View, name: String) {
+        descendants(root).filterIsInstance<Button>().single {
             it.text.startsWith(activity.getString(R.string.settings_hotspot_security) + " · ")
         }.performClick()
         val choice = ShadowAlertDialog.getLatestAlertDialog()

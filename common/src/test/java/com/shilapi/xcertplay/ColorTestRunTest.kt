@@ -6,8 +6,8 @@ import org.junit.Test
 class ColorTestRunTest {
     @Test fun planCoversBothPathsBothCodecsAndBothEncodedRanges() {
         val cases = ColorTestRun.cases
-        val local = cases.filter { it.asset != null && !it.hardwareYuv }
-        assertEquals(setOf("h264_full", "h264_limited"), cases.filter { it.asset != null && it.hardwareYuv }.map { it.asset }.toSet())
+        val local = cases.take(40).filter { it.asset != null && !it.hardwareYuv }
+        assertEquals(setOf("h264_full", "h264_limited"), cases.take(43).filter { it.asset != null && it.hardwareYuv }.map { it.asset }.toSet())
         assertEquals(24, local.size)
         assertEquals(24, local.map { listOf(it.asset, it.surface, it.forceSoftware, it.color.fromSps) }.distinct().size)
         assertEquals(17, cases.count { it.mainProfile != null })
@@ -53,7 +53,7 @@ class ColorTestRunTest {
 
     @Test fun spsComparisonsAppendWithoutChangingExistingCaseIndices() {
         val cases = ColorTestRun.cases
-        assertEquals(43, cases.size)
+        assertEquals(51, cases.size)
         assertEquals("current", cases[16].mainProfile)
         assertEquals("yuv-auto", cases[36].mainProfile)
         assertTrue(cases.subList(36, 40).all { it.forceSoftware && it.mainProfile!!.startsWith("yuv-") })

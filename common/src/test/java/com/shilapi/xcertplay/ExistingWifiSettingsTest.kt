@@ -7,6 +7,7 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.view.View
 import android.view.ViewGroup
+import com.shilapi.xcertplay.host.R
 import com.shilapi.xcertplay.network.CarHotspotSettings
 import com.shilapi.xcertplay.orchestration.CarPlayRuntimeConfig
 import com.shilapi.xcertplay.orchestration.CarPlayTransport
@@ -52,19 +53,23 @@ class ExistingWifiSettingsTest {
 
     @Test fun cancellingSetupPreservesModeAndSavingValidCredentialsSelectsLan() {
         AirPlayPersistence.saveWirelessHotspotMode(app, WirelessHotspotMode.WIFI_P2P)
-        controls().filterIsInstance<Button>().first { it.text.contains("Same LAN") }.performClick()
-        shadowOf(Looper.getMainLooper()).idle()
+        // Mode selection is independent of the credentials editor.
+        AirPlayPersistence.saveWirelessHotspotMode(app,WirelessHotspotMode.EXISTING_WIFI)
+        fun edit(){controls().filterIsInstance<Button>().single{
+            it.text==activity.getString(R.string.existing_wifi_details)
+        }.performClick();shadowOf(Looper.getMainLooper()).idle()}
+        edit()
         ShadowAlertDialog.getLatestAlertDialog().getButton(AlertDialog.BUTTON_NEGATIVE).performClick()
-        assertEquals(WirelessHotspotMode.WIFI_P2P, AirPlayPersistence.loadWirelessHotspotMode(app))
-        controls().filterIsInstance<Button>().first { it.text.contains("Same LAN") }.performClick()
-        shadowOf(Looper.getMainLooper()).idle()
-        val dialog = ShadowAlertDialog.getLatestAlertDialog()
+        assertEquals("",AirPlayPersistence.loadExistingWifiSsid(app))
+        assertEquals(WirelessHotspotMode.EXISTING_WIFI,AirPlayPersistence.loadWirelessHotspotMode(app))
+        edit()
+        val dialog=ShadowAlertDialog.getLatestAlertDialog()
         val fields = descendants(dialog.window!!.decorView).filterIsInstance<EditText>().toList()
         fields[0].setText(" Pocket ") // SSID whitespace is meaningful.
         fields[1].setText("short")
         dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
         assertTrue(dialog.isShowing)
-        assertEquals(WirelessHotspotMode.WIFI_P2P, AirPlayPersistence.loadWirelessHotspotMode(app))
+        assertEquals(WirelessHotspotMode.EXISTING_WIFI, AirPlayPersistence.loadWirelessHotspotMode(app))
         fields[1].setText("pocket-password")
         dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
         assertEquals(WirelessHotspotMode.EXISTING_WIFI, AirPlayPersistence.loadWirelessHotspotMode(app))

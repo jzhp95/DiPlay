@@ -26,24 +26,22 @@ class AutomaticVideoCleanupTest {
         context.getSharedPreferences("automatic_video_suite_v1", 0).edit().clear().commit()
     }
     @Test fun acknowledgementClearsTheCrossPageBarrierBeforeAdvancing() {
-        val id = AutomaticVideoSuite.begin(context); var done = 0
+        val id = java.util.UUID.randomUUID().toString(); var done = 0
         AutomaticVideoCleanup.await(context, id, { release = it }, { done++ })
-        assertTrue(AutomaticVideoSuite.read(context).getBoolean("cleanupPending"))
+        assertTrue(AutomaticVideoCleanup.blocked())
         assertEquals(0, done)
         release!!.invoke(); shadowOf(Looper.getMainLooper()).idle()
         assertFalse(AutomaticVideoCleanup.blocked())
-        assertTrue(AutomaticVideoSuite.read(context).getBoolean("cleanupConfirmed"))
+        assertFalse(AutomaticVideoCleanup.blocked())
         assertEquals(1, done)
     }
     @Test fun stalledReleaseInterruptsAndBlocksNewConnectionsUntilActualAcknowledgement() {
-        val id = AutomaticVideoSuite.begin(context)
+        val id = java.util.UUID.randomUUID().toString()
         AutomaticVideoCleanup.await(context, id, { release = it }, {})
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(11))
-        assertEquals("interrupted", AutomaticVideoSuite.read(context).getString("status"))
         assertTrue(AutomaticVideoCleanup.blocked())
-        assertThrows(IllegalStateException::class.java) { AutomaticVideoSuite.begin(context) }
+        assertThrows(IllegalStateException::class.java) { AutomaticVideoCleanup.await(context,"new",{}, {}) }
         release!!.invoke(); shadowOf(Looper.getMainLooper()).idle()
         assertFalse(AutomaticVideoCleanup.blocked())
-        assertEquals("interrupted", AutomaticVideoSuite.read(context).getString("status"))
     }
 }

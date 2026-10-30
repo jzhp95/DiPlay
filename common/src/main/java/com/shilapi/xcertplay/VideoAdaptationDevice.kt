@@ -32,17 +32,25 @@ internal object VideoAdaptationDevice {
             .put("physicalSizeBasis", "system_reported_dpi_not_measured_inches")
             .put("activeMode", display.mode.modeId).put("refreshRate", display.refreshRate).put("modes", modes)
     }
-    fun collect(context: Context, screen: JSONObject): JSONObject {
+    fun collect(context: Context, screen: JSONObject, progress: (JSONObject) -> Unit = {}): JSONObject {
+        val basic = JSONObject().put("manufacturer", Build.MANUFACTURER).put("model", Build.MODEL)
+            .put("hardware", Build.HARDWARE).put("board", Build.BOARD).put("android", Build.VERSION.RELEASE)
+            .put("api", Build.VERSION.SDK_INT).put("screen", screen).put("collectionIncomplete", true)
+        progress(JSONObject(basic.toString()))
+        val system = runCatching { DecoderSystemInformation.collect(context) }.getOrElse { JSONObject().put("error", it.javaClass.simpleName) }
+        basic.put("systemInformation", system); progress(JSONObject(basic.toString()))
         val missing = JSONArray()
         val codecs = JSONArray()
         runCatching {
             MediaCodecList(MediaCodecList.ALL_CODECS).codecInfos.filter { !it.isEncoder }.forEach { info ->
-                for (mime in info.supportedTypes.filter { it.equals(MediaFormat.MIMETYPE_VIDEO_AVC, true) || it.equals(MediaFormat.MIMETYPE_VIDEO_HEVC, true) }) {
+                for (mime in info.supportedTypes.filter { it.startsWith("video/", true) }) {
                     val entry = JSONObject().put("name", info.name).put("mime", mime)
                     try {
                         val cap = info.getCapabilitiesForType(mime)
                         val video = cap.videoCapabilities
-                        entry.put("colorFormats", JSONArray(cap.colorFormats.toList()))
+                        entry.put("maxSupportedInstances", cap.maxSupportedInstances)
+                            .put("adaptivePlayback", cap.isFeatureSupported(android.media.MediaCodecInfo.CodecCapabilities.FEATURE_AdaptivePlayback))
+                            .put("colorFormats", JSONArray(cap.colorFormats.toList()))
                             .put("profileLevels", JSONArray(cap.profileLevels.map { JSONObject().put("profile", it.profile).put("level", it.level) }))
                         if (video != null) entry.put("widthRange", video.supportedWidths.toString())
                             .put("heightRange", video.supportedHeights.toString()).put("fpsRange", video.supportedFrameRates.toString())
@@ -64,6 +72,7 @@ internal object VideoAdaptationDevice {
             }
         }.onFailure { missing.put("codec_enumeration:${it.javaClass.simpleName}") }
         if (codecs.length() == 0) missing.put("no_avc_hevc_capabilities")
+        basic.put("decoders", codecs); progress(JSONObject(basic.toString()))
         val gpu = runCatching { gpu() }.getOrElse {
             missing.put("gpu:${it.javaClass.simpleName}"); JSONObject().put("unavailable", it.javaClass.simpleName)
         }
@@ -76,12 +85,14 @@ internal object VideoAdaptationDevice {
             .put("abis", JSONArray(Build.SUPPORTED_ABIS.toList())).put("screen", screen)
             .put("availableProcessors", Runtime.getRuntime().availableProcessors())
             .put("memoryTotalBytes", memory.totalMem).put("memoryAvailableBytes", memory.availMem)
-            .put("gpu", gpu).put("decoders", codecs).put("thermal", thermal(context)).put("missing", missing)
+            .put("collectionIncomplete", false).put("systemInformation", system).put("gpu", gpu).put("decoders", codecs).put("thermal", thermal(context)).put("missing", missing)
     }
     fun thermal(context: Context): JSONObject {
         val battery = runCatching { context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED)) }.getOrNull()
         val temperature = battery?.getIntExtra("temperature", Int.MIN_VALUE) ?: Int.MIN_VALUE
-        return JSONObject().put("batteryCelsius", if (temperature != Int.MIN_VALUE) temperature / 10.0 else JSONObject.NULL)
+        return JSONObject().put("batteryCelsius", if (temperature in 1..1000) temperature / 10.0 else JSONObject.NULL)
+            .put("batteryRawTenthsCelsius", if (temperature != Int.MIN_VALUE) temperature else JSONObject.NULL)
+            .put("batteryTemperatureValid", temperature in 1..1000)
             .put("cpuGpuTemperature", "unavailable_without_verified_sensor_mapping")
             .put("thermalStatus", if (Build.VERSION.SDK_INT >= 29)
                 runCatching { (context.getSystemService(Context.POWER_SERVICE) as PowerManager).currentThermalStatus }.getOrNull() ?: JSONObject.NULL
@@ -110,6 +121,7 @@ internal object VideoAdaptationDevice {
             check(!vendor.isNullOrBlank() && !renderer.isNullOrBlank()) { "GPU strings unavailable" }
             return JSONObject().put("vendor", vendor).put("renderer", renderer)
                 .put("version", GLES20.glGetString(GLES20.GL_VERSION) ?: JSONObject.NULL)
+                .put("extensions", GLES20.glGetString(GLES20.GL_EXTENSIONS)?.take(16_384) ?: JSONObject.NULL)
         } finally {
             EGL14.eglMakeCurrent(display, EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_CONTEXT)
             if (surface != EGL14.EGL_NO_SURFACE) EGL14.eglDestroySurface(display, surface)

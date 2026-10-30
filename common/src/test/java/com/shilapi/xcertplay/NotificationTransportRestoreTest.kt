@@ -24,9 +24,9 @@ class NotificationTransportRestoreTest {
     @Before fun clearPreferences() {
         app.getSharedPreferences("diplay", 0).edit().clear().commit()
         app.getSharedPreferences("xcertplay_airplay", 0).edit().clear().commit()
-        CarPlayBackgroundSession.clear()
+        BackgroundSessionFixture.clear()
     }
-    @After fun cleanup() { CarPlayBackgroundSession.clear() }
+    @After fun cleanup() { BackgroundSessionFixture.clear() }
 
     @Test fun grantedNotificationAfterRecreationKeepsUsbTransport() = exercise(true)
     @Test fun deniedNotificationAfterRecreationKeepsUsbTransport() = exercise(false)
@@ -42,19 +42,19 @@ class NotificationTransportRestoreTest {
             Intent().putExtra("page", "home")).setup()
         var replacement: org.robolectric.android.controller.ActivityController<DiPlayActivity>? = null
         try {
-            ReflectionHelpers.setField(first.get(), "setupError", null)
+            HostSessionFixture.setField(first.get(), "setupError", null)
             ReflectionHelpers.callInstanceMethod<Unit>(first.get(), "connect",
                 ReflectionHelpers.ClassParameter(Boolean::class.javaPrimitiveType!!, false))
             val request = shadowOf(first.get()).lastRequestedPermission
             assertNotNull("USB should reach notification permission", request)
             assertEquals(listOf(android.Manifest.permission.POST_NOTIFICATIONS), request.requestedPermissions.toList())
-            assertFalse(ReflectionHelpers.getField(first.get(), "notificationTransport"))
+            assertFalse(HostSessionFixture.getField(first.get(), "notificationTransport"))
             val state = android.os.Bundle()
             first.pause().saveInstanceState(state).stop().destroy()
             val second = Robolectric.buildActivity(DiPlayActivity::class.java,
                 Intent().putExtra("page", "home")).create(state)
             replacement = second
-            ReflectionHelpers.setField(second.get(), "setupError", null)
+            HostSessionFixture.setField(second.get(), "setupError", null)
             second.start().resume()
             if (granted) shadowOf(app).grantPermissions(android.Manifest.permission.POST_NOTIFICATIONS)
             second.get().onRequestPermissionsResult(request.requestCode, request.requestedPermissions,

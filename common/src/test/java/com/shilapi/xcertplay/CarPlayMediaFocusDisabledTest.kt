@@ -37,7 +37,7 @@ class CarPlayMediaFocusDisabledTest {
 
     @After fun cleanup() {
         controllers.forEach(CarPlayMediaKeys::detach)
-        CarPlayBackgroundSession.clear()
+        BackgroundSessionFixture.clear()
         AirPlayPersistence.saveDisableMediaKeyAudioFocus(app, false)
         shadowOf(Looper.getMainLooper()).idle()
     }

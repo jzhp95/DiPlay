@@ -19,6 +19,8 @@ internal sealed interface VideoJob {
     data class DetachSurface(val request: SurfaceDetachRequest) : VideoJob
     /** Ask the iPhone for a keyframe, so a surface that just came back gets a picture without waiting for motion. */
     data object RefreshPicture : VideoJob
+    /** Explicitly requested by isolated diagnostics; never inserted by the live protocol. */
+    data object EndOfDiagnosticInput : VideoJob
     data object Resync : VideoJob
 }
 

@@ -24,6 +24,8 @@ internal object DiagnosticExportStore {
         val uri: Uri,
         val savedInApp: Boolean = false,
         val savedPath: String? = null,
+        val publicFailure: String? = null,
+        val downloadId: Long? = null, val downloadIndexFailure: String? = null,
     )
 
     fun saveWithoutPicker(context: Context, fileName: String, report: String): SavedReport {
@@ -56,8 +58,9 @@ internal object DiagnosticExportStore {
     }
 
     /** Keep the private source as a shareable fallback; public files are never pruned. */
-    fun saveFileWithoutPicker(context: Context, source: File, mime: String): SavedReport {
+    fun saveFileWithoutPicker(context: Context, source: File, mime: String, indexDownload: Boolean = true): SavedReport {
         require(source.isFile && source.length() > 0) { "Report file is empty" }
+        var publicFailure = if (needsStoragePermission(context)) "未获得存储权限" else "公共下载目录不可写"
         val fallback = { FileProvider.getUriForFile(context, "${context.packageName}.diagnostic-reports", source) }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             var created: Uri? = null
@@ -74,9 +77,26 @@ internal object DiagnosticExportStore {
                 created = uri
                 val stream = resolver.openOutputStream(uri, "w") ?: throw IOException("Downloads is not writable")
                 stream.use { out -> source.inputStream().use { it.copyTo(out) } }
+                val digest = java.security.MessageDigest.getInstance("SHA-256")
+                checkNotNull(resolver.openInputStream(uri)).use { input ->
+                    val bytes=ByteArray(65536);while(true){val n=input.read(bytes);if(n<0)break;digest.update(bytes,0,n)}
+                }
+                check(digest.digest().joinToString("") { "%02x".format(it.toInt() and 255) } == DecoderDiagnosticsRun.sha(source)) { "Downloads readback verification failed" }
                 check(resolver.update(uri, ContentValues().apply { put(MediaStore.Downloads.IS_PENDING, 0) }, null, null) == 1)
-                return SavedReport(uri, savedPath = "Download/Apple CarPlay/${source.name}")
+                // MediaStore may rename duplicate names; never advertise the requested name as the actual file.
+                val actualPath = runCatching {
+                    resolver.query(uri,arrayOf(MediaStore.Downloads.DISPLAY_NAME,MediaStore.Downloads.RELATIVE_PATH),null,null,null)?.use { cursor ->
+                        if(!cursor.moveToFirst())null else {
+                            val name=cursor.getString(cursor.getColumnIndexOrThrow(MediaStore.Downloads.DISPLAY_NAME))
+                            val relative=cursor.getString(cursor.getColumnIndexOrThrow(MediaStore.Downloads.RELATIVE_PATH))
+                            if(name.isNullOrBlank() || relative.isNullOrBlank())null else relative.trimEnd('/')+"/"+name
+                        }
+                    }
+                }.getOrNull()
+                return SavedReport(uri, savedPath = actualPath ?: "Download/Apple CarPlay（系统未提供文件名，请使用报告链接或下载列表）",
+                    publicFailure = if(actualPath==null)"文件已校验写入，系统未返回实际文件名"else null)
             } catch (error: Exception) {
+                publicFailure = error.javaClass.simpleName + ": " + (error.message ?: "").take(160)
                 created?.let { runCatching { context.contentResolver.delete(it, null, null) } }
             }
         }
@@ -88,15 +108,33 @@ internal object DiagnosticExportStore {
                 val destination = File(directory, source.name)
                 val published = if (destination.exists()) File.createTempFile("video-report-", ".zip", directory) else destination
                 target = published
-                source.inputStream().use { input -> published.outputStream().use { input.copyTo(it) } }
-                check(published.length() == source.length()) { "Archive copy incomplete" }
+                val temporary = File(directory, published.name + ".writing")
+                try {
+                    source.inputStream().use { input -> temporary.outputStream().use { out -> input.copyTo(out); out.fd.sync() } }
+                    check(temporary.length() == source.length() && DecoderDiagnosticsRun.sha(temporary) == DecoderDiagnosticsRun.sha(source)) { "Archive copy verification failed" }
+                    check(temporary.renameTo(published)) { "Archive publication rename failed" }
+                } finally { temporary.delete() }
                 runCatching { MediaScannerConnection.scanFile(context.applicationContext, arrayOf(published.absolutePath), arrayOf(mime), null) }
                 val uri = runCatching { FileProvider.getUriForFile(context, "${context.packageName}.diagnostic-reports", published) }
-                    .getOrElse { fallback() }
-                return SavedReport(uri, savedPath = published.absolutePath)
-            } catch (error: Exception) { target?.delete() }
+                    .getOrElse { runCatching { fallback() }.getOrDefault(Uri.EMPTY) }
+                val index = if (indexDownload) registerCompletedDownload(context, published, mime) else (null to null)
+                return SavedReport(uri, savedPath = published.absolutePath, downloadId = index.first, downloadIndexFailure = index.second)
+            } catch (error: Exception) {
+                publicFailure = error.javaClass.simpleName + ": " + (error.message ?: "").take(160)
+                target?.delete()
+            }
         }
-        return SavedReport(fallback(), savedInApp = true, savedPath = source.absolutePath)
+        return SavedReport(runCatching { fallback() }.getOrDefault(Uri.EMPTY), savedInApp = true, savedPath = source.absolutePath, publicFailure = publicFailure)
+    }
+
+    @Suppress("DEPRECATION")
+    internal fun registerCompletedDownload(context: Context, file: File, mime: String): Pair<Long?, String?> {
+        if (Build.VERSION.SDK_INT >= 29) return null to null
+        return try {
+            val manager = context.getSystemService(Context.DOWNLOAD_SERVICE) as android.app.DownloadManager
+            val id = manager.addCompletedDownload(file.name, "DiPlay 解码诊断报告", true, mime, file.absolutePath, file.length(), false)
+            if (id >= 0) id to null else null to "系统未接受下载列表登记"
+        } catch (error: Exception) { null to (error.javaClass.simpleName + ": " + (error.message ?: "").take(160)) }
     }
 
     private fun saveInDirectory(
@@ -113,7 +151,7 @@ internal object DiagnosticExportStore {
             file.writeText(report, Charsets.UTF_8)
             val uri = FileProvider.getUriForFile(context, "${context.packageName}.diagnostic-reports", file)
             // Retain only the newest eight reports; never prune the export being returned.
-            directory.listFiles()?.filter { it != file && it.isFile }
+            directory.listFiles()?.filter { it != file && it.isFile && it.extension == "txt" }
                 ?.sortedByDescending { it.lastModified() }?.drop(7)?.forEach { it.delete() }
             return SavedReport(uri, savedInApp = savedInApp, savedPath = if (savedInApp) null else file.absolutePath)
         } catch (error: Exception) {

@@ -12,7 +12,7 @@ internal object VideoAdaptationExport {
         appendLine("DiPlay 车机视频适配采集")
         val auto = value.optJSONObject("automaticSuite")
         if (auto != null && auto.optString("id").isNotEmpty()) {
-            appendLine("自动套件：${auto.optString("status")}；已执行 ${auto.optInt("index")}/${auto.optInt("total")}")
+            appendLine("自动套件：${auto.optString("status")}；已执行 ${auto.optInt("position", auto.optJSONArray("results")?.length() ?: 0)}/${auto.optInt("total")}")
             appendLine("自动结果是技术证据；面板颜色未自动判定，真实地图运动未自动控制或验证。")
         }
         appendLine("手工采样参考缺项：" + VideoAdaptationStore.gaps(value).joinToString("；").ifEmpty { "静止与动态基本采样已具备；仍需人工分析" })
@@ -26,9 +26,14 @@ internal object VideoAdaptationExport {
     /** Call with a frozen JSON snapshot on a worker; never zip arbitrary paths from stored data. */
     fun zip(context: Context, value: JSONObject): File {
         val directory = File(context.getExternalFilesDir(null) ?: context.filesDir, "diagnostic-reports").apply { mkdirs() }
-        val file = File(directory, "video-adaptation-${System.currentTimeMillis()}-${java.util.UUID.randomUUID()}.zip")
+        val stamp = java.text.SimpleDateFormat("yyyyMMdd-HHmmss", java.util.Locale.ROOT).format(java.util.Date())
+        val file = File(directory, "decoder-diagnostics-$stamp-${java.util.UUID.randomUUID().toString().take(8)}.zip")
         val names = linkedSetOf<String>()
-        val rows = value.optJSONArray("samples") ?: JSONArray()
+        val rows = JSONArray()
+        for (key in listOf("samples", "manualAdaptationSamplesReference")) {
+            val source = value.optJSONArray(key) ?: continue
+            for (i in 0 until source.length()) rows.put(source.getJSONObject(i))
+        }
         for (i in 0 until rows.length()) {
             val captures = rows.getJSONObject(i).optJSONArray("captures") ?: continue
             for (j in 0 until captures.length()) {
@@ -38,17 +43,22 @@ internal object VideoAdaptationExport {
         }
         try {
             ZipOutputStream(file.outputStream()).use { output ->
+                val manifest = JSONArray()
                 fun entry(name: String, bytes: ByteArray) {
                     output.putNextEntry(ZipEntry(name)); output.write(bytes); output.closeEntry()
+                    manifest.put(JSONObject().put("name", name).put("bytes", bytes.size)
+                        .put("sha256", java.security.MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it.toInt() and 255) }))
                 }
                 entry("report.json", value.toString(2).toByteArray(Charsets.UTF_8))
                 entry("report.txt", report(value).toByteArray(Charsets.UTF_8))
+                for (name in listOf("manifest.json", "decoder-reference-manifest.json")) {
+                    context.assets.open("color-test/$name").use { entry("reference/$name", it.readBytes()) }
+                }
                 val missingFiles = JSONArray()
                 for (name in names) {
                     val capture = File(VideoAdaptationStore.directory(context), name)
                     if (!capture.isFile) { missingFiles.put(name); continue }
-                    output.putNextEntry(ZipEntry("captures/$name"))
-                    capture.inputStream().use { it.copyTo(output) }; output.closeEntry()
+                    entry("captures/$name", capture.readBytes())
                 }
                 val colorRows = value.optJSONArray("separateColorTestHistory") ?: JSONArray()
                 val colorNames = linkedSetOf<String>()
@@ -57,15 +67,19 @@ internal object VideoAdaptationExport {
                     row.optJSONObject("evidence")?.let { colorNames.addAll(ColorProbeEvidence.captures(it)) }
                     row.optString("capture").takeIf { it.startsWith("observation-") }?.let(colorNames::add)
                 }
+                val autoResults = value.optJSONObject("automaticSuite")?.optJSONArray("results") ?: JSONArray()
+                for (i in 0 until autoResults.length()) autoResults.getJSONObject(i).optJSONObject("evidence")?.let {
+                    colorNames.addAll(ColorProbeEvidence.captures(it))
+                }
                 for (name in colorNames.filter { it.matches(Regex("observation-[a-zA-Z0-9-]+[.]png")) }) {
                     val capture = File(ColorProbeEvidence.directory(context), name)
                     if (!capture.isFile) { missingFiles.put("separate-color-reference/$name"); continue }
-                    output.putNextEntry(ZipEntry("separate-color-reference/$name"))
-                    capture.inputStream().use { it.copyTo(output) }; output.closeEntry()
+                    entry("separate-color-reference/$name", capture.readBytes())
                 }
                 entry("missing-capture-files.json", missingFiles.toString(2).toByteArray(Charsets.UTF_8))
+                entry("bundle-manifest.json", manifest.toString(2).toByteArray(Charsets.UTF_8))
             }
-            directory.listFiles()?.filter { it != file && it.name.startsWith("video-adaptation-") && it.extension == "zip" }
+            directory.listFiles()?.filter { it != file && (it.name.startsWith("video-adaptation-") || it.name.startsWith("decoder-diagnostics-")) && it.extension == "zip" }
                 ?.sortedByDescending { it.lastModified() }?.drop(7)?.forEach { it.delete() }
             return file
         } catch (e: Exception) { file.delete(); throw e }

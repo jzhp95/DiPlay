@@ -325,6 +325,15 @@ class AutomaticMfiAuthenticationTest {
             if (receiver != null) receivers[receiver] = filter
             return super.registerReceiver(receiver, filter)
         }
+        override fun registerReceiver(receiver:BroadcastReceiver?,filter:IntentFilter,permission:String?,handler:android.os.Handler?):Intent? {
+            if(receiver!=null)receivers[receiver]=filter
+            if(permission!=null)assertEquals("${packageName}.USB_PERMISSION_RESULT",permission)
+            return super.registerReceiver(receiver,filter,permission,handler)
+        }
+        override fun registerReceiver(receiver:BroadcastReceiver?,filter:IntentFilter,flags:Int):Intent? {
+            if(receiver!=null)receivers[receiver]=filter
+            return super.registerReceiver(receiver,filter,flags)
+        }
         override fun unregisterReceiver(receiver: BroadcastReceiver) { receivers.remove(receiver); super.unregisterReceiver(receiver) }
     }
     @Implements(Ch341I2cTransport::class, isInAndroidSdk = false)

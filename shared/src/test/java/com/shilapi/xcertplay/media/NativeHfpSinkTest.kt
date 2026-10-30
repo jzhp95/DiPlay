@@ -26,11 +26,11 @@ class NativeHfpSinkTest {
             sink.onAudioStarted(id, format, 0)
             manager.mode = AudioManager.MODE_NORMAL
             sink.onAudioRtp(id, format, byteArrayOf(), 0)
-            val renderers = ReflectionHelpers.getField<Map<*, *>>(sink, "audioRenderers")
+            val renderers = ReflectionHelpers.getField<Map<*, *>>(sink.audio, "audioRenderers")
             assertTrue(renderers.isEmpty())
             assertEquals(1, logs.count { it.contains("抑制重复") })
             sink.onAudioStopped(id)
-            assertFalse(ReflectionHelpers.getField<NativeHfpRingPolicy>(sink, "nativeHfpRing").contains(id))
+            assertFalse(ReflectionHelpers.getField<NativeHfpRingPolicy>(sink.audio, "nativeHfpRing").contains(id))
         } finally { sink.close(); manager.mode = AudioManager.MODE_NORMAL }
     }
 }

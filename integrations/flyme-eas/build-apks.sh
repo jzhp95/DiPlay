@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build two test APKs, platform-sign both, and keep artifacts under ignored build/.
+# Build the Flyme test APK, platform-sign it, and keep artifacts under ignored build/.
 set -euo pipefail
 repo=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 cd "$repo"
@@ -10,10 +10,9 @@ fi
 signing_dir="${DIPLAY_PLATFORM_SIGNING_DIR:-$repo/AOSP-platform-signing}"
 tools="$ANDROID_HOME/build-tools/36.1.0"
 output="$repo/build/car-test-apks"
-# One local-time stamp pairs both APKs and their checksums from this invocation.
+# Keep this APK and its checksum together under one local-time stamp.
 build_stamp=$(date '+%Y%m%d-%H%M%S')
-normal_apk="Apple-CarPlay-normal-$build_stamp.apk"
-system_apk="Apple-CarPlay-system-uid-$build_stamp.apk"
+flyme_apk="Apple-CarPlay-flyme-test-$build_stamp.apk"
 key="$signing_dir/platform.pk8"
 cert="$signing_dir/platform.x509.pem"
 for file in "$key" "$cert" "$tools/apksigner" "$tools/zipalign" "$tools/aapt2"; do
@@ -26,15 +25,15 @@ if [[ -n "${DIPLAY_AUTH_ASSETS_DIR:-}" || -d "$repo/offline-mfi" ]]; then
     task=:mobile:assembleStandaloneDebug
     printf '%s\n' 'Using local CarPlay authentication input (standalone build).'
 else
-    printf '%s\n' 'No root offline-mfi/ or DIPLAY_AUTH_ASSETS_DIR: source-only test APKs.' >&2
+    printf '%s\n' 'No root offline-mfi/ or DIPLAY_AUTH_ASSETS_DIR: source-only Flyme test APK.' >&2
 fi
 expected_cert=$(openssl x509 -in "$cert" -noout -fingerprint -sha256 | cut -d= -f2 | tr -d ':' | tr '[:upper:]' '[:lower:]')
 [[ -n "$expected_cert" ]] || { printf '%s\n' 'Cannot read signing certificate' >&2; exit 1; }
 
 build_one() {
-    local kind="$1" system="$2" package="$3" final="$4"
-    printf '\nBuilding %s (flymeSystem=%s)\n' "$kind" "$system"
-    ./gradlew "-PflymeSystem=$system" "$task" --console=plain
+    local kind="$1" package="$2" final="$3"
+    printf '\nBuilding %s\n' "$kind"
+    ./gradlew "$task" --console=plain
     local input="$repo/mobile/build/outputs/apk/debug/mobile-debug.apk"
     [[ -s "$input" ]] || { printf 'Missing build output: %s\n' "$input" >&2; return 1; }
     if [[ "$task" == :mobile:assembleStandaloneDebug ]]; then
@@ -58,22 +57,14 @@ build_one() {
     grep -F "package: name='$package'" "$output/$kind-badging.txt" > /dev/null || {
         printf 'Unexpected package; expected %s\n' "$package" >&2; return 1;
     }
-    if [[ "$system" == true ]]; then
-        grep -F 'android.uid.system' "$output/$kind-manifest.txt" > /dev/null
-        grep -F 'com.shilapi.flymeeas.ENABLED' "$output/$kind-manifest.txt" > /dev/null
-    else
-        if grep -E 'sharedUserId|com.shilapi.flymeeas.ENABLED' "$output/$kind-manifest.txt" > /dev/null; then
-            printf '%s\n' 'Ordinary APK unexpectedly declares shared UID or EAS opt-in' >&2
-            return 1
-        fi
-    fi
+    grep -F 'android.uid.system' "$output/$kind-manifest.txt" > /dev/null
+    grep -F 'com.shilapi.flymeeas.ENABLED' "$output/$kind-manifest.txt" > /dev/null
     mv "$candidate" "$output/$final"
     rm -f "$aligned" "$candidate.idsig"
     printf 'Verified: %s\n' "$output/$final"
 }
 
-build_one normal false com.shihab.diplay.hudtest "$normal_apk"
-build_one system-uid true com.shihab.diplay.flyme.hudtest "$system_apk"
-shasum -a 256 "$output/$normal_apk" "$output/$system_apk" > "$output/SHA256SUMS-$build_stamp.txt"
-printf '\nBoth APKs verified. Output: %s\n' "$output"
+build_one flyme-test com.shihab.diplay.flyme.test "$flyme_apk"
+shasum -a 256 "$output/$flyme_apk" > "$output/SHA256SUMS-$build_stamp.txt"
+printf '\nFlyme test APK verified. Output: %s\n' "$output"
 printf '%s\n' 'The system APK declares shared UID; actual UID and OEM grants must still be checked after installation on the car.'

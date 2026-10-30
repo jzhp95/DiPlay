@@ -47,9 +47,9 @@ class NavigationAudioGainTest {
     @Test fun navigationGuidanceIsScaledAsWrittenAndNeverThroughTheTrack() {
         val sink = AndroidMediaSink(navigationAttenuationDb = -12)
         val format = AudioFormat(AudioCodecKind.LPCM, 48_000, 1, 96, "default")
-        val create = AndroidMediaSink::class.java.getDeclaredMethod("audioRenderer",
+        val create = AndroidAudioPipeline::class.java.getDeclaredMethod("audioRenderer",
             AudioStreamId::class.java, AudioFormat::class.java).apply { isAccessible = true }
-        val renderer = create.invoke(sink, AudioStreamId(96, "default"), format)
+        val renderer = create.invoke(sink.audio, AudioStreamId(96, "default"), format)
         val type = renderer.javaClass
         val track = track()
         try {
@@ -124,9 +124,9 @@ class NavigationAudioGainTest {
         val sink = AndroidMediaSink()
         val format = AudioFormat(AudioCodecKind.LPCM, 48_000, 1, 96, "default")
         val id = AudioStreamId(96, "default")
-        val create = AndroidMediaSink::class.java.getDeclaredMethod("audioRenderer",
+        val create = AndroidAudioPipeline::class.java.getDeclaredMethod("audioRenderer",
             AudioStreamId::class.java, AudioFormat::class.java).apply { isAccessible = true }
-        val renderer = create.invoke(sink, id, format)
+        val renderer = create.invoke(sink.audio, id, format)
         val monitorTaken = CountDownLatch(1)
         val releaseMonitor = CountDownLatch(1)
         val codecThread = Thread({
@@ -160,9 +160,9 @@ class NavigationAudioGainTest {
         val reports = mutableListOf<String>()
         val sink = AndroidMediaSink(onAudioDiagnostic = reports::add)
         val format = AudioFormat(AudioCodecKind.LPCM, 48_000, 1, 96, "default")
-        val create = AndroidMediaSink::class.java.getDeclaredMethod("audioRenderer",
+        val create = AndroidAudioPipeline::class.java.getDeclaredMethod("audioRenderer",
             AudioStreamId::class.java, AudioFormat::class.java).apply { isAccessible = true }
-        val renderer = create.invoke(sink, AudioStreamId(96, "default"), format)
+        val renderer = create.invoke(sink.audio, AudioStreamId(96, "default"), format)
         val type = renderer.javaClass
         val flush = type.getDeclaredMethod("applyNavigationAttenuation").apply { isAccessible = true }
         try {

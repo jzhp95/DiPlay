@@ -1,6 +1,6 @@
 package com.shilapi.xcertplay.airplay
 
-import java.io.IOException
+import java.net.ProtocolException
 
 /**
  * RTSP/HTTP-style request framing for the CarPlay control channel.
@@ -48,11 +48,11 @@ object RtspMessage {
         while (offset < buffer.size) {
             val headerEndIndex = indexOf(buffer, headerEnd, offset)
             if (headerEndIndex == null) {
-                if (buffer.size - offset > MAX_HEADER_BYTES) throw IOException("RTSP header exceeds limit")
+                if (buffer.size - offset > MAX_HEADER_BYTES) throw ProtocolException("RTSP header exceeds limit")
                 break
             }
             if (headerEndIndex - offset + headerEnd.size > MAX_HEADER_BYTES) {
-                throw IOException("RTSP header exceeds limit")
+                throw ProtocolException("RTSP header exceeds limit")
             }
             val headerText = String(buffer, offset, headerEndIndex - offset, Charsets.US_ASCII)
             val lines = headerText.split("\r\n")
@@ -68,17 +68,17 @@ object RtspMessage {
                 val name = line.substring(0, separator).trim().lowercase()
                 val value = line.substring(separator + 1).trim()
                 if (name == "content-length" && headers[name]?.let { it != value } == true) {
-                    throw IOException("Conflicting RTSP Content-Length headers")
+                    throw ProtocolException("Conflicting RTSP Content-Length headers")
                 }
                 headers[name] = value
             }
             val bodyStart = headerEndIndex + headerEnd.size
             val contentLength = headers["content-length"]?.let { value ->
                 if (value.isEmpty() || value.any { it !in '0'..'9' }) {
-                    throw IOException("Invalid RTSP Content-Length")
+                    throw ProtocolException("Invalid RTSP Content-Length")
                 }
-                val length = value.toLongOrNull() ?: throw IOException("Invalid RTSP Content-Length")
-                if (length > MAX_BODY_BYTES) throw IOException("RTSP body exceeds limit")
+                val length = value.toLongOrNull() ?: throw ProtocolException("Invalid RTSP Content-Length")
+                if (length > MAX_BODY_BYTES) throw ProtocolException("RTSP body exceeds limit")
                 length
             } ?: 0L
             val bodyEndLong = bodyStart.toLong() + contentLength

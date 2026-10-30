@@ -29,14 +29,14 @@ class LauncherIntentTest {
         val app = RuntimeEnvironment.getApplication()
         app.getSharedPreferences("diplay", 0).edit().clear().commit()
         app.getSharedPreferences("xcertplay_airplay", 0).edit().clear().commit()
-        CarPlayBackgroundSession.clear()
+        BackgroundSessionFixture.clear()
         val stop: ((() -> Unit) -> Unit) = { done -> stops++; done() }
-        ReflectionHelpers.setField(CarPlayBackgroundSession, "stopAction", stop)
+        BackgroundSessionFixture.storeStop(stop)
     }
 
     @After fun cleanup() {
         controller?.destroy()
-        CarPlayBackgroundSession.clear()
+        BackgroundSessionFixture.clear()
     }
     private fun launcher() = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
 
@@ -54,11 +54,11 @@ class LauncherIntentTest {
         controller = Robolectric.buildActivity(DiPlayActivity::class.java, launcher()).create()
         val activity = controller!!.get()
         assertFalse(activity.isFinishing)
-        assertEquals("home", ReflectionHelpers.getField<String>(activity, "page"))
+        assertEquals("home", HostSessionFixture.getField<String>(activity, "page"))
         assertNull(shadowOf(activity).nextStartedActivity)
         assertTrue(CarPlayBackgroundSession.hasSession())
         assertEquals(0, stops)
-        val disconnect = ReflectionHelpers.getField<android.widget.Button>(activity, "disconnectButton")
+        val disconnect = HostSessionFixture.getField<android.widget.Button>(activity, "disconnectButton")
         assertEquals(android.view.View.VISIBLE, disconnect.visibility)
         disconnect.performClick()
         assertEquals(1, stops)
@@ -70,13 +70,13 @@ class LauncherIntentTest {
         val activity = controller!!.get()
         ReflectionHelpers.callInstanceMethod<Unit>(activity, "onNewIntent",
             ReflectionHelpers.ClassParameter(Intent::class.java, launcher()))
-        assertEquals("home", ReflectionHelpers.getField<String>(activity, "page"))
+        assertEquals("home", HostSessionFixture.getField<String>(activity, "page"))
         assertNull(shadowOf(activity).nextStartedActivity)
         assertTrue(CarPlayBackgroundSession.hasSession())
         assertEquals(0, stops)
         ReflectionHelpers.callInstanceMethod<Unit>(activity, "onNewIntent",
             ReflectionHelpers.ClassParameter(Intent::class.java, launcher().putExtra("page", "settings")))
-        assertEquals("settings", ReflectionHelpers.getField<String>(activity, "page"))
+        assertEquals("settings", HostSessionFixture.getField<String>(activity, "page"))
         assertNull(shadowOf(activity).nextStartedActivity)
     }
 
@@ -103,7 +103,7 @@ class LauncherIntentTest {
         controller = Robolectric.buildActivity(DiPlayActivity::class.java,
             Intent().putExtra("page", "settings")).create()
         val activity = controller!!.get()
-        assertEquals("settings", ReflectionHelpers.getField<String>(activity, "page"))
+        assertEquals("settings", HostSessionFixture.getField<String>(activity, "page"))
         assertNull(shadowOf(activity).nextStartedActivity)
         ReflectionHelpers.callInstanceMethod<Unit>(activity, "onNewIntent",
             ReflectionHelpers.ClassParameter(Intent::class.java, launcher()))
@@ -113,7 +113,7 @@ class LauncherIntentTest {
     }
 
     @Test fun enabledButDisconnectedLauncherStillShowsReceiverUi() {
-        CarPlayBackgroundSession.clear()
+        BackgroundSessionFixture.clear()
         DiPlayPreferences.saveEnterCarPlayOnOpen(RuntimeEnvironment.getApplication(), true)
         controller = Robolectric.buildActivity(DiPlayActivity::class.java, launcher()).create()
         val activity = controller!!.get()
@@ -128,7 +128,7 @@ class LauncherIntentTest {
             .create(Bundle().apply { putString("page", "settings") })
         val activity = controller!!.get()
         assertFalse(activity.isFinishing)
-        assertEquals("settings", ReflectionHelpers.getField<String>(activity, "page"))
+        assertEquals("settings", HostSessionFixture.getField<String>(activity, "page"))
         assertNull(shadowOf(activity).nextStartedActivity)
         assertEquals(0, stops)
     }

@@ -34,6 +34,22 @@ class VideoAdaptationExportTest {
             }
         } finally { output.delete(); capture.delete(); unreferenced.delete() }
     }
+    @Test fun automaticBundleIncludesManualReferenceAndSuiteCapturesWithIntegrityManifest() {
+        val c = RuntimeEnvironment.getApplication()
+        val manual = File(VideoAdaptationStore.directory(c), "observation-manual-reference.png").apply { writeBytes(byteArrayOf(3, 4)) }
+        val main = File(ColorProbeEvidence.directory(c), "observation-main-reference.png").apply { writeBytes(byteArrayOf(5, 6)) }
+        val value = JSONObject().put("manualAdaptationSamplesReference", JSONArray().put(JSONObject().put("captures", JSONArray().put(manual.name))))
+            .put("automaticSuite", JSONObject().put("results", JSONArray().put(JSONObject().put("evidence", JSONObject().put("captures", JSONArray().put(main.name))))))
+        val file = VideoAdaptationExport.zip(c, value)
+        try {
+            ZipFile(file).use { zip ->
+                assertNotNull(zip.getEntry("captures/${manual.name}"))
+                assertNotNull(zip.getEntry("separate-color-reference/${main.name}"))
+                val manifest = JSONArray(zip.getInputStream(zip.getEntry("bundle-manifest.json")).bufferedReader().readText())
+                assertTrue(manifest.length() >= 4)
+            }
+        } finally { file.delete(); manual.delete(); main.delete() }
+    }
     @Test fun capturesPreserveNativePixelsWithinTheBoundAndMarkLargeImagesForScaling() {
         assertEquals(1920 to 1080, ColorProbeImageCapture.captureSize(1920, 1080, true))
         assertEquals(3840 to 1080, ColorProbeImageCapture.captureSize(7680, 2160, true))

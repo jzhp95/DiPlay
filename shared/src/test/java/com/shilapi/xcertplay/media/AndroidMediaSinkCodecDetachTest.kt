@@ -98,7 +98,7 @@ class AndroidMediaSinkCodecDetachTest {
             codec.blockNext()
             sink.onVideoFrame(111, idr)
             assertTrue("Mirror must reach the controlled native call", codec.entered.await(5, TimeUnit.SECONDS))
-            val mirrors = sink.field<Map<Pair<Int, String>, Any>>("mirrorDecoders")
+            val mirrors = sink.video.field<Map<Pair<Int, String>, Any>>("mirrorDecoders")
             worker = mirrors[111 to "launcher:audit"]!!.field<Thread>("thread")
             sink.close()
             val notified = CountDownLatch(1)
@@ -338,7 +338,7 @@ class AndroidMediaSinkCodecDetachTest {
         val sink = AndroidMediaSink(videoPacingDelayMillis = 90).also { sinks += it }
         sink.setSurface(110, a)
         val registry = GatedRegistry().also { it.putGate = RegistryGate() }
-        sink.replaceField("videoDecoders", registry)
+        sink.video.replaceField("videoDecoders", registry)
         val creator = thread { sink.onVideoConfig(110, avcC) }
         val gate = checkNotNull(registry.putGate)
         var detach: BeginOnThread? = null
@@ -367,7 +367,7 @@ class AndroidMediaSinkCodecDetachTest {
         val sink = configuredSink(a)
         holdWorkerInCodec(sink)
         val registry = GatedRegistry(decoders(sink)).also { it.removeGate = RegistryGate() }
-        sink.replaceField("videoDecoders", registry)
+        sink.video.replaceField("videoDecoders", registry)
         val retire = thread { sink.onScreenStreamActive(110, false) }
         val gate = checkNotNull(registry.removeGate)
         var detach: BeginOnThread? = null
@@ -464,18 +464,30 @@ class AndroidMediaSinkCodecDetachTest {
             codec.release()
             assertTrue(notifying.await(5, TimeUnit.SECONDS))
             assertTrue("cleanup finished but onExit is still notifying", decoder.field<Thread>("thread").isAlive)
-            assertTrue(sink.field<Set<Any>>("closingVideoDecoders").isEmpty())
+            assertTrue(sink.video.field<Set<Any>>("closingVideoDecoders").isEmpty())
             // settleDetach can time out, pause, and only reach retire after onExit completed cleanup.
-            sink.javaClass.getDeclaredMethod("retire", Int::class.javaPrimitiveType, decoder.javaClass)
-                .apply { isAccessible = true }.invoke(sink, 110, decoder)
+            sink.video.javaClass.getDeclaredMethod("retire", Int::class.javaPrimitiveType, decoder.javaClass)
+                .apply { isAccessible = true }.invoke(sink.video, 110, decoder)
             val alreadyReleased = CountDownLatch(1)
             sink.whenVideoReleased { alreadyReleased.countDown() }
             assertEquals("already-released registration must complete immediately", 0L, alreadyReleased.count)
-            assertTrue("the stale worker was not republished", sink.field<Set<Any>>("closingVideoDecoders").isEmpty())
+            assertTrue("the stale worker was not republished", sink.video.field<Set<Any>>("closingVideoDecoders").isEmpty())
         } finally {
             finishNotification.countDown()
             decoder.field<Thread>("thread").join(5_000)
         }
+    }
+
+    @Test @Config(sdk=[28]) fun unpacedOutputParksAndRebindsWithoutReconfiguringCodec() {
+        val a=newSurface();val b=newSurface();val sink=configuredSink(a,pacingMillis=0)
+        val before=mediaCodecOf(mainDecoder(sink))
+        assertTrue(sink.beginSurfaceDetach(a,parkMain=true).await())
+        assertSame(before,mediaCodecOf(mainDecoder(sink)))
+        assertNotNull(parkingOf(mainDecoder(sink)))
+        sink.setSurface(110,b);assertTrue(barrier(sink))
+        assertSame(b,mainDecoder(sink).field<Surface?>("outputSurface"))
+        assertSame(before,mediaCodecOf(mainDecoder(sink)))
+        assertEquals(listOf<Surface?>(a),codec.configuredSurfaces.toList())
     }
 
     // --- helpers ---
@@ -483,8 +495,8 @@ class AndroidMediaSinkCodecDetachTest {
     private fun newSurface() = Surface(SurfaceTexture(0))
 
     /** A smooth-video sink, as the host makes it: no default surface, the main stream configured on [surface]. */
-    private fun configuredSink(surface: Surface): AndroidMediaSink {
-        val sink = AndroidMediaSink(surface = null, videoPacingDelayMillis = 90)
+    private fun configuredSink(surface: Surface, pacingMillis: Int = 90): AndroidMediaSink {
+        val sink = AndroidMediaSink(surface = null, videoPacingDelayMillis = pacingMillis)
         sinks += sink
         sink.setSurface(110, surface)
         sink.onVideoConfig(110, avcC)
@@ -569,7 +581,7 @@ class AndroidMediaSinkCodecDetachTest {
         javaClass.getDeclaredField(name).apply { isAccessible = true }.set(this, value)
     }
 
-    private fun decoders(sink: AndroidMediaSink): Map<Int, Any> = sink.field("videoDecoders")
+    private fun decoders(sink: AndroidMediaSink): Map<Int, Any> = sink.video.field("videoDecoders")
 
     private fun mainDecoder(sink: AndroidMediaSink): Any = checkNotNull(decoders(sink)[110]) { "no main decoder" }
 

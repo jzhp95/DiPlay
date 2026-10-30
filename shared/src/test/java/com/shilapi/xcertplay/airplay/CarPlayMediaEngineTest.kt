@@ -88,7 +88,7 @@ class CarPlayMediaEngineTest {
     }
 
     private fun testSession(videoInCar: Boolean = false): AirPlaySession = AirPlaySession(
-        socket = Socket(),
+        socket = LoopbackControlSocket(),
         config = AirPlayConfig(
             deviceName = "test",
             deviceId = "02:00:00:00:00:02",

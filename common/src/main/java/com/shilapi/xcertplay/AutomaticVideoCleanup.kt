@@ -17,7 +17,6 @@ internal object AutomaticVideoCleanup {
         check(pending == null)
         val ticket = Ticket(context.applicationContext, id, done)
         pending = ticket
-        AutomaticVideoSuite.cleanup(ticket.context, id, true, false)
         ticket.timeout = Runnable { complete(ticket, false) }.also { main.postDelayed(it, 10_000) }
         try { enqueue { main.post { complete(ticket, true) } } }
         catch (_: Exception) { complete(ticket, false) }
@@ -26,11 +25,9 @@ internal object AutomaticVideoCleanup {
         if (pending !== ticket) return
         if (released) {
             pending = null; ticket.timeout?.let(main::removeCallbacks)
-            AutomaticVideoSuite.cleanup(ticket.context, ticket.id, false, true)
         } else {
             if (ticket.timedOut) return
             ticket.timedOut = true
-            AutomaticVideoSuite.cleanupFailed(ticket.context, ticket.id)
             // Keep the process guard until actual release, but drop the Activity callback now.
         }
         val done = ticket.done; ticket.done = null; done?.invoke()

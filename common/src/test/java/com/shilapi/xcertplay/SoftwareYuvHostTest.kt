@@ -29,7 +29,7 @@ class SoftwareYuvHostTest {
         val index = ColorTestRun.cases.indexOfFirst { it.mainProfile == "software-direct" }
         val request = ColorMainProbeRegistry.begin(index, VideoColorOverride())
         try {
-            ReflectionHelpers.setField(activity, "colorMainProbe", request)
+            HostSessionFixture.setField(activity, "colorMainProbe", request)
             build(activity)
             withSink(activity) { assertFalse(it.mainScreenHardwareYuv) }
             assertTrue(AirPlayPersistence.loadHardwareYuvEnabled(activity))
@@ -65,7 +65,7 @@ class SoftwareYuvHostTest {
             val index = ColorTestRun.cases.indexOfFirst { it.mainProfile == profile }
             val request = ColorMainProbeRegistry.begin(index, VideoColorOverride())
             try {
-                ReflectionHelpers.setField(activity, "colorMainProbe", request)
+                HostSessionFixture.setField(activity, "colorMainProbe", request)
                 build(activity)
                 withSink(activity) { assertEquals(profile == "current", it.mainScreenSoftwareYuv != null) }
             } finally {
@@ -81,7 +81,7 @@ class SoftwareYuvHostTest {
         val index = ColorTestRun.cases.indexOfFirst { it.mainProfile == "yuv-limited601" }
         val request = ColorMainProbeRegistry.begin(index, VideoColorOverride())
         try {
-            ReflectionHelpers.setField(activity, "colorMainProbe", request)
+            HostSessionFixture.setField(activity, "colorMainProbe", request)
             build(activity)
             withSink(activity) { assertEquals(SoftwareYuvConfig(2, 2), it.mainScreenSoftwareYuv) }
             assertFalse(AirPlayPersistence.loadSoftwareYuvEnabled(activity))
@@ -98,7 +98,7 @@ class SoftwareYuvHostTest {
         val old = AndroidMediaSink(mainScreenSoftwareYuv = oldColor)
         var stops = 0
         try {
-            CarPlayBackgroundSession.store(controller, old, 640, 360, Any(),
+            BackgroundSessionFixture.store(controller, old, 640, 360, Any(),
                 CarPlaySessionDisplay(640, 360, Surface.ROTATION_0, false, false, 640, 360)) { stops++ }
             AirPlayPersistence.saveSoftwareDirectVideoOutput(activity, true)
             AirPlayPersistence.saveSoftwareYuvEnabled(activity, false)
@@ -109,7 +109,7 @@ class SoftwareYuvHostTest {
             assertSame(old, field<AndroidMediaSink>(activity, "sink"))
             assertEquals(0, stops)
             assertTrue(PendingReconnect.isPending(controller))
-            CarPlayBackgroundSession.clear(); PendingReconnect.clear()
+            BackgroundSessionFixture.clear(); PendingReconnect.clear()
             build(activity)
             withSink(activity) { assertNull(it.mainScreenSoftwareYuv); assertTrue(it.mainScreenSoftwareDecoder) }
         } finally {
@@ -119,25 +119,24 @@ class SoftwareYuvHostTest {
     }
 
     private fun build(activity: CarPlayHostActivity) {
-        ReflectionHelpers.setField(activity, "airPlayIdentity", AirPlayPersistence.loadIdentity(activity))
+        HostSessionFixture.setField(activity, "airPlayIdentity", AirPlayPersistence.loadIdentity(activity))
         invoke(activity, "loadPersistedSettings"); invoke(activity, "buildContentView")
     }
     private fun withSink(activity: CarPlayHostActivity, verify: (AndroidMediaSink) -> Unit) {
-        val method = activity.javaClass.getDeclaredMethod("createMediaSink", Int::class.javaPrimitiveType,
-            Int::class.javaPrimitiveType, Int::class.javaPrimitiveType).apply { isAccessible = true }
-        val sink = method.invoke(activity, 640, 360, 0) as AndroidMediaSink
-        try { verify(sink) } finally { sink.close(); sink.awaitVideoReleased(5000) }
+        val connection=HostSessionFixture.mediaConnection(activity,640,360,0)
+        val sink=connection.sink
+        try { verify(sink) } finally { connection.close();sink.awaitVideoReleased(5000) }
     }
     private fun withHost(verify: (CarPlayHostActivity) -> Unit) {
-        CarPlayBackgroundSession.clear(); PendingReconnect.clear()
+        BackgroundSessionFixture.clear(); PendingReconnect.clear()
         val activity = Robolectric.buildActivity(CarPlayHostActivity::class.java).get()
         try { verify(activity) } finally {
             field<Handler>(activity, "mainHandler").removeCallbacksAndMessages(null)
-            CarPlayBackgroundSession.clear(); PendingReconnect.clear()
+            BackgroundSessionFixture.clear(); PendingReconnect.clear()
             activity.getSharedPreferences("xcertplay_airplay", 0).edit().clear().commit()
         }
     }
     private fun invoke(activity: CarPlayHostActivity, name: String) =
         activity.javaClass.getDeclaredMethod(name).apply { isAccessible = true }.invoke(activity)
-    private fun <T> field(activity: CarPlayHostActivity, name: String): T = ReflectionHelpers.getField(activity, name)
+    private fun <T> field(activity: CarPlayHostActivity, name: String): T = HostSessionFixture.getField(activity, name)
 }

@@ -49,29 +49,70 @@ internal object CarPlayVideo : CarPlayVideoListener {
 
     fun attach(context: Context, next: CarPlayController) {
         appContext = context.applicationContext
+        val previous = controller
         controller = next
-        next.videoListener = this
-    }
-
-    override fun readParked(): Boolean? = null
-
-    override fun onVideoAllowedChanged(allowed: Boolean) {
-        if (!allowed) main.post { closePlayer("the car left P") }
-    }
-
-    override fun onVideoSessionEnded() {
-        main.post {
-            stop()
-            streamId = null
+        if (previous !== next) {
+            previous?.videoListener = null
+            dispatch(next) { resetSession() }
+        }
+        next.videoListener = object : CarPlayVideoListener {
+            override fun readParked(): Boolean? = null
+            override fun onVideoAllowedChanged(allowed: Boolean) = dispatch(next) {
+                if (!allowed) closePlayer("the car left P")
+            }
+            override fun onVideoSessionEnded() = dispatch(next) { stop(); streamId = null }
+            override fun onVideoUiRequested() = dispatch(next) { show() }
+            override fun onVideoMessage(streamId: Long, message: Map<String, Any?>) =
+                dispatch(next) { handle(streamId, message) }
         }
     }
 
-    override fun onVideoUiRequested() {
-        main.post { show() }
+    private fun dispatch(expected: CarPlayController, action: () -> Unit) {
+        main.post { if (controller === expected) action() }
     }
 
+    fun detach(expected: CarPlayController) {
+        if (controller !== expected) return
+        controller = null
+        expected.videoListener = null
+        main.post {
+            if (controller == null) resetSession()
+        }
+        pendingUrls.values.forEach { it.cancel(false) }
+        pendingUrls.clear()
+    }
+
+    private fun resetSession() {
+        val previousPlayer = activity
+        activity = null
+        stop()
+        streamId = null
+        startMillis = 0
+        streaming = false
+        previousPlayer?.finish()
+    }
+
+    fun sessionUrlResolver(): (String) -> LoadedUrl? {
+        val expected = controller
+        return { url -> if (expected == null) null else resolveOnIphone(url, expected) }
+    }
+
+    override fun readParked(): Boolean? = null
+    override fun onVideoAllowedChanged(allowed: Boolean) {
+        val expected = controller ?: return
+        dispatch(expected) { if (!allowed) closePlayer("the car left P") }
+    }
+    override fun onVideoSessionEnded() {
+        val expected = controller ?: return
+        dispatch(expected) { stop(); streamId = null }
+    }
+    override fun onVideoUiRequested() {
+        val expected = controller ?: return
+        dispatch(expected) { show() }
+    }
     override fun onVideoMessage(streamId: Long, message: Map<String, Any?>) {
-        main.post { handle(streamId, message) }
+        val expected = controller ?: return
+        dispatch(expected) { handle(streamId, message) }
     }
 
     /**
@@ -171,7 +212,10 @@ internal object CarPlayVideo : CarPlayVideoListener {
      * does: unhandledURL request with FCUP_Response_URL / _IsContentKeyRequest / _RequestID, answered
      * with FCUP_Response_Data, _StatusCode and _Headers (Location). Blocking; a loader thread.
      */
-    fun resolveOnIphone(url: String): LoadedUrl? {
+    fun resolveOnIphone(url: String): LoadedUrl? = controller?.let { resolveOnIphone(url, it) }
+
+    private fun resolveOnIphone(url: String, expected: CarPlayController): LoadedUrl? {
+        if (controller !== expected) return null
         val stream = streamId ?: return null
         val id = nextUrlRequest.getAndIncrement()
         val answer = CompletableFuture<Map<*, *>>()
@@ -185,7 +229,7 @@ internal object CarPlayVideo : CarPlayVideoListener {
                 "FCUP_Response_RequestID" to id,
             ),
             "item" to linkedMapOf("uuid" to itemUuid),
-        ))
+        ), expected)
         Log.i(TAG, "asked the iPhone to load a ${android.net.Uri.parse(url).scheme} URL request=$id")
         val response = try {
             answer.get(URL_TIMEOUT_SECONDS, TimeUnit.SECONDS)
@@ -195,6 +239,7 @@ internal object CarPlayVideo : CarPlayVideoListener {
         } finally {
             pendingUrls.remove(id)
         }
+        if (controller !== expected) return null
         response ?: return null
         val headers = response["FCUP_Response_Headers"] as? Map<*, *>
         return LoadedUrl(
@@ -215,9 +260,10 @@ internal object CarPlayVideo : CarPlayVideoListener {
     private fun playerState(): VideoInCar.PlayerState? =
         activity?.state() ?: url?.let { VideoInCar.PlayerState(false, false, startMillis / 1000.0, 0.0, 0.0) }
 
-    private fun reply(streamId: Long, message: Map<String, Any?>) {
-        val target = controller ?: return
+    private fun reply(streamId: Long, message: Map<String, Any?>, expected: CarPlayController? = controller) {
+        val target = expected ?: return
         sender.execute {
+            if (controller !== target) return@execute
             // A reply that cannot be sent must never take CarPlay down with it.
             val sent = runCatching { target.sendVideoMessage(streamId, message) }
                 .onFailure { Log.w(TAG, "reply ${message["type"]} failed: ${it.javaClass.simpleName}") }

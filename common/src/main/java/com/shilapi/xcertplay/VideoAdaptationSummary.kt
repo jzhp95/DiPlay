@@ -34,6 +34,8 @@ internal object VideoAdaptationSummary {
         }
         appendLine("温度：${text(value, "thermal")}")
         appendLine("不可读项：${text(value, "missing")}")
+        appendLine("扩展系统与软硬件信息：${text(value, "systemInformation")}")
+        appendLine("信息采集尚未完成：${text(value, "collectionIncomplete")}")
     }
     fun latest(state: JSONObject): String = buildString {
         val rows = state.optJSONArray("results")

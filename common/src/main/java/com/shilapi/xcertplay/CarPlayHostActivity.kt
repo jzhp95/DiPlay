@@ -99,6 +99,7 @@ import com.shilapi.xcertplay.orchestration.CarPlayController
 import com.shilapi.xcertplay.orchestration.CarPlayRuntimeConfig
 import com.shilapi.xcertplay.network.WirelessStartupFailure
 import com.shilapi.xcertplay.network.WirelessStartupPolicy
+import com.shilapi.xcertplay.orchestration.ConnectionFailureCause
 import com.shilapi.xcertplay.orchestration.CarPlayStatus
 import com.shilapi.xcertplay.orchestration.CarPlayTransport
 import com.shilapi.xcertplay.orchestration.ManualHotspotBand
@@ -154,7 +155,6 @@ class CarPlayHostActivity : ComponentActivity() {
     private var connectionInstructionsView: TextView? = null
     private var connectionHelpView: TextView? = null
     private var wifiRecoveryButton: View? = null
-    private var reconnectAttempts = 0
     private val siriKey = WheelSiriKey()
     private val siriKeyPresses = WheelKeyPresses()
     private val mediaKeyPresses = WheelKeyPresses()
@@ -162,15 +162,8 @@ class CarPlayHostActivity : ComponentActivity() {
     private var pendingDoubleSiri: PendingAssignedSiriDoublePress? = null
     private var delayedDoubleSiri: PendingAssignedSiriDoublePress? = null
     private val legacySiriPresses = mutableSetOf<Triple<Int, Int, Int>>()
-    private val startupRetryBudget = WirelessStartupRetryBudget()
-    private var startupRetryStopped = false
-    private var authenticationRetryUsed = false
-    private var authenticationFailureGeneration = -1
-    private var authenticationInvalidGeneration = -1
-    private var authenticationReconnectRequiresClosed = false
-    private var retiringAuthenticationController: CarPlayController? = null
+    private val startupRetryStopped get() = sessionRuntime?.snapshot()?.phase == com.shilapi.xcertplay.session.RuntimePhase.FAILED
     private var startupRetryButton: View? = null
-    private var startupFailureGeneration = -1
     private lateinit var airPlayIdentity: AirPlayIdentity
     private var languagePreferenceAtCreate = AppLocale.SIMPLIFIED_CHINESE
 
@@ -405,7 +398,6 @@ class CarPlayHostActivity : ComponentActivity() {
     // Smooth video (a setting): SurfaceView output with frames released at the iPhone's frame time.
     private var colorMainProbe: ColorMainProbeRegistry.Request? = null
     private var colorMainOverlay: ColorMainProbeOverlay? = null
-    private var automaticColorProbe: AutomaticColorMainProbe? = null
     private var videoAdaptationOverlay: VideoAdaptationOverlay? = null
     private var videoAdaptationTouchMoves = 0L
     private var colorMainFinishing = false
@@ -424,7 +416,6 @@ class CarPlayHostActivity : ComponentActivity() {
     // Sinks whose sessions are being torn down; their decoders may still render to the current surface
     // until they have released their codecs, so a destroyed surface is detached from them too. A restart
     // and a shutdown can overlap, so this is a set.
-    private val retiringSinks = java.util.concurrent.CopyOnWriteArraySet<AndroidMediaSink>()
     internal var sinkReleaseWaitMillis = SINK_RELEASE_WAIT_MILLIS
     private var videoSurfaceProbe: ViewTreeObserver.OnPreDrawListener? = null
     private var pictureBinding: CarPlayPicture.Binding? = null
@@ -470,22 +461,58 @@ class CarPlayHostActivity : ComponentActivity() {
     private var safeAreaEditSize: DisplaySize? = null
     private var safeAreaEditorActive = false
     private var externalActivityInProgress = false
-    private var sink: AndroidMediaSink? = null
-    private var controller: CarPlayController? = null
+    private var sessionRuntime:com.shilapi.xcertplay.session.SessionRuntime?=null
+    private var sessionUiCommand:com.shilapi.xcertplay.session.SessionUiCommand?=null
+    private var pendingDisplayCommand:com.shilapi.xcertplay.session.SessionUiCommand?=null
+    private var sessionClient:com.shilapi.xcertplay.session.SessionClient?=null
+    private var sessionSubscription:com.shilapi.xcertplay.session.SessionSubscription?=null
+    private var sessionEvents:com.shilapi.xcertplay.session.SessionSubscription?=null
+    private var pendingSessionRequest:com.shilapi.xcertplay.session.SessionStartRequest?=null
+    private var boundSessionIdentity:com.shilapi.xcertplay.session.SessionIdentity?=null
+    private var lastPrerequisiteFailure:String?=null
+    private var outputSessionIdentity:com.shilapi.xcertplay.session.SessionIdentity?=null
+    private val sink:AndroidMediaSink? get()=sessionRuntime?.currentConnection?.sink
+    private val controller:CarPlayController? get()=sessionRuntime?.currentConnection?.controller
+    private var projectionBinding:com.shilapi.xcertplay.session.ProjectionSurfaceBinding?=null
     private val videoSurfaceOwner = CarPlayVideoSurfaceOwner<Surface>(
-        detach = { surface ->
-            sink?.clearSurface(SCREEN_TYPE_MAIN, surface)
-            sink?.clearSurface(SCREEN_TYPE_ALT, surface)
+        detach = { surface -> detachVideoSurface(surface,park=false) },
+        release = { surface ->
+            val owner=sessionRuntime
+            if(owner==null)surface.release()else owner.releaseOutputWhenReady(surface){surface.release()}
         },
-        release = { it.release() },
     )
     private val currentSurface: Surface? get() = videoSurfaceOwner.current
     private var currentSurfaceTexture: SurfaceTexture? = null
+    private val textureSurfaces=java.util.IdentityHashMap<SurfaceTexture,Surface>()
+    private val projectionBack = ProjectionBackDispatcher()
+    private var videoParked = false
+    private val parkVideoInBackground = Runnable {
+        if (!isActivityStarted && !isDestroyed) currentSurface?.let { detachVideoSurface(it, park = true) }
+    }
+
+    private fun detachVideoSurface(surface:Surface,park:Boolean,waitForFramework:Boolean=false){
+        val binding=projectionBinding
+        val confirmed=sessionRuntime?.unbindOutput(binding?.bindingId?:"",surface,park,waitForFramework)?:true
+        if(binding?.surface===surface)projectionBinding=null
+        if(park)videoParked=true
+        appendLog("Video surface detached parked=$park confirmed=$confirmed")
+    }
+
+    private fun restoreVideoPicture() {
+        showLastPicture()
+        sink?.refreshPicture(SCREEN_TYPE_MAIN)
+        mainHandler.removeCallbacks(pictureRetry)
+        mainHandler.postDelayed(pictureRetry, 1_000L)
+        mainHandler.postDelayed(pictureRetry, 2_000L)
+    }
     // Copies of stream 111 outside the dashboard (centre card, launcher maps) each get their own decoder.
-    private val mirrorSink: (String, Surface?) -> Unit = { key, surface -> sink?.setMirrorSurface(SCREEN_TYPE_ALT, key, surface) }
     private val mirrorsChanged: () -> Unit = {
-        updateClusterMapShown()
-        if (MapMirrors.launcherShowsMap) CenterMapOverlay.hide()
+        mainHandler.post {
+            if(!isDestroyed && sessionRuntime?.isUiOwner(System.identityHashCode(this))==true){
+                updateClusterMapShown()
+                if(MapMirrors.launcherShowsMap)CenterMapOverlay.hide()
+            }
+        }
     }
     // With Usage Access the card shows only over a home screen; null = not known (no monitor).
     private var homeMonitor: HomeScreenMonitor? = null
@@ -603,15 +630,7 @@ class CarPlayHostActivity : ComponentActivity() {
     private var lastConfiguration: Configuration? = null
     private var activeAirPlaySession: AirPlaySession? = null
     private val activeScreenStreamTypes = mutableSetOf<Int>()
-    private var handshakeResetInProgress = false
-    private var startAfterHandshakeReset = false
     private var restartGeneration = 0
-    private var reconnectScheduled = false
-    // How often the current controller reached its control loop, and whether a loss came after the
-    // last time. A retry scheduled before the count went up leaves the attempt alone only while it is
-    // still running when the retry fires (#873).
-    private var controlRunningCount = 0
-    private var lossSinceControlRunning = false
     private var sessionLog: SessionLogFile? = null
     private var gestureFingerCount = 3
     private var settingsGestureHint: TextView? = null
@@ -700,7 +719,6 @@ class CarPlayHostActivity : ComponentActivity() {
             if (sidePanelShown) mainHandler.postDelayed(this, SIDE_PANEL_REFRESH_MILLIS)
         }
     }
-    private val teardownExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private val airPlayCommandExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private val logLines = ArrayDeque<LogEntry>()
     private val expireOldLogLines = Runnable { refreshLogView(System.currentTimeMillis()) }
@@ -714,11 +732,13 @@ class CarPlayHostActivity : ComponentActivity() {
     private val applyDisplaySize = Runnable {
         val size = pendingDisplaySize ?: return@Runnable
         pendingDisplaySize = null
-        applyDisplaySize(size)
+        val command=pendingDisplayCommand;pendingDisplayCommand=null
+        applyDisplaySize(size,command)
     }
 
     private val textureListener = object : TextureView.SurfaceTextureListener {
         override fun onSurfaceTextureAvailable(texture: SurfaceTexture, width: Int, height: Int) {
+            if(isDestroyed || shuttingDown.get())return
             val existing = currentSurface
             val surface = if (
                 existing != null &&
@@ -732,26 +752,44 @@ class CarPlayHostActivity : ComponentActivity() {
                     currentSurfaceTexture = texture
                 }
             }
+            textureSurfaces[texture]=surface
             appendLog(if (existing === surface) "Texture surface reused" else "Texture surface created")
             attachSurface(surface)
+            restoreVideoPicture()
             updateVideoLayout(width, height)
             scheduleDisplaySize(width, height)
         }
 
         override fun onSurfaceTextureSizeChanged(texture: SurfaceTexture, width: Int, height: Int) {
+            if(currentSurfaceTexture!==texture)return
             updateVideoLayout(width, height)
             scheduleDisplaySize(width, height)
         }
 
         override fun onSurfaceTextureDestroyed(texture: SurfaceTexture): Boolean {
-            if (currentSurfaceTexture !== texture) return true
-            currentSurface?.let(videoSurfaceOwner::clear)
-            currentSurfaceTexture = null
-            appendLog("Texture surface destroyed")
-            return true
+            val surface=textureSurfaces.remove(texture)
+            if(currentSurfaceTexture===texture){
+                captureLastPicture()
+                currentSurface?.let{
+                    detachVideoSurface(it,park=true)
+                    videoSurfaceOwner.clear(it)
+                }
+                currentSurfaceTexture=null
+            }
+            if(surface==null)return true
+            val owner=sessionRuntime
+            if(owner==null)texture.release()else owner.releaseOutputWhenReady(surface){texture.release()}
+            appendLog("Texture destruction deferred until output release")
+            return false
         }
 
-        override fun onSurfaceTextureUpdated(texture: SurfaceTexture) = Unit
+        override fun onSurfaceTextureUpdated(texture: SurfaceTexture) {
+            if (texture === currentSurfaceTexture && pictureHold?.visibility == View.VISIBLE) {
+                mainHandler.removeCallbacks(pictureHoldTick)
+                pictureHold?.visibility = View.GONE
+                pictureHold?.setImageDrawable(null)
+            }
+        }
     }
 
     private val fallbackSurfaceCallback = object : SurfaceHolder.Callback {
@@ -780,16 +818,10 @@ class CarPlayHostActivity : ComponentActivity() {
         override fun surfaceDestroyed(holder: SurfaceHolder) {
             val surface = holder.surface
             captureLastPicture()
-            // The SurfaceHolder contract: nothing may render to the surface once this returns. Every decoder
-            // is asked at once, then waited for against one deadline; each confirms once it has moved,
-            // parked or released its codec, and closing decoders count once their workers exit. With
-            // smooth video the live session's main decoder parks off screen and keeps its state.
-            val live = sink
-            val detaches = (listOfNotNull(live) + retiringSinks).distinct()
-                .map { owner -> owner.beginSurfaceDetach(surface, parkMain = smoothVideo && owner === live) }
-            val confirmed = detaches.map { it.await() }.all { it }
+            // Keep both direct and paced decoders; YUV uses its existing release/reconfigure fallback.
+            detachVideoSurface(surface, park = true, waitForFramework = true)
             videoSurfaceOwner.clear(surface)
-            appendLog("SurfaceView video surface destroyed detachConfirmed=$confirmed")
+            appendLog("SurfaceView video surface destroyed")
         }
     }
 
@@ -798,8 +830,8 @@ class CarPlayHostActivity : ComponentActivity() {
         colorMainProbe = ColorMainProbeRegistry.lookup(intent.getStringExtra(ColorMainProbeRegistry.EXTRA_TOKEN))
         NavigationWidgetUpdater.attach(applicationContext)
         CenterMapOverlay.requestShow = ::showCenterMap
-        MapMirrors.sink = mirrorSink
-        MapMirrors.onChanged = mirrorsChanged
+
+
         languagePreferenceAtCreate = AppLocale.preference(this)
         if (isIphoneUsbAttachment(intent)) {
             AirPlayPersistence.saveWirelessEnabled(this, false)
@@ -829,6 +861,7 @@ class CarPlayHostActivity : ComponentActivity() {
             this,
             object : OnBackPressedCallback(true) {
                 override fun handleOnBackPressed() {
+                    if (colorMainProbe != null || picturePanel != null || menuOpen) projectionBack.reset()
                     if (colorMainProbe != null) {
                         finishColorMainProbe("跳过", colorMainEvidence(emptyList()).put("interrupted", true), false)
                     } else if (picturePanel != null) {
@@ -836,7 +869,17 @@ class CarPlayHostActivity : ComponentActivity() {
                     } else if (menuOpen) {
                         if (safeAreaEditorActive) closeSafeAreaEditor() else leaveSettingsMenu()
                     } else {
-                        showDiPlayHome()
+                        when (projectionBack.press(activeAirPlaySession, SystemClock.uptimeMillis()) {
+                            controller?.sendKnob(com.shilapi.xcertplay.airplay.AirPlayKnobState(back = true)) == true
+                        }) {
+                            ProjectionBackDispatcher.Result.FORWARDED -> android.widget.Toast.makeText(this@CarPlayHostActivity,
+                                R.string.carplay_back_again_for_home, android.widget.Toast.LENGTH_SHORT).show()
+                            ProjectionBackDispatcher.Result.DESKTOP -> runCatching {
+                                startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                            }.onFailure { showDiPlayHome() }
+                            ProjectionBackDispatcher.Result.FALLBACK -> showDiPlayHome()
+                        }
                     }
                 }
             },
@@ -1108,7 +1151,6 @@ class CarPlayHostActivity : ComponentActivity() {
         val probe = ColorMainProbeRegistry.lookup(intent.getStringExtra(ColorMainProbeRegistry.EXTRA_TOKEN))
         if (probe != null) {
             colorMainOverlay?.close(); colorMainOverlay = null
-        automaticColorProbe?.close(); automaticColorProbe = null
             colorMainProbe = null
             shutdown(false, "prepare explicit main-screen color test") { if (!isDestroyed) recreate() }
             return
@@ -1138,6 +1180,11 @@ class CarPlayHostActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         isActivityStarted = true
+        mainHandler.removeCallbacks(parkVideoInBackground)
+        if (videoParked) {
+            currentSurface?.takeIf { it.isValid }?.let { attachSurface(it); restoreVideoPicture() }
+            videoParked = false
+        }
         logThemeState(ThemeModeDiagnostics.Source.START, resources.configuration)
         mainHandler.removeCallbacks(pollConfiguration)
         mainHandler.post(pollConfiguration)
@@ -1415,6 +1462,7 @@ class CarPlayHostActivity : ComponentActivity() {
     }
 
     override fun onPause() {
+        captureLastPicture()
         cancelTemporarySystemBars()
         hostAppearanceResumed = false
         AppAppearanceRuntime.clearHost(this)
@@ -1432,6 +1480,9 @@ class CarPlayHostActivity : ComponentActivity() {
         closePicturePanel()
         // The controller, USB/iAP2 link, and VPN attachment intentionally outlive the UI.
         isActivityStarted = false
+        projectionBack.reset()
+        mainHandler.removeCallbacks(parkVideoInBackground)
+        mainHandler.postDelayed(parkVideoInBackground, 500L)
         logThemeState(ThemeModeDiagnostics.Source.STOP, resources.configuration)
         mainHandler.removeCallbacks(pollConfiguration)
         super.onStop()
@@ -1521,7 +1572,6 @@ class CarPlayHostActivity : ComponentActivity() {
         if (colorMainProbe != null && !colorMainFinishing && !isChangingConfigurations)
             finishColorMainProbe("无法显示", colorMainEvidence(emptyList()).put("startup_error", "destroyed_without_result"), false, returnToTests = false)
         colorMainOverlay?.close(); colorMainOverlay = null
-        automaticColorProbe?.close(); automaticColorProbe = null
         mainHandler.removeCallbacks(hideTemporarySystemBars)
         discardLastPicture()
         if (pictureCopyThreadStarted) pictureCopyThread.quitSafely()
@@ -1542,14 +1592,11 @@ class CarPlayHostActivity : ComponentActivity() {
         homeMonitor?.stop()
         CenterMapOverlay.hide()
         if (CenterMapOverlay.requestShow == (::showCenterMap)) CenterMapOverlay.requestShow = null
-        if (MapMirrors.sink === mirrorSink) {
-            MapMirrors.sink = null
-            MapMirrors.setStreamActive(false)
-        }
         if (MapMirrors.onChanged === mirrorsChanged) MapMirrors.onChanged = null
         mainHandler.removeCallbacks(applyDisplaySize)
         mainHandler.removeCallbacks(expireOldLogLines)
         mainHandler.removeCallbacks(pollConfiguration)
+        mainHandler.removeCallbacks(parkVideoInBackground)
         videoSurfaceOwner.clear()
         currentSurfaceTexture = null
         fallbackVideoView = null
@@ -1557,30 +1604,26 @@ class CarPlayHostActivity : ComponentActivity() {
         sessionLog?.append("Activity destroyed")
         sessionLog?.close()
         sessionLog = null
+        sessionEvents?.close();sessionEvents=null
+        sessionSubscription?.close();sessionSubscription=null
+        sessionUiCommand?.let{sessionRuntime?.releaseUi(it)}
+        sessionClient?.close();sessionClient=null
+        pendingSessionRequest=null
+        airPlayCommandExecutor.shutdownNow()
         super.onDestroy()
     }
 
-    private fun savedVideoOutput() = carPlayVideoOutput(
-        AirPlayPersistence.loadSoftwareDirectVideoOutput(this),
-        AirPlayPersistence.loadSmoothVideo(this),
-        AirPlayPersistence.loadDirectVideoOutput(this),
-        AirPlayPersistence.loadSoftwareYuvColor(this).takeIf { AirPlayPersistence.loadSoftwareYuvEnabled(this) },
-        hardwareYuv = AirPlayPersistence.loadHardwareYuvEnabled(this),
-    )
+    private fun savedVideoOutput() = com.shilapi.xcertplay.session.VideoSettingsAdapter.loadOutput(this)
 
     private fun buildContentView(): View {
         val desiredOutput = savedVideoOutput()
-        val retained = CarPlayBackgroundSession.snapshot()?.takeIf {
-            colorMainProbe == null && PendingReconnect.isPending(it.controller) &&
-                (it.sink.mainScreenSoftwareDecoder != desiredOutput.software ||
-                    it.sink.mainScreenSoftwareYuv != desiredOutput.yuv ||
-                    it.sink.mainScreenHardwareYuv != desiredOutput.hardwareYuv)
-        }
-        // Saving the mode must not stop a retained session merely because its Activity was recreated.
-        val savedOutput = retained?.let {
-            carPlayVideoOutput(it.sink.mainScreenSoftwareDecoder, it.sink.videoPacingEnabled,
-                AirPlayPersistence.loadDirectVideoOutput(this), it.sink.mainScreenSoftwareYuv, it.sink.mainScreenHardwareYuv)
-        } ?: desiredOutput
+        val retainedRuntime=DiPlaySessionService.liveRuntime
+        val retained=retainedRuntime?.currentConnection?.takeIf{colorMainProbe==null}
+        // Rebuilding a page renders the live request, even when preferences await a later reconnect.
+        val savedOutput=retained?.let{
+            carPlayVideoOutput(it.sink.mainScreenSoftwareDecoder,it.sink.videoPacingEnabled,
+                retainedRuntime?.currentRequest?.media?.direct?:false,it.sink.mainScreenSoftwareYuv,it.sink.mainScreenHardwareYuv)
+        }?:desiredOutput
         val profile = colorMainProbe?.profile
         // Explicit trials remain independent; "current" must include the driver's daily mode.
         softwareDirectVideoOutput = savedOutput.software && (profile == null || profile.id == "current")
@@ -1669,11 +1712,11 @@ class CarPlayHostActivity : ComponentActivity() {
             visibility = View.GONE
             setOnClickListener {
                 if (!CarPlayBackgroundSession.isOwner(this@CarPlayHostActivity) ||
-                    shuttingDown.get() || menuOpen || handshakeResetInProgress) return@setOnClickListener
-                startupRetryBudget.manualRetry()
-                authenticationRetryUsed = false
-                startupRetryStopped = false
-                reconnectAttempts = 0
+                    shuttingDown.get() || menuOpen) return@setOnClickListener
+
+
+
+
                 visibility = View.GONE
                 restartCarPlay(getString(R.string.connecting_to_your_iphone))
             }
@@ -1792,12 +1835,6 @@ class CarPlayHostActivity : ComponentActivity() {
         connectionPanel = viewport
         updateDebugOverlays()
         colorMainProbe?.let { request ->
-            if (request.autoRunId != null) {
-                automaticColorProbe = AutomaticColorMainProbe(this, request, ::videoAdaptationSample,
-                    { if (fallbackVideoView != null) null to fallbackVideoView else (videoView as? TextureView) to null },
-                    ::colorMainEvidence) { verdict, data, next -> finishColorMainProbe(verdict, data, next) }
-                root.addView(automaticColorProbe!!.root, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM))
-            } else {
             colorMainOverlay = ColorMainProbeOverlay(this, request,
                 ready = { sink?.videoColorOutput()?.let { it.active && it.firstFrameRendered } == true },
                 connection = { stageStatusView?.text?.toString().orEmpty() },
@@ -1805,7 +1842,6 @@ class CarPlayHostActivity : ComponentActivity() {
                 evidence = ::colorMainEvidence,
                 completed = { verdict, data, next -> finishColorMainProbe(verdict, data, next) })
             root.addView(colorMainOverlay!!.root, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM))
-            }
         }
         return root
     }
@@ -4794,465 +4830,183 @@ class CarPlayHostActivity : ComponentActivity() {
     private fun normalizedModel(): String =
         model.trim().ifBlank { AirPlayPersistence.DEFAULT_MODEL }
 
-    private fun createMediaSink(
-        videoWidth: Int,
-        videoHeight: Int,
-        controllerGeneration: Int,
-    ): AndroidMediaSink {
-        // Capture this session's log: late decoder shutdown must not write into a new session.
-        val diagnosticLog = sessionLog
-        softwareYuvFailureShown = false
-        hardwareYuvFailureShown = false
-        return AndroidMediaSink(
-            surface = null,
-            videoWidth = videoWidth,
-            videoHeight = videoHeight,
-            preferSoftwareHevcDecoder = hevcSoftwareDecoderEnabled && !hardwareYuvVideoOutput,
-            forceSoftwareVideoDecoder = colorMainProbe?.profile?.software == true,
-            mainScreenSoftwareDecoder = softwareDirectVideoOutput,
-            mainScreenSoftwareYuv = softwareYuvConfig,
-            mainScreenHardwareYuv = hardwareYuvVideoOutput,
-            videoColorOverride = colorMainProbe?.color ?: com.shilapi.xcertplay.media.VideoColorOverride(),
-            nativeHfpCalls = AirPlayPersistence.loadNativeHfpCalls(this),
-            advancedAudioChannelMapping = advancedAudioChannelMapping,
-            audioFocusEnabled = AirPlayPersistence.loadAudioFocusEnabled(this),
-            audioFocusAutoYield = AirPlayPersistence.loadAudioFocusAutoYield(this),
-            mediaChannel = AirPlayPersistence.loadMediaAudioChannel(this),
-            navigationChannel = AirPlayPersistence.loadNavigationAudioChannel(this),
-            navigationAttenuationDb = AirPlayPersistence.loadNavigationAudioAttenuationDb(this),
-            context = this,
-            navigationStreamType = navigationStreamType,
-            onScreenStreamActiveChanged = { type, active ->
-                onScreenStreamStateChanged(controllerGeneration, type, active)
-            },
-            mediaBufferMillis = AirPlayPersistence.loadMediaBufferMillis(this, wireless = wirelessEnabled),
-            onAudioDiagnostic = { message ->
-                DetailedDebugLog.record("audio", "generation=$controllerGeneration $message")
-                if (message.startsWith("Microphone: ")) {
-                    AsyncDiagnosticLog.append(diagnosticLog, message)
-                } else {
-                    diagnosticLog?.append(formattedLogLine(message, System.currentTimeMillis()))
-                }
-            },
-            onMediaAudioChanged = CarPlayMediaKeys::onMediaAudioChanged,
-            callEchoCancellation = AirPlayPersistence.loadCallEchoCancellation(this),
-            callVoiceFilter = AirPlayPersistence.loadCallVoiceFilter(this),
-            experimentalAudio = AirPlayPersistence.loadExperimentalAudio(this),
-            callSpeakerphone = { AirPlayPersistence.loadCallSpeakerphone(this) },
-            // Only a SurfaceView honours release timestamps; smooth video always selects one.
-            videoPacingDelayMillis = if (smoothVideo) smoothVideoDelayMillis(fps) else 0,
-            mainVideoFrameRate = fps,
-            vendorLowLatencyDecoder = AirPlayPersistence.loadLowLatencyDecoder(this),
-            mtkDecoderTuningEnabled = AirPlayPersistence.loadMtkDecoderTuning(this),
-        )
-    }
-
-    private fun createMediaEngine(sink: AndroidMediaSink): CarPlayMediaEngine =
-        CarPlayMediaEngine(
-            sink = sink,
-            microphoneEnabled = microphoneAvailable,
-            audioCaptureDirectory = audioCaptureDirectory(),
-        )
-
-    private fun createSessionListener(controllerGeneration: Int): AirPlaySessionListener =
-        object : AirPlaySessionListener {
-            private val diagnosticLog = sessionLog
-
-            override fun onCornerMask(session: AirPlaySession, png: ByteArray, displayWidth: Int) {
-                runOnUiThread {
-                    if (controllerGeneration != restartGeneration || shuttingDown.get() ||
-                        blackCornerRadiusDp != CarPlayBlackCornerOverlay.IPHONE_MASK) return@runOnUiThread
-                    val active = activeAirPlaySession
-                    if (active != null && active !== session) return@runOnUiThread
-                    pendingIphoneCornerMask = session to (png to displayWidth)
-                    if (active === session) installIphoneCornerMask(session, png, displayWidth)
-                }
-            }
-
-            override fun onSessionActive(session: AirPlaySession) {
-                DetailedDebugLog.record("connection", "session active generation=$controllerGeneration current=$restartGeneration")
-                runOnUiThread {
-                    if (controllerGeneration != restartGeneration || controllerGeneration == authenticationInvalidGeneration ||
-                        shuttingDown.get() || startupRetryStopped) {
-                        return@runOnUiThread
-                    }
-                    activeAirPlaySession = session
-                    val pending = pendingIphoneCornerMask
-                    if (pending?.first === session) {
-                        installIphoneCornerMask(session, pending.second.first, pending.second.second)
-                    } else clearIphoneCornerMask()
-                    CarPlayBackgroundSession.active = true
-                    showConnectionHelp(null)
-                    reconnectAttempts = 0
-                    logThemeState(ThemeModeDiagnostics.Source.SESSION_ACTIVE, resources.configuration)
-                    syncAirPlayDarkMode(ThemeModeDiagnostics.Source.SESSION_ACTIVE)
-                    if (menuOpen) return@runOnUiThread
-                    appendLog("AirPlay session active")
-                }
-            }
-
-            override fun onVideoFrameRendered(session: AirPlaySession) {
-                runOnUiThread {
-                    if (controllerGeneration != restartGeneration || controllerGeneration == authenticationInvalidGeneration ||
-                        activeAirPlaySession !== session || shuttingDown.get()) return@runOnUiThread
-                    if (!startupRetryBudget.firstFrame(session, android.os.SystemClock.elapsedRealtime())) return@runOnUiThread
-                    mainHandler.postDelayed({
-                        if (controllerGeneration == restartGeneration && controllerGeneration != authenticationInvalidGeneration &&
-                            activeAirPlaySession === session && !shuttingDown.get() && CarPlayBackgroundSession.isOwner(this@CarPlayHostActivity) &&
-                            startupRetryBudget.resetIfStable(session, android.os.SystemClock.elapsedRealtime())) {
-                            appendLog("wireless startup retry budget reset after stable video session")
-                        }
-                    }, WirelessStartupPolicy.STABLE_SESSION_MILLIS)
-                }
-            }
-
-            override fun onSessionEnded(session: AirPlaySession) {
-                DetailedDebugLog.record("connection", "session ended generation=$controllerGeneration current=$restartGeneration")
-                runOnUiThread {
-                    val active = activeAirPlaySession
-                    if (active != null && active !== session) {
-                        // 探针或非活动握手结束时，保留当前播放会话。
-                        appendLog("Non-active AirPlay connection ended; keeping the live session")
-                        return@runOnUiThread
-                    }
-                    if (controllerGeneration != restartGeneration || startupRetryStopped) return@runOnUiThread
-                    startupRetryBudget.disconnected()
-                    activeAirPlaySession = null
-                    clearIphoneCornerMask()
-                    CarPlayBackgroundSession.active = false
-                    if (menuOpen) {
-                        recoveryPendingAfterMenu = true
-                        return@runOnUiThread
-                    }
-                    activeScreenStreamTypes.clear()
-                    setConnectionStage(R.string.carplay_session_ended_reconnecting)
-                    appendLog("AirPlay session ended; reconnecting from scratch")
-                    reconnectAfterLoss("AirPlay session ended")
-                }
-            }
-
-            override fun onTransportError(message: String) {
-                DetailedDebugLog.record("connection", "transport error generation=$controllerGeneration $message")
-                runOnUiThread {
-                    if (controllerGeneration != restartGeneration || startupRetryStopped) return@runOnUiThread
-                    startupRetryBudget.disconnected()
-                    if (menuOpen) {
-                        recoveryPendingAfterMenu = true
-                        return@runOnUiThread
-                    }
-                    activeScreenStreamTypes.clear()
-                    setConnectionStage(R.string.transport_error_reconnecting)
-                    appendLog("CarPlay transport error: $message; reconnecting from scratch")
-                    reconnectAfterLoss("CarPlay transport error: $message")
-                }
-            }
-
-            override fun onDebugLog(message: String) {
-                if (colorMainProbe != null) synchronized(colorMainLines) {
-                    DiagnosticRedactor.redact(message)?.let { colorMainLines.addLast(it.take(700)) }
-                    while (colorMainLines.size > 80) colorMainLines.removeFirst()
-                }
-                DetailedDebugLog.record("protocol", "generation=$controllerGeneration $message")
-                // AirPlay metadata lines contain body=length and are intentionally dropped by the
-                // log redactor. Extract only a fixed phase label; never display the original line.
-                ConnectionStageProtocol.textId(message)?.let { phase ->
-                    runOnUiThread {
-                        if (controllerGeneration == restartGeneration && !shuttingDown.get() &&
-                            !isDestroyed && !startupRetryStopped && connectionStageProgress.protocol(phase)) {
-                            connectionStageView?.text = currentConnectionStageText()
-                        }
-                    }
-                }
-                if (DiagnosticRedactor.redact(message) == null) return
-                if (message.startsWith(CarPlayController.CONNECTION_DIAGNOSTIC_PREFIX + " ")) {
-                    // Retain old-controller teardown evidence without accepting its UI/session state.
-                    AsyncDiagnosticLog.append(diagnosticLog, message)
-                    return
-                }
-                runOnUiThread {
-                    if (controllerGeneration != restartGeneration) {
-                        return@runOnUiThread
-                    }
-                    DisplayDiagnosticSnapshot.record(this@CarPlayHostActivity, displayDiagnosticAttempt, message)
-                    if (hardwareYuvVideoOutput && !hardwareYuvFailureShown && message.contains("hardware-yuv unavailable:")) {
-                        hardwareYuvFailureShown = true
-                        android.widget.Toast.makeText(this@CarPlayHostActivity, R.string.settings_hardware_yuv_failed,
-                            android.widget.Toast.LENGTH_LONG).show()
-                    }
-                    if (softwareYuvConfig != null && !softwareYuvFailureShown &&
-                        message.contains("software-yuv unavailable:")) {
-                        softwareYuvFailureShown = true
-                        android.widget.Toast.makeText(this@CarPlayHostActivity, R.string.settings_software_yuv_failed,
-                            android.widget.Toast.LENGTH_LONG).show()
-                    }
-                    if (menuOpen) return@runOnUiThread
-                    if (message.startsWith(PROTOCOL_TRACE_PREFIX)) {
-                        appendFileLog(message)
-                    } else {
-                        appendLog(message, recordDetail = false)
-                    }
-                }
-            }
-        }
-
-    private fun createStatusReporter(
-        controllerGeneration: Int,
-    ): (CarPlayStatus) -> Unit = report@{ status ->
-        DetailedDebugLog.record("connection-stage", "generation=$controllerGeneration current=$restartGeneration stage=${status.javaClass.simpleName} menuOpen=$menuOpen")
-        if (controllerGeneration != restartGeneration) return@report
-        connectionStageProgress.status(status)
-        connectionStageView?.text = currentConnectionStageText()
-        if (status is CarPlayStatus.RunningControl || status is CarPlayStatus.RunningWireless) {
-            controlRunningCount++
-            lossSinceControlRunning = false
-        } else if (status is CarPlayStatus.Failed || status is CarPlayStatus.ControlEnded) {
-            lossSinceControlRunning = true
-        }
-        if (status is CarPlayStatus.Failed || status is CarPlayStatus.ControlEnded) {
-        }
-        if (status is CarPlayStatus.Failed && status.authenticationFailure) {
-            authenticationInvalidGeneration = controllerGeneration
-            authenticationReconnectRequiresClosed = true
-            // Stop all transports promptly, including while the settings menu is open.
-            controller?.close()
-        }
-        if (menuOpen) {
-            if (status is CarPlayStatus.Failed &&
-                failurePendingAfterMenu?.authenticationFailure != true) failurePendingAfterMenu = status
-            return@report
-        }
-        updateHotspotStatus(status)
-        val description = status.describe()
-        val englishDescription = status.describe(englishResources)
-        // Once the retries stopped, a later failure of the same attempt, such as its cleanup, keeps the line saying so.
-        if (!startupRetryStopped || status !is CarPlayStatus.Failed) setConnectionStage(description, englishDescription)
-        // Keep the actionable tip readable while automatic retries are in progress.
-        // Only a working AirPlay session, or a new failure, replaces it.
-        if (status is CarPlayStatus.Failed) showConnectionHelp(status)
-        if (status is CarPlayStatus.Failed && status.authenticationFailure) {
-            if (!CarPlayBackgroundSession.isOwner(this) || shuttingDown.get() || startupRetryStopped) return@report
-            if (authenticationFailureGeneration == controllerGeneration) return@report
-            authenticationFailureGeneration = controllerGeneration
-            authenticationReconnectRequiresClosed = true
-            if (authenticationRetryUsed) {
-                stopAuthenticationRecovery()
-                return@report
-            }
-            authenticationRetryUsed = true
-        }
-        when (status) {
-            is CarPlayStatus.Failed -> if (status.wifiResetRequired) {
-                wifiRecoveryButton?.visibility = View.VISIBLE
-            } else {
-                wifiRecoveryButton?.visibility = View.GONE
-                if (status.startupFailure != null) {
-                    if (startupFailureGeneration == controllerGeneration) return@report
-                    startupFailureGeneration = controllerGeneration
-                }
-                reconnectAfterLoss(description, status.startupFailure, englishDescription)
-            }
-            else -> Unit
-        }
-    }
-
-    private fun adoptBackgroundSession(): Boolean {
-        val snapshot = CarPlayBackgroundSession.snapshot() ?: return false
-        if (colorMainProbe != null) {
-            CarPlayBackgroundSession.stop { mainHandler.post { if (!isDestroyed) maybeStartCarPlay() } }
-            return false
-        }
-        if (snapshot.controller.isClosed()) {
-            CarPlayBackgroundSession.clear(snapshot.controller)
-            return false
-        }
-        // The sink's pacing is fixed when it is built; a session from before a Smooth video change (for
-        // example one whose reconnect stopped at a prerequisite) is stopped instead of adopted. Callers
-        // retry, and the next start matches this view.
-        if (!backgroundSessionMatchesView(snapshot.sink.videoPacingEnabled, smoothVideo) ||
-            snapshot.sink.mainScreenSoftwareDecoder != softwareDirectVideoOutput ||
-            snapshot.sink.mainScreenSoftwareYuv != softwareYuvConfig ||
-            snapshot.sink.mainScreenHardwareYuv != hardwareYuvVideoOutput) {
-            appendLog("Background session video output differs from this view " +
-                "(software=${snapshot.sink.mainScreenSoftwareDecoder}/$softwareDirectVideoOutput); " +
-                "stopping it instead of adopting it")
-            CarPlayBackgroundSession.stop { mainHandler.post { if (!isDestroyed) maybeStartCarPlay() } }
-            return false
-        }
-        displayDiagnosticAttempt = DisplayDiagnosticSnapshot.currentAttempt(this)
-
-        // The retained controller already resolved the microphone choice, including a refusal.
-        // Keep the actual grant in microphoneAvailable for the replacement stack.
-        microphonePermissionResolved = true
-        controller = snapshot.controller
-        updateClusterMapShown()
-        sink = snapshot.sink
-        sessionDisplay = snapshot.display
-        resetSidePanel()
-        if (snapshot.display.viewAreas?.let { it.kindOf(it.current) == CarPlayViewAreas.Kind.SIDE_PANEL } == true) {
-            // The live stream can outlast its Activity. Restore the Android view covering its
-            // unused strip instead of leaving a blank third when a new host adopts the session.
-            sidePanelShown = true
-            sidePanel?.visibility = View.VISIBLE
-            sidePanelTick.run()
-            showSidePanelGripHint()
-        }
-        MapMirrors.reapply()
-        CarPlayBackgroundSession.store(snapshot.controller, snapshot.sink, snapshot.width, snapshot.height,
-            this, snapshot.display) { completion ->
-            runOnUiThread {
-                shutdown(false, "Apple CarPlay disconnect", completion)
-                finish()
-            }
-        }
-        if (snapshot.width > 0 && snapshot.height > 0) {
-            activeDisplaySize = DisplaySize(snapshot.width, snapshot.height)
-        }
-        videoView?.let { updateVideoLayout(it.width, it.height) }
-        videoView?.post {
-            val view = videoView ?: return@post
-            if (view.width > 0 && view.height > 0) {
-                scheduleDisplaySize(view.width, view.height)
-            }
-        }
-
-        val generation = restartGeneration
-        snapshot.controller.attachUi(
-            createSessionListener(generation),
-            createStatusReporter(generation),
-        )
-        // Install the listener before reading the snapshot: a later transition reaches this UI,
-        // while an earlier transition is represented by the controller's current session.
-        activeAirPlaySession = snapshot.controller.currentAirPlaySession()
-        // A new Activity adopts the running stream without another AirPlay SETUP or session-active
-        // callback. Restore iOS's captured mask when the controller still owns that live session.
-        if (blackCornerRadiusDp == CarPlayBlackCornerOverlay.IPHONE_MASK) {
-            snapshot.controller.activeIphoneCornerMask()?.takeIf { it.first === activeAirPlaySession }
-                ?.let { (session, png, width) -> installIphoneCornerMask(session, png, width) }
-        }
-        if (activeAirPlaySession != null) {
-            logThemeState(ThemeModeDiagnostics.Source.SESSION_ACTIVE, resources.configuration)
+    private fun createSessionListener(controllerGeneration:Int):AirPlaySessionListener=object:AirPlaySessionListener {
+        private val diagnosticLog=sessionLog
+        private fun current()=controllerGeneration==restartGeneration && !isDestroyed && !shuttingDown.get()
+        override fun onSessionActive(session:AirPlaySession){if(current()){
+            activeAirPlaySession=session;showConnectionHelp(null)
+            val pending=pendingIphoneCornerMask
+            if(pending?.first===session)installIphoneCornerMask(session,pending.second.first,pending.second.second)
+            else clearIphoneCornerMask()
+            controller?.activeIphoneCornerMask()?.takeIf{it.first===session}?.let{installIphoneCornerMask(session,it.second,it.third)}
+            logThemeState(ThemeModeDiagnostics.Source.SESSION_ACTIVE,resources.configuration)
             syncAirPlayDarkMode(ThemeModeDiagnostics.Source.SESSION_ACTIVE)
+            setConnectionStage(R.string.carplay_service_already_running)
+        }}
+        override fun onSessionEnded(session:AirPlaySession){if(current() && (activeAirPlaySession==null || activeAirPlaySession===session)){
+            activeAirPlaySession=null;clearIphoneCornerMask();activeScreenStreamTypes.clear()
+            setConnectionStage(R.string.carplay_session_ended_reconnecting)
+        }}
+        override fun onTransportError(message:String){if(current())setConnectionStage(R.string.transport_error_reconnecting)}
+        override fun onCornerMask(session:AirPlaySession,png:ByteArray,displayWidth:Int){
+            if(!current() || blackCornerRadiusDp!=CarPlayBlackCornerOverlay.IPHONE_MASK)return
+            if(activeAirPlaySession!=null && activeAirPlaySession!==session)return
+            pendingIphoneCornerMask=session to (png to displayWidth)
+            if(activeAirPlaySession===session)installIphoneCornerMask(session,png,displayWidth)
         }
-        snapshot.sink.setScreenStreamActiveChangedListener { type, active ->
-            onScreenStreamStateChanged(restartGeneration, type, active)
+        override fun onDebugLog(message:String){
+            if(message.startsWith(CarPlayController.CONNECTION_DIAGNOSTIC_PREFIX+" ")){
+                AsyncDiagnosticLog.append(diagnosticLog,message)
+                return
+            }
+            if(!current())return
+            if(colorMainProbe!=null)synchronized(colorMainLines){
+                DiagnosticRedactor.redact(message)?.let{colorMainLines.addLast(it.take(700))}
+                while(colorMainLines.size>80)colorMainLines.removeFirst()
+            }
+            ConnectionStageProtocol.textId(message)?.let{if(connectionStageProgress.protocol(it))connectionStageView?.text=currentConnectionStageText()}
+            if(DiagnosticRedactor.redact(message)==null)return
+            DisplayDiagnosticSnapshot.record(this@CarPlayHostActivity,displayDiagnosticAttempt,message)
+            if(hardwareYuvVideoOutput && !hardwareYuvFailureShown && message.contains("hardware-yuv unavailable:")){
+                hardwareYuvFailureShown=true
+                android.widget.Toast.makeText(this@CarPlayHostActivity,R.string.settings_hardware_yuv_failed,android.widget.Toast.LENGTH_LONG).show()
+            }
+            if(softwareYuvConfig!=null && !softwareYuvFailureShown && message.contains("software-yuv unavailable:")){
+                softwareYuvFailureShown=true
+                android.widget.Toast.makeText(this@CarPlayHostActivity,R.string.settings_software_yuv_failed,android.widget.Toast.LENGTH_LONG).show()
+            }
+            if(!menuOpen){
+                if(message.startsWith(PROTOCOL_TRACE_PREFIX))appendFileLog(message)
+                else appendLog(message,recordDetail=false)
+            }
         }
-        currentSurface?.let(::attachSurface)
-        val serviceReused = snapshot.controller.hasActiveAirPlayAttachment()
-        appendLog(
-            if (serviceReused) {
-                "Reusing existing background CarPlay service"
-            } else {
-                "Reusing existing background CarPlay session"
-            },
-        )
-        setConnectionStage(
-            if (serviceReused) {
-                R.string.carplay_service_already_running
-            } else {
-                R.string.carplay_session_already_running
-            },
-        )
-        updateDebugOverlays()
+    }
+
+    private fun createStatusReporter(controllerGeneration:Int):(CarPlayStatus)->Unit={status->
+        if(controllerGeneration==restartGeneration && !isDestroyed && !shuttingDown.get()){
+            connectionStageProgress.status(status)
+            connectionStageView?.text=currentConnectionStageText()
+            updateHotspotStatus(status)
+            val cause=(status as? CarPlayStatus.Failed)?.knownCause
+            if(cause!=null)setConnectionStage(ConnectionFailureGuidance.stage(cause))
+            else setConnectionStage(status.describe(),status.describe(englishResources))
+            wifiRecoveryButton?.visibility=if(status is CarPlayStatus.Failed && status.wifiResetRequired)View.VISIBLE else View.GONE
+            if(status is CarPlayStatus.Failed)showConnectionHelp(status)
+        }
+    }
+
+    private fun bindSessionRuntime(owner:com.shilapi.xcertplay.session.SessionRuntime){
+        sessionSubscription?.close();sessionEvents?.close()
+        val firstBinding=sessionRuntime!==owner || sessionUiCommand==null
+        sessionRuntime=owner
+        val claimed=owner.claimUi(System.identityHashCode(this))
+        if(firstBinding || sessionUiCommand?.ownerGeneration!=claimed.ownerGeneration){
+            sessionUiCommand=claimed
+            mainHandler.removeCallbacks(applyDisplaySize)
+            pendingDisplaySize=null;pendingDisplayCommand=null
+            if(owner.configurationRequired && owner.currentConnection==null)activeDisplaySize=null
+        }
+        MapMirrors.onChanged=mirrorsChanged
+        sessionSubscription=owner.subscribe { state->
+            if(!isDestroyed && !shuttingDown.get()){
+                if(boundSessionIdentity!=state.identity){
+                    sessionEvents?.close();boundSessionIdentity=state.identity
+                    state.identity?.let{identity->
+                        restartGeneration=identity.generation.toInt()
+                        sessionEvents=owner.attachEvents(createSessionListener(restartGeneration),createStatusReporter(restartGeneration)) {type,active->
+                            if(!isDestroyed)onScreenStreamStateChanged(restartGeneration,type,active)
+                        }
+                    }
+                }
+                if(state.identity!=null && outputSessionIdentity!=state.identity && owner.currentConnection!=null){
+                    outputSessionIdentity=state.identity
+                    sessionDisplay=owner.currentRequest?.display
+                    activeAirPlaySession=controller?.currentAirPlaySession()
+                    resetSidePanel()
+                    if(sessionDisplay?.viewAreas?.let{it.kindOf(it.current)==CarPlayViewAreas.Kind.SIDE_PANEL}==true){
+                        sidePanelShown=true;sidePanel?.visibility=View.VISIBLE
+                        sidePanelTick.run();showSidePanelGripHint()
+                    }
+                    sessionDisplay?.let{display->activeDisplaySize=DisplaySize(display.windowWidth,display.windowHeight)}
+                    currentSurface?.let(::attachSurface)
+                    if(activeAirPlaySession!=null)syncAirPlayDarkMode(ThemeModeDiagnostics.Source.SESSION_ACTIVE)
+                    controller?.activeIphoneCornerMask()?.takeIf{it.first===activeAirPlaySession}?.let{installIphoneCornerMask(it.first,it.second,it.third)}
+                }
+                if(state.identity==null && owner.currentConnection==null){
+                    activeAirPlaySession=null;activeScreenStreamTypes.clear()
+                    clearIphoneCornerMask();resetSidePanel();updateDebugOverlays()
+                }
+                val uiState=com.shilapi.xcertplay.session.ProjectionUiStateRenderer.render(state)
+                if(uiState.requestPrerequisites && lastPrerequisiteFailure!=state.failure){
+                    lastPrerequisiteFailure=state.failure
+                    mainHandler.post{if(!isDestroyed && !shuttingDown.get())requestStartupPrerequisites()}
+                }else if(state.phase==com.shilapi.xcertplay.session.RuntimePhase.STARTING)lastPrerequisiteFailure=null
+                if(state.phase==com.shilapi.xcertplay.session.RuntimePhase.BLOCKED_RELEASE)
+                    setConnectionStage(R.string.session_waiting_for_release)
+                startupRetryButton?.visibility=if(uiState.showRetry)View.VISIBLE else View.GONE
+                if(uiState.showRetry){
+                    val cause=state.protocolStatus?.describe()
+                    setConnectionStage(listOfNotNull(cause,getString(R.string.wireless_startup_retries_exhausted)).joinToString("\n"))
+                }
+            }
+        }
+    }
+
+    private fun adoptBackgroundSession():Boolean {
+        val owner=DiPlaySessionService.liveRuntime ?: return false
+        if(owner.currentConnection==null)return false
+        if(sessionRuntime!==owner || sessionSubscription==null)bindSessionRuntime(owner)
+        sessionDisplay=owner.currentRequest?.display
         return true
     }
 
-    private fun startCarPlay(size: DisplaySize) {
+    private fun prepareSessionRequest(size:DisplaySize):com.shilapi.xcertplay.session.SessionStartRequest {
         refreshMicrophonePermission()
-        if (CarPlayBackgroundSession.hasSession() && !CarPlayBackgroundSession.isOwner(this)) return
-        if (shuttingDown.get() || menuOpen || handshakeResetInProgress || controller != null ||
-            CarPlayBackgroundSession.authenticationTeardownPending()) return
-        val controllerGeneration = restartGeneration
-        // Settings → Connection can change the target while this screen stays open (#696).
-        mfiTarget = AirPlayPersistence.loadMfiTarget(this)
-        runCatching { DiPlayBootstrap.ensure(this, mfiTarget) }
-        val config = createRuntimeConfig()
-        val effectiveSize = if (isMultiWindowActive() && !AirPlayPersistence.loadAdaptPipResolution(this) &&
-            maximumDetectedWidthPixels >= size.width && maximumDetectedHeightPixels >= size.height &&
-            (maximumDetectedWidthPixels > size.width || maximumDetectedHeightPixels > size.height)) {
-            DisplaySize(maximumDetectedWidthPixels, maximumDetectedHeightPixels)
-        } else {
-            size
-        }
-        val airPlayConfig = createAirPlayConfig(effectiveSize)
-        val locationProvider: Iap2LocationProvider? =
-            if (config.locationReportingEnabled) AndroidCarPlayLocationProvider(this) else null
-        appendLog(
-            "Starting CarPlay controller at ${size.width}x${size.height} -> " +
-                "${airPlayConfig.main.widthPixels}x${airPlayConfig.main.heightPixels} " +
-                "(${displayScalePercent}%) " +
-                "physical=${airPlayConfig.main.widthPhysicalMm}x" +
-                "${airPlayConfig.main.heightPhysicalMm}mm " +
-                "video=${if (airPlayConfig.hevc) "HEVC" else "H.264"} " +
-                "decoder=${if (airPlayConfig.hevc && hevcSoftwareDecoderEnabled) "software" else "hardware"} " +
-                "microphone=${airPlayConfig.microphone} " +
-                "location=${if (config.locationReportingEnabled) "enabled" else "disabled"}" +
-                "${if (config.identification.vehicleSpeedEnabled) "+wheel-speed" else ""} " +
-                "mfi=${mfiTargetLabel(config.mfiTarget)}" +
-                if (config.transport == CarPlayTransport.WIRED) " usbCharging=${config.availableCurrentMilliAmps}mA" else "",
-        )
-        Log.i(
-            TAG,
-            "starting controller display=${size.width}x${size.height} " +
-                "negotiated=${airPlayConfig.main.widthPixels}x${airPlayConfig.main.heightPixels} " +
-                "scale=${displayScalePercent}% " +
-                "hevc=${airPlayConfig.hevc} " +
-                "softwareHevc=${airPlayConfig.hevc && hevcSoftwareDecoderEnabled} " +
-                "microphone=${airPlayConfig.microphone} " +
-                "location=${config.locationReportingEnabled} " +
-                "mfi=${config.mfiTarget}",
-        )
-        val renderer = createMediaSink(
-            videoWidth = airPlayConfig.main.widthPixels,
-            videoHeight = airPlayConfig.main.heightPixels,
-            controllerGeneration = controllerGeneration,
-        )
-        sink = renderer
-        currentSurface?.let(::attachSurface)
-        MapMirrors.reapply()
-        val media = createMediaEngine(renderer)
-        val pairings = AirPlayPersistence.loadPairings(this) { id, key ->
-            AirPlayPersistence.savePairing(this, id, key)
-        }
-        val next = CarPlayController(
-            context = this,
-            config = config,
-            airPlayConfig = airPlayConfig,
-            identity = airPlayIdentity,
-            pairings = pairings,
-            listener = createSessionListener(controllerGeneration),
-            media = media,
-            reportStatus = createStatusReporter(controllerGeneration),
-            loadPairRecord = { AirPlayPersistence.loadLockdownRecord(this) },
-            savePairRecord = { record -> AirPlayPersistence.saveLockdownRecord(this, record) },
-            clearPairRecord = { AirPlayPersistence.clearLockdownRecord(this) },
-            locationProvider = locationProvider,
-        )
-        controller = next
-        resetSidePanel() // a new session starts without the side panel
-        updateClusterMapShown()
-        CarPlayMediaKeys.attach(this, next)
-        if (airPlayConfig.videoInCar) CarPlayVideo.attach(this, next)
-        val display = CarPlaySessionDisplay(
-            airPlayConfig.main.widthPixels, airPlayConfig.main.heightPixels,
-            displayRotation(), hideTopBar, hideBottomBar, effectiveSize.width, effectiveSize.height,
-            viewAreas = pendingViewAreas,
-            statusBarShown = statusBarShown(),
-        )
-        sessionDisplay = display
-        videoView?.let { updateVideoLayout(it.width, it.height) }
-        CarPlayBackgroundSession.store(next, renderer, size.width, size.height, this, display) { completion ->
-            runOnUiThread {
-                shutdown(terminateProcess = false, reason = "Apple CarPlay disconnect", completion = completion)
-                finish()
+        mfiTarget=AirPlayPersistence.loadMfiTarget(this)
+        DiPlayBootstrap.ensure(this,mfiTarget)
+        val config=createRuntimeConfig()
+        val effectiveSize=if(isMultiWindowActive() && !AirPlayPersistence.loadAdaptPipResolution(this) &&
+            maximumDetectedWidthPixels>=size.width && maximumDetectedHeightPixels>=size.height)
+            DisplaySize(maximumDetectedWidthPixels,maximumDetectedHeightPixels)else size
+        val airPlay=createAirPlayConfig(effectiveSize)
+        val display=CarPlaySessionDisplay(airPlay.main.widthPixels,airPlay.main.heightPixels,displayRotation(),hideTopBar,hideBottomBar,
+            effectiveSize.width,effectiveSize.height,pendingViewAreas,statusBarShown())
+        return com.shilapi.xcertplay.session.SessionStartRequest(config,airPlay,airPlayIdentity,
+            com.shilapi.xcertplay.session.SessionMediaOptions(airPlay.main.widthPixels,airPlay.main.heightPixels,
+                hevcSoftware=hevcSoftwareDecoderEnabled,forceSoftware=colorMainProbe?.profile?.software==true,
+                softwareDirect=softwareDirectVideoOutput,softwareYuv=softwareYuvConfig,hardwareYuv=hardwareYuvVideoOutput,
+                color=colorMainProbe?.color?:com.shilapi.xcertplay.media.VideoColorOverride(),advancedChannels=advancedAudioChannelMapping,
+                navigationStreamType=navigationStreamType,pacingDelayMs=if(smoothVideo)smoothVideoDelayMillis(fps)else 0,
+                frameRate=fps,microphone=microphoneAvailable,captureDirectory=audioCaptureDirectory(),
+                direct=directVideoOutput,hardwareAccelerated=videoView?.isHardwareAccelerated),display)
+    }
+    private fun startCarPlay(size:DisplaySize) {
+        if(shuttingDown.get() || menuOpen || controller!=null)return
+        val request=runCatching{prepareSessionRequest(size)}.getOrElse{appendLog("Session preparation failed: ${it.javaClass.simpleName}");return}
+        pendingSessionRequest=request
+        fun start(owner:com.shilapi.xcertplay.session.SessionRuntime){
+            if(owner.configurationRequired && activeDisplaySize==null){
+                pendingSessionRequest=null
+                videoView?.post{videoView?.let{scheduleDisplaySize(it.width,it.height)}}
+                return
+            }
+            val pending=pendingSessionRequest ?: return
+            pendingSessionRequest=null
+            if(sessionUiCommand==null)bindSessionRuntime(owner)
+            val command=sessionUiCommand ?: return
+            val result=owner.startFromUi(pending,command)
+            if(!result.accepted){
+                appendLog("Session start refused: ${result.reason}")
+                if(result.reason in setOf("foreground_not_ready","diagnostic_active","waiting_for_actual_release"))
+                    mainHandler.postDelayed({if(!isDestroyed)maybeStartCarPlay()},500)
             }
         }
-        try {
-            ContextCompat.startForegroundService(this, Intent(this, DiPlaySessionService::class.java))
-            next.start()
-        } catch (error: RuntimeException) {
-            appendLog("Connection could not start: ${error.javaClass.simpleName}")
-            shutdown(false, "foreground service could not start")
-            setConnectionStage(R.string.could_not_start_carplay_return_to_diplay_and_check_app_per)
+        sessionRuntime?.let{start(it);return}
+        if(sessionClient==null){
+            sessionClient=com.shilapi.xcertplay.session.SessionClient(this){owner->
+                if(!isDestroyed && !shuttingDown.get()){bindSessionRuntime(owner);start(owner)}
+            }
+            runCatching{sessionClient?.connect()}.onFailure{appendLog("Foreground service unavailable: ${it.javaClass.simpleName}");sessionClient?.close();sessionClient=null}
         }
     }
 
@@ -5315,17 +5069,32 @@ class CarPlayHostActivity : ComponentActivity() {
     }
 
     private fun scheduleDisplaySize(width: Int, height: Int) {
-        if (width <= 0 || height <= 0 || shuttingDown.get()) return
+        if(width<=0 || height<=0 || shuttingDown.get() || isDestroyed)return
+        val command=sessionUiCommand
+        if(command!=null && sessionRuntime?.acceptsUiCommand(command)==false)return
         val size = DisplaySize(width, height)
         if (size == pendingDisplaySize) return
         mainHandler.removeCallbacks(applyDisplaySize)
         if (size == activeDisplaySize && !displayLayoutChanged()) {
-            pendingDisplaySize = null
+            val cancelled=pendingDisplaySize!=null
+            pendingDisplaySize = null;pendingDisplayCommand=null
+            if(cancelled && command!=null && sessionRuntime?.currentRequest!=null){
+                val owner=sessionRuntime!!
+                val state=owner.snapshot()
+                val approved=owner.currentRequest!!
+                if(owner.currentConnection!=null && state.phase !in setOf(
+                    com.shilapi.xcertplay.session.RuntimePhase.STOPPING,
+                    com.shilapi.xcertplay.session.RuntimePhase.BLOCKED_RELEASE))
+                    owner.confirmConfigurationFromUi(approved,command)
+                else restartCarPlay("Display configuration returned to the prepared window",command)
+                return
+            }
             // A rotation back can cancel the last pending resize after teardown has finished.
             maybeStartCarPlay()
             return
         }
-        pendingDisplaySize = size
+        pendingDisplaySize = size;pendingDisplayCommand=command
+        if(command!=null)sessionRuntime?.setConfigurationPending(command,true)
         // With a turning screen's square canvas nothing reconnects, so the turn need not wait for the size to settle.
         mainHandler.postDelayed(applyDisplaySize,
             if (sessionDisplay?.viewAreas?.turnsWithScreen == true) 0L else DISPLAY_CHANGE_DEBOUNCE_MILLIS)
@@ -5338,13 +5107,31 @@ class CarPlayHostActivity : ComponentActivity() {
     private fun statusBarShown(): Boolean? =
         ViewCompat.getRootWindowInsets(window.decorView)?.isVisible(WindowInsetsCompat.Type.statusBars())
 
-    private fun applyDisplaySize(size: DisplaySize) {
+    private fun applyDisplaySize(size:DisplaySize)=applyDisplaySize(size,sessionUiCommand)
+    private fun applyDisplaySize(size:DisplaySize,command:com.shilapi.xcertplay.session.SessionUiCommand?) {
+        if(shuttingDown.get() || isDestroyed || (command!=null && sessionRuntime?.acceptsUiCommand(command)==false))return
+        val owner=sessionRuntime
+        val approvedRequest=owner?.currentRequest
+        fun confirmUnchangedConfiguration(){
+            if(command!=null && approvedRequest!=null)owner.confirmConfigurationFromUi(approvedRequest,command)
+        }
+        val state=owner?.snapshot()
+        if(!shuttingDown.get() && !menuOpen && owner?.currentRequest!=null &&
+            (state?.phase in setOf(com.shilapi.xcertplay.session.RuntimePhase.STOPPING,
+                com.shilapi.xcertplay.session.RuntimePhase.BLOCKED_RELEASE) || state?.failure=="display_configuration_pending")){
+            activeDisplaySize=size;recordDetectedMaximum(size);updateResolutionMenu()
+            restartCarPlay("Display settled during session teardown: ${size.width}x${size.height}",command)
+            return
+        }
         val display = sessionDisplay
-        if (display != null && applyViewArea(size, display)) return
+        if (display != null && applyViewArea(size, display)) {
+            confirmUnchangedConfiguration();return
+        }
         val layoutChanged = displayLayoutChanged(size)
         if (shuttingDown.get()) return
-        if (size == activeDisplaySize && !layoutChanged) {
-            // Teardown may have removed the session that made this same-size rotation pending.
+        if (size == activeDisplaySize && !layoutChanged && owner?.configurationRequired!=true) {
+            // Confirm only the snapshot whose layout was just checked.
+            if(controller!=null)confirmUnchangedConfiguration()
             maybeStartCarPlay()
             return
         }
@@ -5355,9 +5142,9 @@ class CarPlayHostActivity : ComponentActivity() {
         if (previous == null) {
             appendLog("Display detected: ${size.width}x${size.height}")
             maybeStartCarPlay()
-        } else if (menuOpen || handshakeResetInProgress) {
+        } else if (menuOpen) {
             appendLog(
-                "Display updated while handshake is reset: " +
+                "Display updated while settings are open: " +
                     "${previous.width}x${previous.height} -> ${size.width}x${size.height}",
             )
         } else if (controller == null && display == null) {
@@ -5373,6 +5160,7 @@ class CarPlayHostActivity : ComponentActivity() {
             appendLog(message)
             Log.i(TAG, message)
             videoView?.let { updateVideoLayout(it.width, it.height) }
+            confirmUnchangedConfiguration()
         } else if (display != null && !layoutChanged &&
             size.width <= display.windowWidth && size.height <= display.windowHeight) {
             // Keep camera shrink/restore cycles within the original window connected. If the
@@ -5382,9 +5170,10 @@ class CarPlayHostActivity : ComponentActivity() {
             appendLog(message)
             Log.i(TAG, message)
             videoView?.let { updateVideoLayout(it.width, it.height) }
+            confirmUnchangedConfiguration()
         } else {
             restartCarPlay(
-                "Display changed ${previous.width}x${previous.height} -> ${size.width}x${size.height}",
+                "Display changed ${previous.width}x${previous.height} -> ${size.width}x${size.height}",command,
             )
         }
     }
@@ -5397,7 +5186,7 @@ class CarPlayHostActivity : ComponentActivity() {
      */
     private fun applyViewArea(size: DisplaySize, display: CarPlaySessionDisplay): Boolean {
         val areas = display.viewAreas ?: return false
-        if (controller == null || menuOpen || handshakeResetInProgress || shuttingDown.get()) return false
+        if (controller == null || menuOpen || shuttingDown.get()) return false
         val split = isMultiWindowActive()
         // A full window's own shape tells the screen's orientation; during a turn the display metrics and
         // rotation can lag behind the window. A split-screen window can have either shape, so it asks the
@@ -5523,10 +5312,6 @@ class CarPlayHostActivity : ComponentActivity() {
     private fun maybeStartCarPlay() {
         if (shuttingDown.get() || startupRetryStopped ||
             CarPlayBackgroundSession.authenticationTeardownPending()) return
-        retiringAuthenticationController?.let { retiring ->
-            if (!retiring.awaitClosed(0)) return
-            retiringAuthenticationController = null
-        }
         if (CarPlayBackgroundSession.hasSession() && !CarPlayBackgroundSession.isOwner(this)) {
             if (!adoptBackgroundSession()) mainHandler.postDelayed({ maybeStartCarPlay() }, 500)
             return
@@ -5540,7 +5325,7 @@ class CarPlayHostActivity : ComponentActivity() {
             appendLog("Video output setting changed; rebuilding the video view")
             // No session runs here, but a restart keeps this host as the session owner; the new instance
             // must be able to start its own.
-            if (CarPlayBackgroundSession.isOwner(this)) CarPlayBackgroundSession.clear()
+
             recreate()
             return
         }
@@ -5553,7 +5338,6 @@ class CarPlayHostActivity : ComponentActivity() {
             !microphonePermissionResolved ||
             shuttingDown.get() ||
             menuOpen ||
-            handshakeResetInProgress ||
             pendingDisplaySize != null ||
             controller != null
         ) {
@@ -5564,136 +5348,20 @@ class CarPlayHostActivity : ComponentActivity() {
         startCarPlay(size)
     }
 
-    private fun stopAuthenticationRecovery() {
-        startupRetryStopped = true
-        reconnectScheduled = false
-        startupRetryButton?.visibility = View.VISIBLE
-        setConnectionStage(getString(R.string.mfi_authentication_retry_stopped))
-        appendLog("MFi recovery stopped; manual retry required")
+    private fun restartCarPlay(reason:String){
+        val owner=sessionRuntime
+        val command=owner?.commandForUi(System.identityHashCode(this))
+        if(owner!=null && command==null)return
+        if(command!=null)sessionUiCommand=command
+        restartCarPlay(reason,command)
     }
-
-    private fun reconnectAfterLoss(
-        reason: String,
-        startupFailure: WirelessStartupFailure? = null,
-        englishReason: String = reason,
-    ) {
-        if (!CarPlayBackgroundSession.isOwner(this)) return
-        // Also when a retry is already pending and this loss is dropped: that retry must not skip.
-        lossSinceControlRunning = true
-        if (menuOpen) recoveryPendingAfterMenu = true
-        if (shuttingDown.get() || menuOpen || handshakeResetInProgress || startupRetryStopped) return
-        if (reconnectScheduled) return
-        val startupDelay = if (startupFailure != null && startupFailure.retryable)
-            startupRetryBudget.nextDelayMillis() else null
-        if (startupFailure != null && startupDelay == null) {
-            startupRetryStopped = true
-            startupRetryButton?.visibility = View.VISIBLE
-            if (startupFailure == WirelessStartupFailure.HOTSPOT_CONFIGURATION) {
-                // Its cause is in English, for the report; the help line below says what to check.
-                setConnectionStage("${getString(R.string.hotspot_network_not_ready)}\n" +
-                    getString(R.string.wireless_startup_retries_exhausted))
-            } else if (!startupFailure.retryable) {
-                setConnectionStage(reason, englishReason)
-            } else {
-                setConnectionStage("$reason\n${getString(R.string.wireless_startup_retries_exhausted)}",
-                    "$englishReason\n${englishResources.getString(R.string.wireless_startup_retries_exhausted)}")
-            }
-            appendLog("wireless startup recovery stopped generation=$restartGeneration reason=$startupFailure retries=${startupRetryBudget.retries}")
-            return
-        }
-        reconnectScheduled = true
-        val generation = restartGeneration
-        val delayMillis = if (startupDelay != null) {
-            startupDelay
-        } else if (reason.contains("AirPlay iAP tunnel", ignoreCase = true)) {
-            IAP_TUNNEL_RECONNECT_DELAY_MILLIS
-        } else {
-            (RECONNECT_DELAY_MILLIS * (1L shl reconnectAttempts.coerceAtMost(4))).coerceAtMost(30_000L)
-        }
-        reconnectAttempts += 1
-        appendLog("$reason; retrying in ${delayMillis}ms generation=$generation startupFailure=$startupFailure startupRetries=${startupRetryBudget.retries}")
-        val controlRunsAtFailure = controlRunningCount
-        mainHandler.postDelayed(
-            {
-                reconnectScheduled = false
-                if (menuOpen && generation == restartGeneration) recoveryPendingAfterMenu = true
-                if (
-                    shuttingDown.get() ||
-                    menuOpen ||
-                    handshakeResetInProgress || startupRetryStopped ||
-                    generation != restartGeneration
-                ) {
-                    return@postDelayed
-                }
-                // A wired attempt can report a failure and still go on: a second CarPlay mode request
-                // failed while the iPhone was already switching, and the switch then completed (#873).
-                // Leave it alone only if it is still running; a loss after its recovery still restarts.
-                if (controlRunningCount != controlRunsAtFailure && !lossSinceControlRunning) {
-                    appendLog("Not reconnecting after $reason: the same attempt is running again")
-                    return@postDelayed
-                }
-                restartCarPlay("Reconnecting after $reason")
-            },
-            delayMillis,
-        )
-    }
-
-    /** Full-stack fallback when an AirPlay-only reconnect is unavailable. */
-    private fun restartCarPlay(reason: String) {
-        if (!CarPlayBackgroundSession.isOwner(this)) return
-        if (shuttingDown.get() || menuOpen || handshakeResetInProgress) return
-        val size = activeDisplaySize ?: return
-        startupRetryBudget.disconnected()
-        startupRetryButton?.visibility = View.GONE
-        appendLog(reason)
-        activeScreenStreamTypes.clear()
-        setConnectionStage(reason)
-        Log.i(TAG, "$reason; rebuilding stack at ${size.width}x${size.height}")
-        val generation = ++restartGeneration
-        handshakeResetInProgress = true
-        val oldController = controller ?: retiringAuthenticationController
-        val oldSink = sink
-        CarPlayMediaKeys.detach(oldController)
-        CarPlayBackgroundSession.clear(oldController, keepOwner = true)
-        controller = null
-        oldSink?.let(retiringSinks::add)
-        sink = null
-        sessionDisplay = null
-        clearIphoneCornerMask()
-        discardLastPicture()
-        val diagnosticLog = sessionLog
-        val requireClosed = authenticationReconnectRequiresClosed || retiringAuthenticationController != null
-        if (requireClosed) {
-            retiringAuthenticationController = oldController
-            CarPlayBackgroundSession.retainAuthenticationTeardown(oldController)
-        }
-        teardownExecutor.execute {
-            val started = System.nanoTime()
-            oldController?.close()
-            val completed = oldController?.awaitClosed(CONTROLLER_CLOSE_TIMEOUT_MILLIS) ?: true
-            AsyncDiagnosticLog.append(
-                diagnosticLog,
-                "${CarPlayController.CONNECTION_DIAGNOSTIC_PREFIX} generation=$generation " +
-                    "restart teardownWaitCompleted=$completed " +
-                    "elapsedMs=${((System.nanoTime() - started) / 1_000_000L).coerceAtLeast(0)}",
-            )
-            oldSink?.let(::closeRetiringSink)
-            runOnUiThread {
-                if (!shuttingDown.get() && generation == restartGeneration) {
-                    handshakeResetInProgress = false
-                    if (requireClosed && !completed) {
-                        stopAuthenticationRecovery()
-                        return@runOnUiThread
-                    }
-                    authenticationReconnectRequiresClosed = false
-                    retiringAuthenticationController = null
-                    // Adoption skips startup prompts while a session is live. Recheck transport
-                    // prerequisites now, including VPN consent that may have been revoked.
-                    // Their completion uses maybeStartCarPlay with the latest settled display size.
-                    requestStartupPrerequisites()
-                }
-            }
-        }
+    private fun restartCarPlay(reason:String,command:com.shilapi.xcertplay.session.SessionUiCommand?){
+        val owner=sessionRuntime
+        if(isDestroyed || shuttingDown.get() || (owner!=null && (command==null || !owner.acceptsUiCommand(command))))return
+        val size=activeDisplaySize ?: return
+        val request=runCatching{prepareSessionRequest(size)}.getOrElse{appendLog("Session preparation failed: ${it.javaClass.simpleName}");return}
+        startupRetryButton?.visibility=View.GONE
+        if(owner!=null && command!=null)owner.reconfigureFromUi(request,reason,command)else startCarPlay(size)
     }
 
     private fun attachVideoAdaptationOverlay() {
@@ -5805,7 +5473,6 @@ class CarPlayHostActivity : ComponentActivity() {
         }
         colorMainFinishing = true
         colorMainOverlay?.close(); colorMainOverlay = null
-        automaticColorProbe?.close(); automaticColorProbe = null
         colorMainProbe = null
         intent.removeExtra(ColorMainProbeRegistry.EXTRA_TOKEN)
         if (ColorMainProbeRegistry.finish(request.token) != null) {
@@ -5820,15 +5487,18 @@ class CarPlayHostActivity : ComponentActivity() {
                 prefs.edit().putString("pending_result", result.toString()).apply()
             }
         }
-        val closingController = controller ?: retiringAuthenticationController
+        val closingController = controller
         val closingSink = sink
-        if (closingController != null) CarPlayBackgroundSession.retainAuthenticationTeardown(closingController)
+
         shutdown(false, "main-screen color test finished") {
-            ColorMainProbeRegistry.teardownFinished(request.token)
+            val released=(closingController?.awaitClosed(0)?:true) && (closingSink?.awaitVideoReleased(0)?:true) && (closingSink?.audioReleased()?:true)
+            ColorMainProbeRegistry.teardownFinished(request.token,released){
+                (closingController?.awaitClosed(0)?:true) && (closingSink?.awaitVideoReleased(0)?:true) && (closingSink?.audioReleased()?:true)
+            }
             val prefs = getSharedPreferences(ColorMainProbeRegistry.PREFS, Context.MODE_PRIVATE)
             if (prefs.getString("pending_token", null) == request.token) {
                 val data = runCatching { org.json.JSONObject(prefs.getString("pending_result", "{}") ?: "{}") }.getOrDefault(org.json.JSONObject())
-                val confirmed = (closingController?.awaitClosed(0) ?: true) && (closingSink?.awaitVideoReleased(0) ?: true)
+                val confirmed = (closingController?.awaitClosed(0) ?: true) && (closingSink?.awaitVideoReleased(0) ?: true) && (closingSink?.audioReleased() ?: true)
                 data.put("teardown_complete", true).put("teardown_confirmed", confirmed)
                 data.optJSONObject("evidence")?.put("teardown", colorMainTeardown)
                 if (!confirmed) {
@@ -5839,6 +5509,7 @@ class CarPlayHostActivity : ComponentActivity() {
                     }
                 }
                 prefs.edit().putString("pending_result", data.toString()).apply()
+                VideoReportPublisher.finishPendingMain(applicationContext, request.token)
             }
             if (returnToTests) OwnScreenStart.start(this,
                 Intent(this, WheelTestActivity::class.java).putExtra("diagnostics_page", "COLOR")
@@ -5851,15 +5522,6 @@ class CarPlayHostActivity : ComponentActivity() {
         controller?.sendTouch(emptyList())
         OwnScreenStart.start(this, Intent(this, DiPlayActivity::class.java)
             .putExtra("page", page).addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT), ::appendLog)
-    }
-
-    /** Keep a timed-out sink visible to surface teardown until its codecs have actually been released. */
-    private fun closeRetiringSink(owner: AndroidMediaSink) {
-        owner.close()
-        val owners = retiringSinks
-        owner.whenVideoReleased { owners.remove(owner) }
-        // Preserve bounded teardown sequencing without blocking the UI or forgetting a live worker.
-        owner.awaitVideoReleased(sinkReleaseWaitMillis)
     }
 
     private fun openSettingsMenu() {
@@ -5972,6 +5634,11 @@ class CarPlayHostActivity : ComponentActivity() {
     private fun finishSettingsMenu(prefix: String, reconnect: Boolean) {
         if (!menuOpen) return
         menuOpen = false
+        if(reconnect && pendingDisplaySize!=null){
+            mainHandler.removeCallbacks(applyDisplaySize)
+            activeDisplaySize=pendingDisplaySize
+            pendingDisplaySize=null;pendingDisplayCommand=null
+        }
         menuSettingsSignature = null
         menuWirelessNetworkSignature = null
         settingsMenu?.visibility = View.GONE
@@ -5990,19 +5657,15 @@ class CarPlayHostActivity : ComponentActivity() {
         failurePendingAfterMenu = null
         val recoveryPending = recoveryPendingAfterMenu || failure != null
         recoveryPendingAfterMenu = false
-        if (reconnect) {
-            startupRetryBudget.manualRetry()
-            authenticationRetryUsed = false
-            startupRetryStopped = false
-        }
         if ((failure?.startupFailure != null || failure?.authenticationFailure == true) && !reconnect) {
             createStatusReporter(restartGeneration)(failure)
         } else if (failure?.wifiResetRequired == true && (!reconnect || wirelessEnabled)) {
             createStatusReporter(restartGeneration)(failure)
-        } else if (handshakeResetInProgress) {
-            startAfterHandshakeReset = true
-        } else if ((reconnect || recoveryPending) && controller != null) {
+        } else if (reconnect || (recoveryPending && controller != null)) {
             restartCarPlay(if (reconnect) "Settings saved; reconnecting" else "Connection lost while settings were open; reconnecting")
+        } else if(sessionRuntime?.configurationRequired==true){
+            val size=activeDisplaySize
+            if(size!=null && pendingDisplaySize==null)applyDisplaySize(size,sessionUiCommand)
         } else {
             maybeStartCarPlay()
         }
@@ -6015,49 +5678,21 @@ class CarPlayHostActivity : ComponentActivity() {
         shutdown(terminateProcess = true, reason = "settings exit application")
     }
 
-    private fun shutdown(terminateProcess: Boolean, reason: String, completion: () -> Unit = {}) {
-        if (!shuttingDown.compareAndSet(false, true)) { completion(); return }
-        resetSidePanel()
-        releaseSidePanelEffects()
-        startupRetryBudget.disconnected()
-        restartGeneration += 1
-        mainHandler.removeCallbacks(applyDisplaySize)
-        val oldController = controller ?: retiringAuthenticationController
-        val oldSink = sink
-        CarPlayMediaKeys.detach(oldController)
-        CarPlayBackgroundSession.clear(oldController)
-        controller = null
-        oldSink?.let(retiringSinks::add)
-        sink = null
-        sessionDisplay = null
-        discardLastPicture()
-        Log.i(TAG, "shutdown reason=$reason terminateProcess=$terminateProcess")
-        teardownExecutor.execute {
-            oldController?.close()
-            val clean = if (colorMainFinishing) {
-                oldSink?.close()
-                oldSink?.whenVideoReleased { retiringSinks.remove(oldSink) }
-                colorMainTeardown = MainProbeTeardown.await(
-                    { timeout -> oldController?.awaitClosed(timeout) ?: true },
-                    { timeout -> oldSink?.awaitVideoReleased(timeout) ?: true })
-                if (!colorMainTeardown.optBoolean("confirmed")) MainProbeTeardown.retain {
-                    (oldController?.awaitClosed(0) ?: true) && (oldSink?.awaitVideoReleased(0) ?: true)
-                }
-                colorMainTeardown.optBoolean("controllerReleased")
-            } else {
-                val released = oldController?.awaitClosed(CONTROLLER_CLOSE_TIMEOUT_MILLIS) ?: true
-                oldSink?.let(::closeRetiringSink)
-                released
-            }
-            airPlayCommandExecutor.shutdown()
-            if (terminateProcess) {
-                applicationContext.stopService(Intent(applicationContext, CarPlayVpnService::class.java))
-            }
-            Log.i(TAG, "shutdown complete clean=$clean")
-            applicationContext.stopService(Intent(applicationContext, DiPlaySessionService::class.java))
-            teardownExecutor.shutdown()
-            mainHandler.post { completion() }
-            if (terminateProcess) Process.killProcess(Process.myPid())
+    private fun shutdown(terminateProcess:Boolean,reason:String,completion:()->Unit={}) {
+        shuttingDown.set(true);pendingSessionRequest=null
+        resetSidePanel();releaseSidePanelEffects()
+        mainHandler.removeCallbacks(parkVideoInBackground)
+        sessionClient?.close();sessionClient=null
+        val oldController=controller;val oldSink=sink
+        val owner=sessionRuntime
+        if(owner==null){completion();return}
+        owner.stop(reason){result->
+            colorMainTeardown=org.json.JSONObject().put("confirmed",result.released)
+                .put("controllerReleased",oldController?.awaitClosed(0)?:true).put("videoReleased",oldSink?.awaitVideoReleased(0)?:true)
+                .put("audioReleased",oldSink?.audioReleased()?:true)
+            completion()
+            if(result.released){applicationContext.stopService(Intent(applicationContext,DiPlaySessionService::class.java))
+                if(terminateProcess)Process.killProcess(Process.myPid())}
         }
     }
 
@@ -6110,7 +5745,7 @@ class CarPlayHostActivity : ComponentActivity() {
         // must not clear the framework-owned replacement surface.
         videoSurfaceOwner.clear()
         currentSurfaceTexture = null
-        texture.surfaceTextureListener = null
+        // Keep the destruction callback: it owns deferred SurfaceTexture release.
         root.removeView(texture)
         videoView = viewport
         fallbackVideoView = surfaceView
@@ -6147,6 +5782,13 @@ class CarPlayHostActivity : ComponentActivity() {
 
     // Copies the SurfaceView's current picture (at half size) before its surface goes, waiting briefly for it.
     private fun captureLastPicture() {
+        if (fallbackVideoView == null) {
+            val texture = (videoView as? TextureView)?.takeIf { it.isAvailable && it.width > 0 && it.height > 0 } ?: return
+            val scale = minOf(1f, 1920f / maxOf(texture.width, texture.height))
+            runCatching { texture.getBitmap((texture.width * scale).toInt().coerceAtLeast(1),
+                (texture.height * scale).toInt().coerceAtLeast(1)) }.getOrNull()?.let { lastPicture = it }
+            return
+        }
         val surfaceView = fallbackVideoView ?: return
         val bounds = fallbackVideoBounds ?: return
         if (!surfaceView.holder.surface.isValid) return
@@ -6169,8 +5811,8 @@ class CarPlayHostActivity : ComponentActivity() {
     private fun showLastPicture() {
         if (sink == null) return
         val picture = lastPicture ?: return
-        val surfaceView = fallbackVideoView ?: return
-        val viewport = surfaceView.parent as? FrameLayout ?: return
+        val output = fallbackVideoView ?: videoView ?: return
+        val viewport = output.parent as? FrameLayout ?: return
         val hold = pictureHold?.takeIf { it.parent === viewport } ?: ImageView(this).apply {
             scaleType = ImageView.ScaleType.FIT_XY
             isClickable = false
@@ -6180,7 +5822,7 @@ class CarPlayHostActivity : ComponentActivity() {
             pictureHold = it
             viewport.addView(it)
         }
-        (surfaceView.layoutParams as? FrameLayout.LayoutParams)?.let { hold.layoutParams = FrameLayout.LayoutParams(it) }
+        (output.layoutParams as? FrameLayout.LayoutParams)?.let { hold.layoutParams = FrameLayout.LayoutParams(it) }
         hold.animate().cancel()
         hold.setImageBitmap(picture)
         hold.alpha = 1f
@@ -6204,12 +5846,12 @@ class CarPlayHostActivity : ComponentActivity() {
         lastPicture = null
     }
 
-    private fun attachSurface(surface: Surface) {
-        sink?.setSurface(SCREEN_TYPE_MAIN, surface)
-        if (AirPlayPersistence.loadClusterMapEnabled(this)) {
-        } else {
-            sink?.setSurface(SCREEN_TYPE_ALT, surface)
-        }
+    private fun attachSurface(surface:Surface){
+        val owner=sessionRuntime ?: return
+        val identity=owner.snapshot().identity ?: return
+        val binding=com.shilapi.xcertplay.session.ProjectionSurfaceBinding(identity,System.identityHashCode(this),surface,
+            !AirPlayPersistence.loadClusterMapEnabled(this))
+        if(owner.bindOutput(binding).accepted)projectionBinding=binding
     }
 
     private fun onHostTouch(view: View, event: MotionEvent): Boolean {
@@ -6317,7 +5959,6 @@ class CarPlayHostActivity : ComponentActivity() {
             }
             if (type == SCREEN_TYPE_ALT) {
                 appendLog("Cluster map: stream active=$active")
-                MapMirrors.setStreamActive(active)
                 if (active) {
                     mainHandler.removeCallbacks(hideIdleCenterMap)
                     if (!CenterMapOverlay.shown) CenterMapOverlay.scheduleShow()
@@ -6338,8 +5979,11 @@ class CarPlayHostActivity : ComponentActivity() {
         }
     }
 
-    private fun setConnectionStage(stringId: Int) =
-        setConnectionStage(getString(stringId), englishResources.getString(stringId))
+    private fun setConnectionStage(stringId:Int) {
+        val message=getString(stringId)
+        latestStage=message;stageStatusView?.text=message
+        updateDebugOverlays()
+    }
 
     private fun showConnectionHelp(failure: CarPlayStatus.Failed?) {
         connectionInstructionsView?.visibility = if (failure == null) View.VISIBLE else View.GONE
@@ -6621,89 +6265,12 @@ internal fun statusBarHiddenByAnotherWindow(display: CarPlaySessionDisplay, widt
 
 /** Process-local hand-off for keeping the CarPlay session alive while no Activity is visible. */
 internal object CarPlayBackgroundSession {
-    @Volatile var active = false
-    private var stopAction: (((() -> Unit)) -> Unit)? = null
-    private var stopping = false
-    private var owner: Any? = null
-    // Survives Activity replacement and clear(): a new owner must not overlap an old MFi identity.
-    private var authenticationRetiringController: CarPlayController? = null
-    @Synchronized fun retainAuthenticationTeardown(controller: CarPlayController?) {
-        if (controller != null) authenticationRetiringController = controller
-    }
-    @Synchronized fun authenticationTeardownPending(): Boolean {
-        val retiring = authenticationRetiringController ?: return false
-        if (!retiring.awaitClosed(0)) return true
-        authenticationRetiringController = null
-        return false
-    }
-    @Synchronized fun isOwner(candidate: Any): Boolean = owner === candidate
-    @Synchronized fun hasSession(): Boolean = stopAction != null || stopping
-    private val stopWaiters = mutableListOf<() -> Unit>()
-
-    fun stop(completion: () -> Unit = {}) {
-        DetailedDebugLog.record("session", "stop requested")
-        val action: (((() -> Unit)) -> Unit)?
-        synchronized(this) {
-            if (stopping) { stopWaiters.add(completion); return }
-            action = stopAction
-            if (action != null) { stopping = true; stopWaiters.add(completion) }
-        }
-        if (action == null) { completion(); return }
-        action.invoke {
-            DetailedDebugLog.record("session", "stop completed")
-            val callbacks = synchronized(this) {
-                stopping = false
-                stopWaiters.toList().also { stopWaiters.clear() }
-            }
-            callbacks.forEach { it() }
-        }
-    }
-
-    data class Snapshot(
-        val controller: CarPlayController,
-        val sink: AndroidMediaSink,
-        val width: Int,
-        val height: Int,
-        val display: CarPlaySessionDisplay,
-    )
-
-    private var controller: CarPlayController? = null
-    private var sink: AndroidMediaSink? = null
-    private var width = 0
-    private var height = 0
-    private var display: CarPlaySessionDisplay? = null
-
-    @Synchronized
-    fun snapshot(): Snapshot? {
-        val currentController = controller ?: return null
-        val currentSink = sink ?: return null
-        val currentDisplay = display ?: return null
-        return Snapshot(currentController, currentSink, width, height, currentDisplay)
-    }
-
-    @Synchronized
-    fun store(controller: CarPlayController, sink: AndroidMediaSink, width: Int, height: Int,
-        owner: Any, display: CarPlaySessionDisplay, stop: (() -> Unit) -> Unit) {
-        DetailedDebugLog.record("session", "store controller=${System.identityHashCode(controller)} size=${width}x$height")
-        this.stopAction = stop
-        this.owner = owner
-        this.controller = controller
-        this.sink = sink
-        this.width = width
-        this.height = height
-        this.display = display
-    }
-
-    @Synchronized
-    fun clear(expected: CarPlayController? = null, keepOwner: Boolean = false) {
-        if (expected != null && controller !== expected) return
-        DetailedDebugLog.record("session", "clear keepOwner=$keepOwner")
-        controller = null
-        sink = null
-        if (!keepOwner) { stopAction = null; owner = null }
-        active = false
-        width = 0
-        height = 0
-        display = null
-    }
+    private val runtime get()=DiPlaySessionService.liveRuntime
+    val active:Boolean get()=runtime?.snapshot()?.phase==com.shilapi.xcertplay.session.RuntimePhase.RUNNING
+    fun isOwner(candidate:Any)=runtime?.isUiOwner(System.identityHashCode(candidate))==true
+    fun hasSession()=runtime?.let{it.currentConnection!=null || it.snapshot().phase in setOf(
+        com.shilapi.xcertplay.session.RuntimePhase.STOPPING,com.shilapi.xcertplay.session.RuntimePhase.BLOCKED_RELEASE)}==true
+    fun authenticationTeardownPending()=runtime?.snapshot()?.phase in setOf(
+        com.shilapi.xcertplay.session.RuntimePhase.STOPPING,com.shilapi.xcertplay.session.RuntimePhase.BLOCKED_RELEASE)
+    fun stop(completion:()->Unit={}){val owner=runtime;if(owner==null)completion()else owner.stop("disconnect"){completion()}}
 }

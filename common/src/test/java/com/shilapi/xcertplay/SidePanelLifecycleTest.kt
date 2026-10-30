@@ -55,7 +55,7 @@ class SidePanelLifecycleTest {
             String::class.java, Function0::class.java).apply { isAccessible = true }
             .invoke(activity, false, "side panel cleanup test", {})
         assertPanelStopped()
-        assertTrue((get("teardownExecutor") as ExecutorService).awaitTermination(5, TimeUnit.SECONDS))
+        assertFalse("Closing a page must not shut down the service worker",(get("teardownExecutor") as ExecutorService).isShutdown)
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(10))
         assertPanelStopped()
     }
@@ -66,10 +66,9 @@ class SidePanelLifecycleTest {
         assertFalse("A destroyed/stopped host must not keep refreshing its old views", handler.hasCallbacks(refresh))
     }
 
-    private fun get(name: String): Any? = activity.javaClass.getDeclaredField(name)
-        .apply { isAccessible = true }.get(activity)
+    private fun get(name: String): Any? = HostSessionFixture.getField<Any?>(activity, name)
 
     private fun set(name: String, value: Any?) {
-        activity.javaClass.getDeclaredField(name).apply { isAccessible = true }.set(activity, value)
+        HostSessionFixture.setField(activity, name, value)
     }
 }

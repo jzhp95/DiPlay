@@ -36,7 +36,7 @@ class WirelessPermissionRefusalTest {
 
     @Before fun setUp() {
         // A session another test left behind would be adopted instead of asking for permissions.
-        CarPlayBackgroundSession.clear()
+        BackgroundSessionFixture.clear()
         context.getSharedPreferences("xcertplay_airplay", 0).edit().clear().commit()
         AirPlayPersistence.saveWirelessEnabled(context, true)
         AirPlayPersistence.saveWirelessHotspotMode(context, WirelessHotspotMode.WIFI_P2P)
@@ -50,10 +50,10 @@ class WirelessPermissionRefusalTest {
         controller?.let { host ->
             runCatching { host.pause().stop().destroy() }
             for (field in listOf("teardownExecutor", "airPlayCommandExecutor")) {
-                ReflectionHelpers.getField<java.util.concurrent.ExecutorService>(host.get(), field).shutdownNow()
+                HostSessionFixture.getField<java.util.concurrent.ExecutorService>(host.get(), field).shutdownNow()
             }
         }
-        CarPlayBackgroundSession.clear()
+        BackgroundSessionFixture.clear()
         context.getSharedPreferences("xcertplay_airplay", 0).edit().clear().commit()
     }
 
@@ -73,7 +73,7 @@ class WirelessPermissionRefusalTest {
     }
 
     private fun stage(activity: CarPlayHostActivity): String =
-        ReflectionHelpers.getField<TextView>(activity, "stageStatusView").text.toString()
+        HostSessionFixture.getField<TextView>(activity, "stageStatusView").text.toString()
 
     @Config(sdk = [29])
     @Test fun refusedLocationIsNamedInsteadOfWaitingForTheIphone() {

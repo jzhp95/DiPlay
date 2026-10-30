@@ -32,7 +32,7 @@ class LocationReportingSettingsTest {
     }
 
     @After fun tearDown() {
-        CarPlayBackgroundSession.clear()
+        BackgroundSessionFixture.clear()
         controller?.pause()?.stop()?.destroy()
     }
 
@@ -93,16 +93,16 @@ class LocationReportingSettingsTest {
         openSettings()
         // Authentication assets are deliberately absent from unit tests. Model an already
         // provisioned, connected host without constructing transports or native decoders.
-        ReflectionHelpers.setField(activity, "setupError", null)
+        HostSessionFixture.setField(activity, "setupError", null)
         val stoppedWithSettings = mutableListOf<Boolean>()
 
         for (enabled in listOf(true, false)) {
             val stop: ((() -> Unit) -> Unit) = { completion ->
                 stoppedWithSettings += AirPlayPersistence.loadLocationReportingEnabled(context)
-                CarPlayBackgroundSession.clear()
+                BackgroundSessionFixture.clear()
                 completion()
             }
-            ReflectionHelpers.setField(CarPlayBackgroundSession, "stopAction", stop)
+            BackgroundSessionFixture.storeStop(stop)
 
             locationSwitch().performClick()
 

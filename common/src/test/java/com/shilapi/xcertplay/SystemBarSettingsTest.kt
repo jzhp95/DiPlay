@@ -23,7 +23,7 @@ class SystemBarSettingsTest {
     private val activity get() = requireNotNull(controller).get()
 
     @After fun tearDown() {
-        CarPlayBackgroundSession.clear()
+        BackgroundSessionFixture.clear()
         controller?.pause()?.stop()?.destroy()
     }
 

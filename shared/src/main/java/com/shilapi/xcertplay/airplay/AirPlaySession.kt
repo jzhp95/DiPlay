@@ -6,6 +6,7 @@ import com.shilapi.xcertplay.transport.BlockingDuplexByteStream
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.io.Closeable
+import java.io.IOException
 import java.math.BigInteger
 import java.net.DatagramPacket
 import java.net.DatagramSocket
@@ -99,6 +100,8 @@ class AirPlaySession(
     private var pendingNightMode: Boolean? = null
     private val firstTouchSendLogged = AtomicBoolean(false)
     private val touchSendFailureLogged = AtomicBoolean(false)
+    // Only the controller's single touch thread calls sendTouch.
+    private val touchSlots = AirPlayTouchSlots(AirPlayHid.TOUCH_CONTACTS)
     private val ntp = NtpClock()
     private var keepAliveSocket: DatagramSocket? = null
     private var keepAliveThread: Thread? = null
@@ -287,8 +290,17 @@ class AirPlaySession(
     fun showViewArea(index: Int): Boolean =
         sendCommand(AirPlayInfoPlist.viewAreaCommand(index, config.main.viewAreas?.size ?: 1))
 
-    fun sendCommand(command: Map<String, Any?>): Boolean = synchronized(eventWriteLock) {
-        sendCommandLocked(command)
+    @Volatile var eventWriteTimingObserver:((Long,Long,Long)->Unit)?=null
+    private var lastWriteNs=0L // guarded by eventWriteLock
+    fun sendCommand(command:Map<String,Any?>):Boolean {
+        val queued=System.nanoTime()
+        var acquired=queued;var writeNs=0L
+        val sent=synchronized(eventWriteLock){
+            acquired=System.nanoTime();lastWriteNs=0
+            sendCommandLocked(command).also{writeNs=lastWriteNs}
+        }
+        runCatching{eventWriteTimingObserver?.invoke(acquired-queued,writeNs,System.nanoTime()-acquired)}
+        return sent
     }
 
     /**
@@ -310,20 +322,24 @@ class AirPlaySession(
         videoPlaybackAvailability.setDesired(allowed)
 
     private fun sendCommandLocked(command: Map<String, Any?>, extraHeaders: String = ""): Boolean {
+        if (closed.get()) return false
         val socket = eventSocket ?: return false
         val cipher = eventCipher ?: return false
-        eventCseq++
+        val nextCseq = eventCseq + 1
         val body = BplistCodec.encode(command)
         val head = "POST /command RTSP/1.0\r\n" + extraHeaders +
             "Content-Type: $PLIST_CONTENT_TYPE\r\n" +
             "Content-Length: ${body.size}\r\n" +
-            "CSeq: $eventCseq\r\n\r\n"
+            "CSeq: $nextCseq\r\n\r\n"
         trace("airplay event tx headers=$head bodyHex=${body.toHex()}")
         return try {
             val bytes = cipher.encrypt(head.toByteArray(Charsets.US_ASCII) + body)
             val output = socket.getOutputStream()
+            val writeStarted=System.nanoTime()
             output.write(bytes)
             output.flush()
+            lastWriteNs=System.nanoTime()-writeStarted
+            eventCseq = nextCseq
             true
         } catch (error: Exception) {
             Log.w(TAG, "airplay event command failed type=${command["type"]}", error)
@@ -332,8 +348,9 @@ class AirPlaySession(
         }
     }
 
+    /** [contacts] carry Android pointer ids; an empty list releases every finger. */
     fun sendTouch(contacts: List<AirPlayContact>): Boolean {
-        val scaled = contacts.map {
+        val scaled = touchSlots.assign(contacts).map {
             it.copy(x = it.x * config.main.widthPixels, y = it.y * config.main.heightPixels)
         }
         val report = AirPlayHid.touchReport(scaled)
@@ -361,10 +378,11 @@ class AirPlaySession(
     fun sendKnobSelect(down: Boolean) =
         sendHidReport(AirPlayHid.KNOB_HID_UID, AirPlayHid.knobReport(AirPlayKnobState(select = down)))
 
-    fun sendMedia(index: Int) {
+    fun sendMedia(index: Int): Boolean {
         val downWritten = sendHidReport(AirPlayHid.MEDIA_HID_UID, AirPlayHid.mediaReport(index))
         val upWritten = sendHidReport(AirPlayHid.MEDIA_HID_UID, AirPlayHid.mediaReport(0))
         debugLog("media HID index=$index downWritten=$downWritten upWritten=$upWritten (event channel write; no playback acknowledgement)")
+        return downWritten && upWritten
     }
 
     fun sendTelephony(index: Int) {
@@ -855,7 +873,8 @@ class AirPlaySession(
 
     private fun acceptEvent(server: ServerSocket) {
         try {
-            val socket = server.accept()
+            val expected = peerAddress ?: throw IOException("control peer unknown")
+            val socket = server.acceptFrom(expected) { debugLog("airplay event rejected sender outside the control session") }
             socket.setSoLinger(true, 0)
             // Avoid Nagle coalescing on this interactive event connection: small HID/event writes
             // need not wait for earlier unacknowledged data.

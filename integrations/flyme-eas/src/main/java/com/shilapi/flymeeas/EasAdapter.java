@@ -46,6 +46,7 @@ public final class EasAdapter implements AutoCloseable {
  private final Sink sink;
  private final HandlerThread thread=new HandlerThread("EAS-serial");
  private final Handler worker;
+ private final EasPlayStateChannel playStateChannel;
  private final Handler watchdog=new Handler(Looper.getMainLooper());
  private final AtomicInteger generation=new AtomicInteger();
  private final List<ServiceConnection> bound=new ArrayList<>();
@@ -60,6 +61,7 @@ public final class EasAdapter implements AutoCloseable {
  private volatile String stage="未开始";
  public EasAdapter(Context context,Sink sink){
   this.context=context.getApplicationContext();this.sink=sink;thread.start();worker=new Handler(thread.getLooper());
+  playStateChannel=new EasPlayStateChannel(this.context,message->{sink.status("eas_play_state",message);log("play-state "+message);});
  }
  public void connect(int sourceType,boolean select){
   if(closed)return;
@@ -68,13 +70,15 @@ public final class EasAdapter implements AutoCloseable {
   worker.post(()->{
    release();if(!current(g))return;
    this.sourceType=sourceType;selectAfterRegister=select;
+   playStateChannel.start();
    sink.status("eas_registration","未注册");sink.status("eas_focus","未知：尚未查询");
    bind(g,false);
   });
  }
  public void updatePlayback(PlaybackSnapshot snapshot){
   if(closed)return;
-  playback=snapshot;int g=generation.get();worker.post(()->publishPlayback(g,"iphone-update"));
+  playback=snapshot;playStateChannel.update(snapshot.playing);
+  int g=generation.get();worker.post(()->publishPlayback(g,"iphone-update"));
  }
  private void publishPlayback(int g,String reason){
   if(!current(g)||media==null||token==null)return;
@@ -83,6 +87,7 @@ public final class EasAdapter implements AutoCloseable {
    Boolean accepted=call(g,media,MEDIA,6,p->{p.writeStrongBinder(token);p.writeStrongBinder(info);},p->p.readInt()!=0);
    call(g,media,MEDIA,10,p->{p.writeStrongBinder(token);p.writeLong(info.snapshot.position);},p->null);
    sink.status("eas_metadata","accepted="+accepted+" reason="+reason+" title="+safe(info.snapshot.title)+" artist="+safe(info.snapshot.artist)+" playing="+info.snapshot.playing+" artwork="+(info.artwork!=null)+" launch="+(info.launch!=null));
+   if(reason.startsWith("focus-"))playStateChannel.refresh();
    log("metadata update accepted="+accepted+" reason="+reason+" track="+info.snapshot.trackId()+" title="+safe(info.snapshot.title)+" duration="+info.snapshot.duration+" position="+info.snapshot.position+" playing="+info.snapshot.playing);
   }catch(Exception e){error("playback update "+reason,e);}
  }
@@ -191,6 +196,7 @@ public final class EasAdapter implements AutoCloseable {
    Boolean updated=call(g,media,MEDIA,6,p->{p.writeStrongBinder(token);p.writeStrongBinder(playbackInfo);},p->p.readInt()!=0);
    log("source list/current/capabilities声明完成; neutral playback update="+updated);
   }catch(Exception e){error("注册后配置",e);}
+  playStateChannel.update(playback.playing);playStateChannel.refresh();
   query(g);if(selectAfterRegister)request(g);
  }
  private void request(int g){
@@ -278,7 +284,7 @@ public final class EasAdapter implements AutoCloseable {
  }
 
  private void unbindAll(){List<ServiceConnection> copy;synchronized(bound){copy=new ArrayList<>(bound);bound.clear();}for(ServiceConnection c:copy){try{context.unbindService(c);}catch(Exception e){log("unbind "+e.getClass().getSimpleName());}}}
- @Override public void close(){if(closed)return;closed=true;playback=PlaybackSnapshot.EMPTY;generation.incrementAndGet();unbindAll();worker.post(()->{release();thread.quitSafely();});}
+ @Override public void close(){if(closed)return;closed=true;playback=PlaybackSnapshot.EMPTY;playStateChannel.close();generation.incrementAndGet();unbindAll();worker.post(()->{release();thread.quitSafely();});}
  private static int actionFor(int raw){switch(raw){case 1:case 30:return 1;case 2:case 31:return 2;case 3:return 4;case 4:return 5;default:return -1;}}
  private static String safe(String s){return s==null?"<null>":s.length()>300?s.substring(0,300):s;}
 

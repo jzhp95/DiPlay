@@ -1,5 +1,5 @@
 #requires -Version 5.1
-# Build and platform-sign normal and system-UID debug APKs on Windows.
+# Build and platform-sign the Flyme test APK on Windows.
 [CmdletBinding()]
 param()
 
@@ -33,10 +33,9 @@ $signingDir = $env:DIPLAY_PLATFORM_SIGNING_DIR
 if (-not $signingDir) { $signingDir = Join-Path $repoRoot 'AOSP-platform-signing' }
 $buildTools = Join-Path $androidSdk 'build-tools\36.1.0'
 $apkOutputDir = Join-Path $repoRoot 'build\car-test-apks'
-# One local-time stamp pairs both APKs and their checksums from this invocation.
+# Keep this APK and its checksum together under one local-time stamp.
 $buildStamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-$normalApk = "Apple-CarPlay-normal-$buildStamp.apk"
-$systemApk = "Apple-CarPlay-system-uid-$buildStamp.apk"
+$flymeApk = "Apple-CarPlay-flyme-test-$buildStamp.apk"
 $privateKey = Join-Path $signingDir 'platform.pk8'
 $certificate = Join-Path $signingDir 'platform.x509.pem'
 $gradle = Join-Path $repoRoot 'gradlew.bat'
@@ -78,13 +77,13 @@ if ($env:DIPLAY_AUTH_ASSETS_DIR -or (Test-Path -LiteralPath (Join-Path $repoRoot
     $buildTask = ':mobile:assembleStandaloneDebug'
     Write-Host 'Using local CarPlay authentication input (standalone build).'
 } else {
-    Write-Warning 'No root offline-mfi/ or DIPLAY_AUTH_ASSETS_DIR: source-only test APKs.'
+    Write-Warning 'No root offline-mfi/ or DIPLAY_AUTH_ASSETS_DIR: source-only Flyme test APK.'
 }
 
 function Build-One {
-    param([string]$Kind, [string]$SystemFlag, [string]$PackageName, [string]$FinalName)
-    Write-Host "`nBuilding $Kind (flymeSystem=$SystemFlag)"
-    Invoke-Checked -FilePath $gradle -ArgumentList @("-PflymeSystem=$SystemFlag", $buildTask, '--console=plain')
+    param([string]$Kind, [string]$PackageName, [string]$FinalName)
+    Write-Host "`nBuilding $Kind"
+    Invoke-Checked -FilePath $gradle -ArgumentList @($buildTask, '--console=plain')
     $unsignedApk = Join-Path $repoRoot 'mobile\build\outputs\apk\debug\mobile-debug.apk'
     Assert-File $unsignedApk
     if ((Get-Item -LiteralPath $unsignedApk).Length -eq 0) { throw 'Build output APK is empty.' }
@@ -119,12 +118,8 @@ function Build-One {
         throw "Unexpected APK package; expected $PackageName"
     }
     $manifestText = $manifest -join "`n"
-    if ($SystemFlag -eq 'true') {
-        if (-not $manifestText.Contains('android.uid.system') -or -not $manifestText.Contains('com.shilapi.flymeeas.ENABLED')) {
-            throw 'System APK is missing the shared UID or EAS opt-in.'
-        }
-    } elseif ($manifestText -match 'sharedUserId|com\.shilapi\.flymeeas\.ENABLED') {
-        throw 'Ordinary APK unexpectedly declares shared UID or EAS opt-in.'
+    if (-not $manifestText.Contains('android.uid.system') -or -not $manifestText.Contains('com.shilapi.flymeeas.ENABLED')) {
+        throw 'Flyme APK is missing the shared UID or EAS opt-in.'
     }
     $finalApk = Join-Path $apkOutputDir $FinalName
     Move-Item -LiteralPath $candidateApk -Destination $finalApk -Force
@@ -137,13 +132,12 @@ function Build-One {
 Push-Location -LiteralPath $repoRoot
 try {
     New-Item -ItemType Directory -Path $apkOutputDir -Force | Out-Null
-    Build-One -Kind normal -SystemFlag false -PackageName com.shihab.diplay.hudtest -FinalName $normalApk
-    Build-One -Kind system-uid -SystemFlag true -PackageName com.shihab.diplay.flyme.hudtest -FinalName $systemApk
-    $checksums = foreach ($name in @($normalApk, $systemApk)) {
+    Build-One -Kind flyme-test -PackageName com.shihab.diplay.flyme.test -FinalName $flymeApk
+    $checksums = foreach ($name in @($flymeApk)) {
         $hash = (Get-FileHash -LiteralPath (Join-Path $apkOutputDir $name) -Algorithm SHA256).Hash.ToLowerInvariant()
         "$hash  $name"
     }
     $checksums | Set-Content -LiteralPath (Join-Path $apkOutputDir "SHA256SUMS-$buildStamp.txt") -Encoding ASCII
-    Write-Host "`nBoth APKs verified. Output: $apkOutputDir"
+    Write-Host "`nFlyme test APK verified. Output: $apkOutputDir"
     Write-Host 'Actual system UID and OEM grants must still be checked after installation on the car.'
 } finally { Pop-Location }

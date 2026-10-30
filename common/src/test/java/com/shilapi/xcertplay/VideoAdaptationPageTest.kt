@@ -34,6 +34,12 @@ import java.io.File
 @Config(sdk = [28])
 @LooperMode(LooperMode.Mode.PAUSED)
 class VideoAdaptationPageTest {
+    @org.junit.Before fun isolatedDiagnosticStore() {
+        DiagnosticStoreFixture.reset()
+        DiagnosticStoreFixture.recover(RuntimeEnvironment.getApplication())
+    }
+    @org.junit.After fun closeDiagnosticStore() { DiagnosticStoreFixture.reset() }
+
     private var page: VideoAdaptationPage? = null
     @After fun cleanup() {
         page?.close()
@@ -50,7 +56,7 @@ class VideoAdaptationPageTest {
 
     @Test fun openingIsReadOnlyAndSamplingWithoutAConnectionDoesNotStartCarPlay() {
         val c = RuntimeEnvironment.getApplication()
-        VideoAdaptationStore.clear(c); CarPlayBackgroundSession.clear()
+        VideoAdaptationStore.clear(c); BackgroundSessionFixture.clear()
         val controller = Robolectric.buildActivity(Activity::class.java).setup()
         val activity = controller.get()
         page = VideoAdaptationPage(activity, DiPlayPalette.LIGHT, {})
@@ -81,15 +87,29 @@ class VideoAdaptationPageTest {
         page!!.close(); controller.pause().stop().destroy()
     }
 
+    @Test fun mergedDecoderPageHasOneAutomaticAndOneUnifiedExportEntry() {
+        val controller = Robolectric.buildActivity(WheelTestActivity::class.java,
+            Intent().putExtra("diagnostics_page", "VIDEO")).setup()
+        try {
+            val root = controller.get().window.decorView
+            val buttons = views(root).filterIsInstance<Button>().toList()
+            assertEquals(1, buttons.count { it.text == controller.get().getString(R.string.video_auto_start) })
+            assertEquals(1, buttons.count { it.text == controller.get().getString(R.string.video_adapt_export) })
+            assertEquals(0, buttons.count { it.text == controller.get().getString(R.string.color_test_export) })
+            assertEquals(DiagnosticsTestLayout.Page.COLOR, HostSessionFixture.getField<DiagnosticsTestLayout.Page>(controller.get(), "selectedPage"))
+            assertTrue(buttons.any { it.text == controller.get().getString(R.string.video_adapt_start) })
+            assertTrue(buttons.any { it.text == controller.get().getString(R.string.color_test_start) })
+        } finally { controller.pause().stop().destroy() }
+    }
     @Test fun videoTabIsReachableByIntentAndRestoredAfterRecreation() {
         val controller = Robolectric.buildActivity(WheelTestActivity::class.java,
             Intent().putExtra("diagnostics_page", "VIDEO")).setup()
         try {
-            assertEquals(DiagnosticsTestLayout.Page.VIDEO,
-                ReflectionHelpers.getField<DiagnosticsTestLayout.Page>(controller.get(), "selectedPage"))
+            assertEquals(DiagnosticsTestLayout.Page.COLOR,
+                HostSessionFixture.getField<DiagnosticsTestLayout.Page>(controller.get(), "selectedPage"))
             controller.recreate()
-            assertEquals(DiagnosticsTestLayout.Page.VIDEO,
-                ReflectionHelpers.getField<DiagnosticsTestLayout.Page>(controller.get(), "selectedPage"))
+            assertEquals(DiagnosticsTestLayout.Page.COLOR,
+                HostSessionFixture.getField<DiagnosticsTestLayout.Page>(controller.get(), "selectedPage"))
         } finally { controller.pause().stop().destroy() }
     }
 
@@ -98,7 +118,7 @@ class VideoAdaptationPageTest {
         activity.setContentView(FrameLayout(activity))
         val content = activity.findViewById<ViewGroup>(android.R.id.content)
         val controller = mock(CarPlayController::class.java)
-        ReflectionHelpers.setField(activity, "controller", controller)
+        HostSessionFixture.setField(activity, "controller", controller)
         val attach = activity.javaClass.getDeclaredMethod("attachVideoAdaptationOverlay").apply { isAccessible = true }
         activity.intent = Intent().putExtra(VideoAdaptationRegistry.EXTRA, "forged")
         val before = content.childCount; attach.invoke(activity)
@@ -108,10 +128,10 @@ class VideoAdaptationPageTest {
         try {
             attach.invoke(activity)
             assertEquals(before + 1, content.childCount)
-            assertSame(controller, ReflectionHelpers.getField<CarPlayController>(activity, "controller"))
+            assertSame(controller, HostSessionFixture.getField<CarPlayController>(activity, "controller"))
         } finally {
-            ReflectionHelpers.getField<VideoAdaptationOverlay?>(activity, "videoAdaptationOverlay")?.close()
-            ReflectionHelpers.getField<android.os.Handler>(activity, "mainHandler").removeCallbacksAndMessages(null)
+            HostSessionFixture.getField<VideoAdaptationOverlay?>(activity, "videoAdaptationOverlay")?.close()
+            HostSessionFixture.getField<android.os.Handler>(activity, "mainHandler").removeCallbacksAndMessages(null)
         }
     }
 
@@ -121,15 +141,15 @@ class VideoAdaptationPageTest {
         val sink = mock(com.shilapi.xcertplay.media.AndroidMediaSink::class.java)
         val view = android.view.TextureView(activity).apply { layout(0, 0, 1920, 1080) }
         val display = CarPlaySessionDisplay(1280, 720, 0, false, false, 1920, 1080)
-        ReflectionHelpers.setField(activity, "controller", controller)
-        ReflectionHelpers.setField(activity, "sink", sink)
-        ReflectionHelpers.setField(activity, "videoView", view)
-        ReflectionHelpers.setField(activity, "sessionDisplay", display)
+        HostSessionFixture.setField(activity, "controller", controller)
+        HostSessionFixture.setField(activity, "sink", sink)
+        HostSessionFixture.setField(activity, "videoView", view)
+        HostSessionFixture.setField(activity, "sessionDisplay", display)
         val output = com.shilapi.xcertplay.media.VideoDecoderColorEvidence("hash", "decoder", false,
             mapOf("width" to 1280, "height" to 720), 1, true, true, "instance")
         `when`(sink.videoColorOutput()).thenReturn(output)
         `when`(sink.liveVideoCounters()).thenReturn(com.shilapi.xcertplay.media.LiveVideoCounters(10, 10, 1000, 10, 1000))
-        CarPlayBackgroundSession.store(controller, sink, 1280, 720, activity, display) { it() }
+        BackgroundSessionFixture.store(controller, sink, 1280, 720, activity, display) { it() }
         val method = activity.javaClass.getDeclaredMethod("videoAdaptationSample").apply { isAccessible = true }
         fun sample() = method.invoke(activity) as VideoAdaptationSample?
         val prefs = CarPlayPicture.preferences(activity)
@@ -144,13 +164,13 @@ class VideoAdaptationPageTest {
             assertNotEquals(first.key, changedPicture.key)
             `when`(sink.videoColorOutput()).thenReturn(output.copy(format = mapOf("width" to 1920, "height" to 1080)))
             assertNotEquals(changedPicture.key, requireNotNull(sample()).key)
-            ReflectionHelpers.setField(activity, "picturePanel", View(activity))
+            HostSessionFixture.setField(activity, "picturePanel", View(activity))
             assertNull(sample())
         } finally {
             if (wasSet) prefs.edit().putInt(CarPlayPicture.BRIGHTNESS, before).commit()
             else prefs.edit().remove(CarPlayPicture.BRIGHTNESS).commit()
-            CarPlayBackgroundSession.clear()
-            ReflectionHelpers.getField<android.os.Handler>(activity, "mainHandler").removeCallbacksAndMessages(null)
+            BackgroundSessionFixture.clear()
+            HostSessionFixture.getField<android.os.Handler>(activity, "mainHandler").removeCallbacksAndMessages(null)
         }
     }
 

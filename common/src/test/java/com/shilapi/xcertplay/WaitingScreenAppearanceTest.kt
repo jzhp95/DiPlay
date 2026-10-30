@@ -24,16 +24,16 @@ class WaitingScreenAppearanceTest {
     private lateinit var activity: CarPlayHostActivity
 
     @Before fun setUp() {
-        CarPlayBackgroundSession.clear()
+        BackgroundSessionFixture.clear()
         activity = Robolectric.buildActivity(CarPlayHostActivity::class.java).get()
     }
 
     @After fun tearDown() {
-        ReflectionHelpers.getField<AtomicBoolean>(activity, "shuttingDown").set(true)
-        ReflectionHelpers.getField<Handler>(activity, "mainHandler").removeCallbacksAndMessages(null)
-        ReflectionHelpers.getField<ExecutorService>(activity, "teardownExecutor").shutdownNow()
-        ReflectionHelpers.getField<ExecutorService>(activity, "airPlayCommandExecutor").shutdownNow()
-        CarPlayBackgroundSession.clear()
+        HostSessionFixture.getField<AtomicBoolean>(activity, "shuttingDown").set(true)
+        HostSessionFixture.getField<Handler>(activity, "mainHandler").removeCallbacksAndMessages(null)
+        HostSessionFixture.getField<ExecutorService>(activity, "teardownExecutor").shutdownNow()
+        HostSessionFixture.getField<ExecutorService>(activity, "airPlayCommandExecutor").shutdownNow()
+        BackgroundSessionFixture.clear()
     }
 
     @Test fun darkAppThemeKeepsTheConnectionScreenDarkWhileCarPlayIsInDayMode() {
@@ -45,8 +45,8 @@ class WaitingScreenAppearanceTest {
     }
 
     private fun waitingBackground(appNight: Boolean, carPlayNight: Boolean): Int {
-        ReflectionHelpers.setField(activity, "appNight", appNight)
-        ReflectionHelpers.setField(activity, "darkMode", carPlayNight)
+        HostSessionFixture.setField(activity, "appNight", appNight)
+        HostSessionFixture.setField(activity, "darkMode", carPlayNight)
         val root = CarPlayHostActivity::class.java.getDeclaredMethod("buildContentView")
             .apply { isAccessible = true }.invoke(activity) as ViewGroup
         val expected = setOf(WaitingScreenColors.of(true).background, WaitingScreenColors.of(false).background)

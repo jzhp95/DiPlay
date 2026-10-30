@@ -80,8 +80,9 @@ internal class IphoneResolvingDataSource(
         }
     }
 
-    class Factory(private val upstream: DataSource.Factory) : DataSource.Factory {
-        override fun createDataSource(): DataSource = IphoneResolvingDataSource(upstream.createDataSource())
+    class Factory(private val upstream: DataSource.Factory,
+        private val resolver: (String) -> CarPlayVideo.LoadedUrl? = CarPlayVideo::resolveOnIphone) : DataSource.Factory {
+        override fun createDataSource(): DataSource = IphoneResolvingDataSource(upstream.createDataSource(), resolver)
     }
 
     private companion object {

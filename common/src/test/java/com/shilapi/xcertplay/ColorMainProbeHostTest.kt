@@ -28,32 +28,37 @@ class ColorMainProbeHostTest {
         val index = ColorTestRun.cases.indexOfFirst { it.mainProfile == "software-texture" }
         val request = ColorMainProbeRegistry.begin(index, VideoColorOverride())
         var sink: AndroidMediaSink? = null
+        var connection:com.shilapi.xcertplay.session.SessionConnection?=null
         try {
-            ReflectionHelpers.setField(activity, "colorMainProbe", request)
-            ReflectionHelpers.setField(activity, "airPlayIdentity", AirPlayPersistence.loadIdentity(activity))
+            HostSessionFixture.setField(activity, "colorMainProbe", request)
+            HostSessionFixture.setField(activity, "airPlayIdentity", AirPlayPersistence.loadIdentity(activity))
             invoke(activity, "loadPersistedSettings")
             invoke(activity, "buildContentView")
-            assertFalse(ReflectionHelpers.getField(activity, "smoothVideo"))
-            assertFalse(ReflectionHelpers.getField(activity, "directVideoOutput"))
+            assertFalse(HostSessionFixture.getField(activity, "smoothVideo"))
+            assertFalse(HostSessionFixture.getField(activity, "directVideoOutput"))
             assertTrue(AirPlayPersistence.loadSmoothVideo(activity))
             assertTrue(AirPlayPersistence.loadDirectVideoOutput(activity))
-            val method = CarPlayHostActivity::class.java.getDeclaredMethod("createMediaSink", Int::class.javaPrimitiveType, Int::class.javaPrimitiveType, Int::class.javaPrimitiveType).apply { isAccessible = true }
-            sink = method.invoke(activity, 640, 360, 0) as AndroidMediaSink
-            assertTrue(ReflectionHelpers.getField(sink, "forceSoftwareVideoDecoder"))
+            connection=HostSessionFixture.mediaConnection(activity,640,360,0)
+            sink=connection.sink
+            assertTrue(HostSessionFixture.getField(sink, "forceSoftwareVideoDecoder"))
         } finally {
-            sink?.close()
-            ReflectionHelpers.getField<ColorMainProbeOverlay?>(activity, "colorMainOverlay")?.close()
-            ReflectionHelpers.getField<Handler>(activity, "mainHandler").removeCallbacksAndMessages(null)
+            connection?.close();sink?.awaitVideoReleased(5000)
+            HostSessionFixture.getField<ColorMainProbeOverlay?>(activity, "colorMainOverlay")?.close()
+            HostSessionFixture.getField<Handler>(activity, "mainHandler").removeCallbacksAndMessages(null)
             ColorMainProbeRegistry.finish(request.token)
+            ColorMainProbeRegistry.teardownFinished(request.token,
+                sink?.awaitVideoReleased(0)!=false && sink?.audioReleased()!=false){
+                sink?.awaitVideoReleased(0)!=false && sink?.audioReleased()!=false
+            }
             AirPlayPersistence.saveSmoothVideo(activity, false)
             AirPlayPersistence.saveDirectVideoOutput(activity, false)
         }
     }
     @Test fun bootstrapFailureStillFinishesTheProbeAndLeavesAFailureResult() {
-        CarPlayBackgroundSession.clear()
+        BackgroundSessionFixture.clear()
         val app = RuntimeEnvironment.getApplication()
         AirPlayPersistence.saveMfiTarget(app, MfiTarget.LOCAL)
-        ReflectionHelpers.setField(DiPlayBootstrap, "ready", false)
+        HostSessionFixture.setField(DiPlayBootstrap, "ready", false)
         val index = ColorTestRun.cases.indexOfFirst { it.mainProfile == "current" }
         val request = ColorMainProbeRegistry.begin(index, VideoColorOverride())
         val prefs = app.getSharedPreferences(ColorMainProbeRegistry.PREFS, Context.MODE_PRIVATE)
@@ -69,7 +74,7 @@ class ColorMainProbeHostTest {
             controller.destroy()
             prefs.edit().clear().commit()
             AirPlayPersistence.saveMfiTarget(app, MfiTarget.USB_CH341)
-            ReflectionHelpers.setField(DiPlayBootstrap, "ready", false)
+            HostSessionFixture.setField(DiPlayBootstrap, "ready", false)
         }
     }
     private fun invoke(activity: CarPlayHostActivity, name: String): Any? =

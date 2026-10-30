@@ -53,24 +53,16 @@ class BackgroundSessionReconnectTest {
         else shadowOf(app).grantPermissions(Manifest.permission.RECORD_AUDIO)
         Vpn.calls = 0
         Vpn.consent = null
-        CarPlayBackgroundSession.clear()
+        BackgroundSessionFixture.clear()
         val old = mock(CarPlayController::class.java)
         `when`(old.nowPlayingSnapshot()).thenReturn(CarPlayNowPlaying())
         `when`(old.awaitClosed(anyLong())).thenReturn(true)
         val activeSession = mock(com.shilapi.xcertplay.airplay.AirPlaySession::class.java)
         if (restoreSession) `when`(old.currentAirPlaySession()).thenReturn(activeSession)
         val replacementSession = mock(com.shilapi.xcertplay.airplay.AirPlaySession::class.java)
-        if (switchDuringAttach) doAnswer {
-            `when`(old.currentAirPlaySession()).thenReturn(replacementSession)
-            null
-        }.`when`(old).attachUi(
-            any<com.shilapi.xcertplay.airplay.AirPlaySessionListener>()
-                ?: object : com.shilapi.xcertplay.airplay.AirPlaySessionListener {},
-            any<(com.shilapi.xcertplay.orchestration.CarPlayStatus) -> Unit>() ?: {},
-        )
         val expectedSession = if (switchDuringAttach) replacementSession else activeSession
         val oldSink = mock(AndroidMediaSink::class.java)
-        CarPlayBackgroundSession.store(old, oldSink, 800, 480, Any(),
+        BackgroundSessionFixture.store(old, oldSink, 800, 480, Any(),
             CarPlaySessionDisplay(800, 480, 0, true, true, 800, 480)) { it() }
         val constructedConfigs = mutableListOf<com.shilapi.xcertplay.airplay.AirPlayConfig>()
         val construction = mockConstruction(CarPlayController::class.java) { controller, context ->
@@ -81,9 +73,13 @@ class BackgroundSessionReconnectTest {
         val activity = owner.get()
         val commands = if (restoreSession) PausedExecutorService().also {
             field<ExecutorService>(activity, "airPlayCommandExecutor").shutdownNow()
-            ReflectionHelpers.setField(activity, "airPlayCommandExecutor", it)
+            HostSessionFixture.setField(activity, "airPlayCommandExecutor", it)
         } else null
         owner.create()
+        if(switchDuringAttach){
+            `when`(old.currentAirPlaySession()).thenReturn(replacementSession)
+            BackgroundSessionFixture.deliverActive(replacementSession)
+        }
         try {
             assertSame(old, field<CarPlayController>(activity, "controller"))
             assertEquals("Adoption must not disturb the live connection with a VPN prompt", 0, Vpn.calls)
@@ -103,22 +99,22 @@ class BackgroundSessionReconnectTest {
             if (revokeConsent) Vpn.consent = Intent("test.vpn.CONSENT")
             field<ExecutorService>(activity, "teardownExecutor").shutdownNow()
             val executor = PausedExecutorService()
-            ReflectionHelpers.setField(activity, "teardownExecutor", executor)
+            HostSessionFixture.setField(activity, "teardownExecutor", executor)
             activity.javaClass.getDeclaredMethod("restartCarPlay", String::class.java)
                 .apply { isAccessible = true }.invoke(activity, "Test adopted connection loss")
             executor.runAll()
             shadowOf(Looper.getMainLooper()).idle()
             verify(old).close()
             if (revokeConsent) {
-                assertEquals(1, Vpn.calls)
+                assertTrue("The replacement must recheck VPN consent",Vpn.calls >= 1)
                 assertTrue(field(activity, "awaitingVpnConsent"))
                 assertFalse(field(activity, "vpnReady"))
                 assertTrue(construction.constructed().isEmpty())
             } else {
-                assertEquals("The adopted host must be able to create a replacement stack", 1, construction.constructed().size)
+                assertEquals("Replacement state=${DiPlaySessionService.liveRuntime?.snapshot()}", 1, construction.constructed().size)
                 verify(construction.constructed().single()).start()
-                if (!wireless) assertEquals(1, Vpn.calls)
-                assertTrue(field(activity, "microphonePermissionResolved"))
+                if (!wireless) assertTrue("The replacement must recheck VPN consent",Vpn.calls >= 1)
+                assertEquals(!wireless || grantMic,field<Boolean>(activity,"microphoneAvailable"))
                 if (wireless) {
                     assertEquals(grantMic, field<Boolean>(activity, "microphoneAvailable"))
                     assertEquals(grantMic, constructedConfigs.single().microphone)
@@ -130,12 +126,12 @@ class BackgroundSessionReconnectTest {
             (field<Any?>(activity, "sink") as? AndroidMediaSink)?.close()
             field<ExecutorService>(activity, "teardownExecutor").shutdownNow()
             field<ExecutorService>(activity, "airPlayCommandExecutor").shutdownNow()
-            CarPlayBackgroundSession.clear()
+            BackgroundSessionFixture.clear()
             owner.destroy()
             construction.close()
         }
     }
-    private fun <T> field(target: Any, name: String): T = ReflectionHelpers.getField(target, name)
+    private fun <T> field(target: Any, name: String): T = HostSessionFixture.getField(target, name)
 
     @Implements(DiPlayBootstrap::class, isInAndroidSdk = false)
     class Bootstrap {

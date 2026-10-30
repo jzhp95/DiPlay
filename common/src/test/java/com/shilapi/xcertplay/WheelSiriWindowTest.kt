@@ -43,7 +43,7 @@ class WheelSiriWindowTest {
 
     @Before fun setUp() {
         CarPlayPhoneState.end()
-        CarPlayBackgroundSession.clear()
+        BackgroundSessionFixture.clear()
         host = Robolectric.buildActivity(CarPlayHostActivity::class.java).get()
         settings = Robolectric.buildActivity(DiPlayActivity::class.java).get()
         host.getSharedPreferences("diplay_wheel_map_zoom", Context.MODE_PRIVATE).edit().clear().commit()
@@ -59,20 +59,20 @@ class WheelSiriWindowTest {
 
     @After fun tearDown() {
         for (name in listOf("teardownExecutor", "airPlayCommandExecutor")) {
-            (host.javaClass.getDeclaredField(name).apply { isAccessible = true }.get(host) as ExecutorService).shutdownNow()
+            (HostSessionFixture.getField<Any?>(host, name) as ExecutorService).shutdownNow()
         }
         for ((activity, name) in listOf(host to "mainHandler", settings to "handler")) {
-            (activity.javaClass.getDeclaredField(name).apply { isAccessible = true }.get(activity) as Handler).removeCallbacksAndMessages(null)
+            (HostSessionFixture.getField<Any?>(activity, name) as Handler).removeCallbacksAndMessages(null)
         }
         CarPlayPhoneState.end()
-        CarPlayBackgroundSession.clear()
+        BackgroundSessionFixture.clear()
         host.getSharedPreferences("xcertplay_airplay", Context.MODE_PRIVATE).edit().clear().commit()
     }
 
     @Test fun flymeVoiceKeysRequestSiriOnceAndRespectSessionAndCalls() {
         for (code in listOf(231, 200231)) {
-            org.robolectric.util.ReflectionHelpers.setField(VoiceKeyPair.shared, "carPlayKeyMillis", null)
-            org.robolectric.util.ReflectionHelpers.setField(VoiceKeyPair.shared, "genericKeyMillis", null)
+            HostSessionFixture.setField(VoiceKeyPair.shared, "carPlayKeyMillis", null)
+            HostSessionFixture.setField(VoiceKeyPair.shared, "genericKeyMillis", null)
             clearInvocations(controller)
             field("activeAirPlaySession", mock(AirPlaySession::class.java))
             host.getSystemService(AudioManager::class.java).mode = AudioManager.MODE_NORMAL
@@ -283,7 +283,7 @@ class WheelSiriWindowTest {
             it.text.toString() == settings.getString(R.string.wheel_key_assign,
                 settings.getString(R.string.wheel_key_role_media_play_pause), key.toString())
         })
-        assertSharedServiceSetupOnce(controls)
+        assertRetiredServiceSetupAbsent(controls)
         assertTrue(WheelKeyService.wanted(settings))
     }
 
@@ -308,11 +308,11 @@ class WheelSiriWindowTest {
             .apply { isAccessible = true }.invoke(settings, controls)
     }
 
-    private fun assertSharedServiceSetupOnce(controls: View) {
+    private fun assertRetiredServiceSetupAbsent(controls: View) {
         val labels = views(controls).filterIsInstance<TextView>().map { it.text.toString() }.toList()
         for (id in listOf(R.string.wheel_keys_service_off, R.string.wheel_keys_enable_adb,
             R.string.wheel_keys_open_settings)) {
-            assertEquals(settings.getString(id), 1, labels.count { it == settings.getString(id) })
+            assertEquals(settings.getString(id), 0, labels.count { it == settings.getString(id) })
         }
     }
 
@@ -328,8 +328,7 @@ class WheelSiriWindowTest {
             .invoke(settings, WheelZoomSettings.Role.SIRI, {}, { _: WheelZoomSettings.Role -> }, done)
     }
 
-    private fun field(name: String, value: Any?) = host.javaClass.getDeclaredField(name)
-        .apply { isAccessible = true }.set(host, value)
+    private fun field(name: String, value: Any?) = HostSessionFixture.setField(host, name, value)
 
     private fun serviceKey(service: WheelKeyService, event: KeyEvent): Boolean = service.javaClass
         .getDeclaredMethod("onKeyEvent", KeyEvent::class.java).apply { isAccessible = true }

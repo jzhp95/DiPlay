@@ -96,10 +96,10 @@ class CallEarpieceFallbackTest {
     ))
 
     /** The sink's own renderer for the call's audio, as a call's downlink creates it. */
-    private fun callRenderer(): Any = AndroidMediaSink::class.java
+    private fun callRenderer(): Any = AndroidAudioPipeline::class.java
         .getDeclaredMethod("audioRenderer", AudioStreamId::class.java, AudioFormat::class.java)
         .apply { isAccessible = true }
-        .invoke(sink, telephony, AudioFormat(AudioCodecKind.LPCM, 16_000, 1, 100, "telephony"))!!
+        .invoke(sink.audio, telephony, AudioFormat(AudioCodecKind.LPCM, 16_000, 1, 100, "telephony"))!!
 
     private fun route(renderer: Any, device: AudioDeviceInfo) {
         renderer.javaClass.getDeclaredMethod("checkCallRoute", AudioDeviceInfo::class.java)

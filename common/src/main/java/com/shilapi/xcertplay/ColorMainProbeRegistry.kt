@@ -34,15 +34,23 @@ internal object ColorMainProbeRegistry {
         val color: VideoColorOverride, val startedMillis: Long, val autoRunId: String? = null)
     private var current: Request? = null
     private val closing = mutableSetOf<String>()
+    private val leases=mutableMapOf<String,com.shilapi.xcertplay.diagnostics.DiagnosticLease.Ticket>()
     @Synchronized fun begin(index: Int, color: VideoColorOverride, autoRunId: String? = null): Request {
+        require(autoRunId==null){"legacy automatic execution retired"}
         check(!MainProbeTeardown.blocked()) { "previous main-screen resources have not released" }
         val profile = profiles.single { it.id == ColorTestRun.cases[index].mainProfile }
-        return Request(UUID.randomUUID().toString(), index, profile, color, System.currentTimeMillis(), autoRunId).also { current = it }
+        check(current==null && closing.isEmpty()){ "diagnostic already active" }
+        val id=UUID.randomUUID().toString()
+        val lease=checkNotNull(com.shilapi.xcertplay.diagnostics.DiagnosticLease.acquire(id,DiPlaySessionService.liveRuntime?.currentConnection?.controller,blocksProduction=false)){"diagnostic already active"}
+        return Request(id,index,profile,color,System.currentTimeMillis(),autoRunId).also{current=it;leases[id]=lease}
     }
     @Synchronized fun lookup(token: String?): Request? = current?.takeIf {
         token != null && token == it.token && System.currentTimeMillis() - it.startedMillis in 0..900_000
     }
     @Synchronized fun finish(token: String): Request? = current?.takeIf { it.token == token }?.also { current = null; closing.add(token) }
     @Synchronized fun isClosing(token: String): Boolean = token in closing
-    @Synchronized fun teardownFinished(token: String) { closing.remove(token) }
+    @Synchronized fun teardownFinished(token: String, released: Boolean = true, actualRelease: (() -> Boolean)? = null) {
+        closing.remove(token)
+        leases.remove(token)?.let{com.shilapi.xcertplay.diagnostics.DiagnosticLease.release(it,released,actualRelease)}
+    }
 }

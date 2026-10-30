@@ -34,7 +34,8 @@ import java.util.zip.ZipOutputStream
 
 /** All color experiments are local to this page. Opening it never starts decoding or changes settings. */
 internal class ColorTestPage(private val activity: Activity, private val palette: DiPlayPalette,
-    private val requestAutomatic: () -> Unit = {}) {
+    private val requestAutomatic: () -> Unit = {}, private val combined: Boolean = false,
+    private val requestRepublish: () -> Unit = { DecoderDiagnosticsService.retry(activity) }) {
     val run = ColorTestRun()
     private val prefs = activity.getSharedPreferences(ColorMainProbeRegistry.PREFS, Activity.MODE_PRIVATE)
     private val player = ColorTestPlayer(activity)
@@ -43,10 +44,6 @@ internal class ColorTestPage(private val activity: Activity, private val palette
     private val exportWorker = Executors.newSingleThreadExecutor()
     private val lines = prefs.getString("log", "")!!.lines().filter { it.isNotBlank() }.toMutableList()
     private val caseLines = mutableListOf<String>()
-    private var autoCaseId: String? = null
-    private var autoCapture: Runnable? = null
-    private var autoDeadline: Runnable? = null
-    private var automaticExportId: String? = null
     private val controls = mutableListOf<Button>()
     private lateinit var automaticButton: Button
     private lateinit var deviceDetails: TextView
@@ -54,8 +51,8 @@ internal class ColorTestPage(private val activity: Activity, private val palette
         override fun run() {
             if (!visible || disposed) return
             consumeMainResult()
-            resumeAutomatic()
-            if (AutomaticVideoSuite.active(activity) || AutomaticVideoSuite.read(activity).optBoolean("cleanupPending")) handler.postDelayed(this, 500)
+            update()
+            if (DecoderDiagnosticsService.active(activity) || VideoReportPublisher.busy()) handler.postDelayed(this, 500)
         }
     }
     private var active = false
@@ -111,11 +108,22 @@ internal class ColorTestPage(private val activity: Activity, private val palette
             controls.add(this)
             content.addView(this, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = padding })
         }
-        label(R.string.color_test_title, FlymeAutoStyle.TextRole.PAGE_TITLE)
-        label(R.string.color_test_description, FlymeAutoStyle.TextRole.SECONDARY)
-        label(R.string.video_auto_description, FlymeAutoStyle.TextRole.SECONDARY)
+        label(if (combined) R.string.decoder_test_title else R.string.color_test_title, FlymeAutoStyle.TextRole.PAGE_TITLE)
+        if (combined) label(R.string.decoder_short_description, FlymeAutoStyle.TextRole.SECONDARY)
+        else {
+            label(R.string.color_test_description, FlymeAutoStyle.TextRole.SECONDARY)
+            label(R.string.video_auto_description, FlymeAutoStyle.TextRole.SECONDARY)
+        }
         automaticButton = action(R.string.video_auto_start, true) {
-            if (AutomaticVideoSuite.active(activity)) stopAutomatic("user_cancelled") else requestAutomatic()
+            if (DecoderDiagnosticsService.active(activity)) DecoderDiagnosticsService.stop(activity)
+            else requestAutomatic()
+        }
+        action(R.string.decoder_system_retry) {
+            if (!DecoderDiagnosticsService.active(activity)) requestRepublish()
+            handler.removeCallbacks(autoPoll); handler.postDelayed(autoPoll, 500)
+        }
+        action(R.string.decoder_system_downloads) {
+            runCatching { activity.startActivity(Intent(android.app.DownloadManager.ACTION_VIEW_DOWNLOADS)) }
         }
         deviceDetails = label(R.string.video_adapt_idle, FlymeAutoStyle.TextRole.SECONDARY).apply { setTextIsSelectable(true) }
         progress = label(R.string.color_test_ready)
@@ -172,9 +180,9 @@ internal class ColorTestPage(private val activity: Activity, private val palette
             if (active) playCurrent() else update()
         }
         label(R.string.color_test_reference_hint, FlymeAutoStyle.TextRole.SECONDARY)
-        action(R.string.color_test_export, true, ::export)
+        if (!combined) action(R.string.color_test_export, true, ::export)
         action(R.string.color_test_clear) {
-            if (exporting || capturing) return@action
+            if (exporting || capturing || VideoReportPublisher.busy()) return@action
             activity.appDialogBuilder().setTitle(R.string.color_test_clear)
                 .setMessage(R.string.color_test_clear_confirm)
                 .setPositiveButton(R.string.color_test_clear) { _, _ ->
@@ -188,17 +196,21 @@ internal class ColorTestPage(private val activity: Activity, private val palette
         update()
     }
 
+    fun attachSampling(sampling: ScrollView) {
+        val content = root.getChildAt(0) as LinearLayout
+        val other = sampling.getChildAt(0) ?: return
+        sampling.removeView(other)
+        content.addView(other, content.indexOfChild(deviceDetails) + 1)
+    }
     fun setVisible(value: Boolean) {
         visible = value
         handler.removeCallbacks(autoPoll)
         if (!value) {
             handler.removeCallbacks(pendingProbePoll)
-            if (AutomaticVideoSuite.active(activity) && prefs.getString("pending_token", null) == null)
-                stopAutomatic("test_page_backgrounded")
             stop()
         } else {
-            consumeMainResult(); resumeAutomatic()
-            if (AutomaticVideoSuite.active(activity) || AutomaticVideoSuite.read(activity).optBoolean("cleanupPending")) handler.postDelayed(autoPoll, 500)
+            consumeMainResult(); update()
+            if (DecoderDiagnosticsService.active(activity) || VideoReportPublisher.busy()) handler.postDelayed(autoPoll, 500)
         }
     }
     private fun consumeMainResult() {
@@ -242,15 +254,12 @@ internal class ColorTestPage(private val activity: Activity, private val palette
         }
         persist()
         prefs.edit().remove("pending_token").remove("pending_result").remove("pending_index").apply()
-        if (evidence.optString("auto_run_id").isNotEmpty()) {
-            if (evidence.optBoolean("teardown_interrupted") || !data.optBoolean("teardown_confirmed")) {
-                if (AutomaticVideoSuite.record(activity, evidence.optString("auto_run_id"), index, evidence,
-                        if (accepted) verdict else "无法显示", canContinue = false)) {
-                    stop(); saveAutomaticReport()
-                }
-            } else automaticRecorded(index, evidence, if (accepted) verdict else "无法显示")
+        if(evidence.optString("auto_run_id").isNotEmpty()) {
+            stop();status.setText(R.string.color_main_interrupted)
+            VideoReportPublisher.manual(activity.applicationContext){if(!disposed)update()}
             return
         }
+        VideoReportPublisher.manual(activity.applicationContext) { if (!disposed) update() }
         if (accepted && data.optBoolean("continue") && !evidence.optBoolean("capture_context_changed") && index < ColorTestRun.cases.lastIndex) {
             run.select(index + 1); range = run.current.color.range; standard = null; savedPicture = false
             persist(); active = true
@@ -264,26 +273,55 @@ internal class ColorTestPage(private val activity: Activity, private val palette
         if (prefs.getString("pending_token", null) != null) {
             status.setText(R.string.color_main_closing); return
         }
-        val request = ColorMainProbeRegistry.begin(run.index, run.current.color, autoCaseId)
+        val request = ColorMainProbeRegistry.begin(run.index, run.current.color)
         prefs.edit().putString("pending_token", request.token).putInt("pending_index", run.index)
             .remove("pending_result").apply()
-        // Finish an existing host before starting a temporary host; never race singleTask recreation with its old shutdown.
+        val previous = DiPlaySessionService.liveRuntime?.currentConnection
+        val context = activity.applicationContext
+        val transition = Handler(Looper.getMainLooper())
+        var finished = false
+        fun released() = (previous?.controller?.awaitClosed(0) ?: !CarPlayBackgroundSession.hasSession()) &&
+            (previous?.sink?.awaitVideoReleased(0) ?: true) && (previous?.sink?.audioReleased() ?: true)
+        fun abort(reason: String) {
+            if (finished) return
+            finished = true
+            if (!released()) MainProbeTeardown.retain { released() }
+            ColorMainProbeRegistry.finish(request.token); ColorMainProbeRegistry.teardownFinished(request.token,released()){released()}
+            if (prefs.getString("pending_token", null) != request.token) return
+            val evidence = JSONObject().put("auto_run_id", request.autoRunId ?: "")
+                .put("probe_token", request.token).put("rendered", false).put("teardown_interrupted", true)
+                .put("missing", JSONArray().put(reason))
+            val result = JSONObject().put("token", request.token).put("index", request.index)
+                .put("verdict", "无法显示").put("continue", false).put("teardown_complete", true)
+                .put("teardown_confirmed", false).put("evidence", evidence)
+            prefs.edit().putString("pending_result", result.toString()).apply()
+            if (request.autoRunId != null) VideoReportPublisher.finishPendingMain(context, request.token)
+            if (!disposed && visible) consumeMainResult()
+        }
+        transition.postDelayed({ abort("previous_session_transition_deadline_45s") }, 45_000)
         CarPlayBackgroundSession.stop {
-            activity.runOnUiThread {
-                if (!visible || disposed || ColorMainProbeRegistry.lookup(request.token) == null) {
-                    ColorMainProbeRegistry.finish(request.token)
-                    ColorMainProbeRegistry.teardownFinished(request.token)
-                    prefs.edit().remove("pending_token").remove("pending_index").apply()
-                    return@runOnUiThread
+            Thread({
+                val result = MainProbeTeardown.await(
+                    { timeout -> previous?.controller?.awaitClosed(timeout) ?: true },
+                    { timeout -> previous?.sink?.awaitVideoReleased(timeout) ?: true },
+                    audio = { previous?.sink?.audioReleased() ?: true })
+                transition.post {
+                    if (finished) return@post
+                    if (!result.optBoolean("confirmed")) { abort("previous_session_teardown_unconfirmed"); return@post }
+                    if (!visible || disposed || ColorMainProbeRegistry.lookup(request.token) == null) {
+                        abort("test_page_left_during_transition"); return@post
+                    }
+                    runCatching {
+                        activity.startActivity(Intent(activity, CarPlayHostActivity::class.java)
+                            .putExtra(ColorMainProbeRegistry.EXTRA_TOKEN, request.token).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    }.onSuccess { finished = true; transition.removeCallbacksAndMessages(null) }
+                        .onFailure { abort("main_host_launch_failed:" + it.javaClass.simpleName) }
                 }
-                activity.startActivity(Intent(activity, CarPlayHostActivity::class.java)
-                    .putExtra(ColorMainProbeRegistry.EXTRA_TOKEN, request.token).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            }
+            }, "decoder-main-transition").apply { isDaemon = true; start() }
         }
     }
+
     fun stop() {
-        autoCapture?.let(handler::removeCallbacks); autoCapture = null
-        autoDeadline?.let(handler::removeCallbacks); autoDeadline = null
         epoch++; active = false; capturing = false; run.rendered = false
         player.stop(); preview.removeAllViews(); texture = null; surfaceView = null
         wrapper?.let { old -> player.stop { old.release() } }; wrapper = null
@@ -292,10 +330,6 @@ internal class ColorTestPage(private val activity: Activity, private val palette
     }
     fun close(keepAutomation: Boolean = false) {
         if (disposed) return
-        if (AutomaticVideoSuite.active(activity) && prefs.getString("pending_token", null) == null) {
-            if (!keepAutomation) stopAutomatic("test_page_destroyed")
-            else releaseAutomaticPlayer(AutomaticVideoSuite.read(activity).optString("id")) {}
-        }
         stop(); disposed = true; handler.removeCallbacksAndMessages(null); player.close(); exportWorker.shutdown()
     }
     private fun playCurrent() {
@@ -306,11 +340,7 @@ internal class ColorTestPage(private val activity: Activity, private val palette
             update()
             return
         }
-        autoCapture?.let(handler::removeCallbacks); autoCapture = null
-        autoDeadline?.let(handler::removeCallbacks); autoDeadline = null
         val token = ++epoch
-        val suite = AutomaticVideoSuite.read(activity)
-        autoCaseId = suite.optString("id").takeIf { AutomaticVideoSuite.active(activity) && suite.optInt("index", -1) == run.index }
         caseLines.clear()
         run.rendered = false; capturing = false
         player.stop()
@@ -318,16 +348,13 @@ internal class ColorTestPage(private val activity: Activity, private val palette
         preview.removeAllViews(); texture = null; surfaceView = null
         status.setText(R.string.color_test_waiting)
         if (run.current.mainProfile != null) {
-            launchMainProbe(); update(); return
-        }
-        if (autoCaseId != null) {
-            autoDeadline = Runnable {
-                if (token == epoch && active && AutomaticVideoSuite.active(activity)) {
-                    capturing = false; epoch++
-                    log("automatic case deadline: output/capture did not finish within 15s")
-                    record("无法显示")
+            player.afterCleanup {
+                if(token==epoch && active && visible && !disposed) {
+                    runCatching{launchMainProbe()}.onFailure{active=false;status.setText(R.string.video_adapt_conflict)}
+                    update()
                 }
-            }.also { handler.postDelayed(it, 15_000) }
+            }
+            return
         }
         log("CASE ${run.index + 1}: ${run.current.title}; range=$range standard=$standard fromSps=${run.current.color.fromSps} savedPicture=$savedPicture")
         fun begin(surface: Surface) {
@@ -337,12 +364,6 @@ internal class ColorTestPage(private val activity: Activity, private val palette
                 log(message)
                 if (message.contains("first frame rendered")) {
                     run.rendered = true
-                    if (autoCaseId != null && autoCapture == null) {
-                        autoCapture = Runnable {
-                            if (token == epoch && active && !capturing)
-                                record(if (run.rendered) "自动采集（未人工判色）" else "无法显示")
-                        }.also { handler.postDelayed(it, 3_000) }
-                    }
                 }
                 if (message.startsWith("错误：") || message.contains("configuration failed")) run.rendered = false
                 when {
@@ -356,6 +377,7 @@ internal class ColorTestPage(private val activity: Activity, private val palette
         }
         if (run.current.surface) {
             val output = SurfaceView(activity)
+            if (run.current.asset?.contains("1080") == true) output.holder.setFixedSize(1920, 1080)
             surfaceView = output
             output.holder.addCallback(object : SurfaceHolder.Callback {
                 override fun surfaceCreated(holder: SurfaceHolder) = begin(holder.surface)
@@ -373,6 +395,7 @@ internal class ColorTestPage(private val activity: Activity, private val palette
             output.surfaceTextureListener = object : TextureView.SurfaceTextureListener {
                 override fun onSurfaceTextureAvailable(st: SurfaceTexture, width: Int, height: Int) {
                     if (token != epoch || !active) return
+                    if (run.current.asset?.contains("1080") == true) st.setDefaultBufferSize(1920, 1080)
                     val surface = Surface(st); wrapper = surface; begin(surface)
                 }
                 override fun onSurfaceTextureSizeChanged(st: SurfaceTexture, width: Int, height: Int) = Unit
@@ -395,17 +418,24 @@ internal class ColorTestPage(private val activity: Activity, private val palette
         if (!technical && !run.rendered) { status.setText(R.string.color_test_not_rendered); return }
         val token = epoch
         val beforeCapture = player.evidence()
+        val nativeReference = run.current.asset?.contains("1080") == true
+        val captureWidth = if (nativeReference) 1920 else 640
+        val captureHeight = if (nativeReference) 1080 else 360
         capturing = true; captureName = null; update()
+        var clarity: JSONObject? = null
+        var completed = false
         fun complete(bitmap: Bitmap?) {
+            if (completed) { bitmap?.recycle(); return }; completed = true
             if (token != epoch || disposed) { bitmap?.recycle(); return }
             capturing = false
             if (bitmap != null) {
+                if (run.current.asset == "h264_clarity1080") clarity = ClarityReferenceMetrics.measure(bitmap)
                 val file = File(captureDirectory(), "observation-${UUID.randomUUID()}.png")
                 runCatching { file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) } }
                     .onSuccess {
                         captureName = file.name
                         log("capture=${file.name}; software pixels only (not panel measurements)")
-                        if (run.current.asset != null) {
+                        if (run.current.asset != null && !run.current.asset!!.contains("1080")) {
                             val samples = ColorReferenceView.colors.indices.joinToString(" ") { i ->
                                 val color = bitmap.getPixel(((i % 8 + .5f) * bitmap.width / 8).toInt(), ((i / 8 + .5f) * bitmap.height / 3).toInt())
                                 "%06x".format(color and 0xffffff)
@@ -420,12 +450,23 @@ internal class ColorTestPage(private val activity: Activity, private val palette
                 put("standard", standard ?: JSONObject.NULL); put("savedPicture", savedPicture)
                 put("softwareRequired", run.current.forceSoftware)
                 put("hardwareYuv", run.current.hardwareYuv)
+                put("captureWidth", captureWidth); put("captureHeight", captureHeight)
+                put("nativeReferenceCaptureRequested", nativeReference)
+                put("previewWidth", preview.width); put("previewHeight", preview.height)
+                put("surfaceBufferWidth", surfaceView?.holder?.surfaceFrame?.width() ?: JSONObject.NULL)
+                put("surfaceBufferHeight", surfaceView?.holder?.surfaceFrame?.height() ?: JSONObject.NULL)
+                put("capturePath", if (surfaceView != null) "surface_pixel_copy" else "texture_getBitmap")
+                put("nativeBufferSizeConfirmed", surfaceView?.holder?.surfaceFrame?.let {
+                    it.width() == captureWidth && it.height() == captureHeight } ?: false)
+
                 put("fromSps", run.current.color.fromSps)
                 put("actualView", if (run.current.surface) "SurfaceView" else "TextureView")
             }
             val afterCapture = player.evidence()
             val evidence = ColorProbeEvidence.capture(afterCapture, run.rendered, run.current.forceSoftware,
-                listOfNotNull(captureName), "production_decoder_fixture", requested).put("logs", JSONArray(caseLines.toList()))
+                listOfNotNull(captureName), "production_decoder_fixture", requested).put("logs", JSONArray(caseLines.toList())).put("fixturePerformance", player.performance())
+                .put("clarityScope", "known_pattern_bitmap_capture; texture_preview_resampling_may_affect_contrast; not_decoder_only_or_physical_panel_measurement")
+                .put("clarityMeasurement", clarity ?: JSONObject.NULL)
             if (!technical && (beforeCapture?.sourceHash != afterCapture?.sourceHash ||
                     beforeCapture?.output?.instance != afterCapture?.output?.instance ||
                     beforeCapture?.output?.generation != afterCapture?.output?.generation)) {
@@ -433,17 +474,12 @@ internal class ColorTestPage(private val activity: Activity, private val palette
                     beforeCapture?.output?.firstFrameRendered == true, run.current.forceSoftware, emptyList(), "before_capture", requested))
                 evidence.getJSONArray("missing").put("capture_context_changed")
             }
-            autoCaseId?.let { evidence.put("auto_run_id", it).put("automatic", true)
-                .put("visual_verdict", "not_automatically_measured") }
             if (run.record(verdict, range, standard, savedPicture, captureName, evidence.toString())) {
                 log("OBSERVATION ${run.index + 1}: $verdict; range=$range standard=$standard fromSps=${run.current.color.fromSps} savedPicture=$savedPicture")
                 persist()
                 val retained = observationCaptures().toSet()
                 captureDirectory().listFiles()?.filter { it.name.startsWith("observation-") && it.name !in retained }?.forEach { it.delete() }
-                if (autoCaseId != null) {
-                    automaticRecorded(run.index, evidence, verdict)
-                    return
-                }
+                VideoReportPublisher.manual(activity.applicationContext) { if (!disposed) update() }
                 if (evidence.optBoolean("capture_context_changed")) {
                     stop(); status.setText(R.string.color_main_interrupted)
                 } else if (run.index < ColorTestRun.cases.lastIndex) {
@@ -453,10 +489,11 @@ internal class ColorTestPage(private val activity: Activity, private val palette
             }
             update()
         }
+        handler.postDelayed({ complete(null) }, 5_000)
         if (technical) { complete(null); return }
         val videoTexture = texture
         if (videoTexture != null) {
-            if (!savedPicture) { complete(videoTexture.getBitmap(640, 360)); return }
+            if (!savedPicture) { complete(videoTexture.getBitmap(captureWidth, captureHeight)); return }
             // A window copy includes the view's color filter, but only when the entire preview is visible.
             root.scrollTo(0, preview.top)
             videoTexture.postOnAnimation {
@@ -470,7 +507,7 @@ internal class ColorTestPage(private val activity: Activity, private val palette
                     }
                     val location = IntArray(2); videoTexture.getLocationInWindow(location)
                     val rect = Rect(location[0], location[1], location[0] + videoTexture.width, location[1] + videoTexture.height)
-                    val windowBitmap = Bitmap.createBitmap(640, 360, Bitmap.Config.ARGB_8888)
+                    val windowBitmap = Bitmap.createBitmap(captureWidth, captureHeight, Bitmap.Config.ARGB_8888)
                     try {
                         PixelCopy.request(activity.window, rect, windowBitmap, { result ->
                             if (result == PixelCopy.SUCCESS) complete(windowBitmap) else { windowBitmap.recycle(); complete(null) }
@@ -482,7 +519,7 @@ internal class ColorTestPage(private val activity: Activity, private val palette
         }
         val videoSurface = surfaceView
         if (videoSurface == null || !videoSurface.holder.surface.isValid) { complete(null); return }
-        val bitmap = Bitmap.createBitmap(640, 360, Bitmap.Config.ARGB_8888)
+        val bitmap = Bitmap.createBitmap(captureWidth, captureHeight, Bitmap.Config.ARGB_8888)
         try {
             PixelCopy.request(videoSurface, bitmap, { result ->
                 if (result == PixelCopy.SUCCESS) complete(bitmap) else { bitmap.recycle(); complete(null) }
@@ -504,11 +541,11 @@ internal class ColorTestPage(private val activity: Activity, private val palette
         pictureButton.isEnabled = !run.current.surface && run.current.mainProfile == null
         rangeButton.isEnabled = run.current.mainProfile == null && !pendingMain
         matrixButton.isEnabled = run.current.mainProfile == null && !pendingMain
-        val suiteActive = AutomaticVideoSuite.active(activity)
+        val suiteActive = DecoderDiagnosticsService.active(activity)
         if (suiteActive) controls.forEach { it.isEnabled = false }
-        automaticButton.isEnabled = !exporting
+        automaticButton.isEnabled = !exporting && (suiteActive || !VideoReportPublisher.busy())
         automaticButton.setText(if (suiteActive) R.string.video_auto_stop else R.string.video_auto_start)
-        deviceDetails.text = VideoAdaptationSummary.device(VideoAdaptationStore.read(activity).optJSONObject("device")) + "\n" +
+        deviceDetails.text = DecoderDiagnosticsRun.description(activity) + "\n\n历史手动采集：\n" + (if (combined) VideoReportPublisher.description(activity) else VideoAdaptationSummary.device(VideoAdaptationStore.read(activity).optJSONObject("device"))) + "\n" +
             VideoAdaptationSummary.latest(AutomaticVideoSuite.read(activity))
         val states = ColorTestRun.cases.indices.map(::coverageState)
         coverage.text = activity.getString(R.string.color_evidence_summary, states.count { it == "齐全" },
@@ -560,108 +597,21 @@ internal class ColorTestPage(private val activity: Activity, private val palette
         run.results.forEach { (i, result) -> editor.putString("result_$i", result) }; editor.apply()
     }
     private fun captureDirectory() = ColorProbeEvidence.directory(activity)
+    private fun resourcesWidth() = activity.resources.displayMetrics.widthPixels.coerceAtLeast(1)
+    private fun resourcesHeight() = activity.resources.displayMetrics.heightPixels.coerceAtLeast(1)
     fun startAutomatic() {
-        if (disposed || exporting || capturing || AutomaticVideoSuite.active(activity)) return
-        if (AutomaticVideoCleanup.blocked() || MainProbeTeardown.blocked()) { status.setText(R.string.color_main_closing); return }
-        if (VideoAdaptationRegistry.current() != null) { status.setText(R.string.video_adapt_conflict); return }
+        if (disposed || exporting || capturing || DecoderDiagnosticsService.active(activity)) return
+        if (AutomaticVideoCleanup.blocked() || MainProbeTeardown.blocked() || VideoAdaptationRegistry.current() != null || prefs.getString("pending_token", null) != null) {
+            status.setText(R.string.video_adapt_conflict); return
+        }
         stop()
-        val pending = prefs.getString("pending_token", null)
-        if (pending != null && (ColorMainProbeRegistry.lookup(pending) != null || ColorMainProbeRegistry.isClosing(pending))) {
-            status.setText(R.string.color_main_closing); return
-        }
-        prefs.edit().remove("pending_token").remove("pending_result").remove("pending_index").apply()
-        val id = AutomaticVideoSuite.begin(activity, focused = true)
-        val screen = runCatching { VideoAdaptationDevice.screen(activity) }.getOrElse {
-            stopAutomatic("screen_query_failed"); return
-        }
-        val context = activity.applicationContext
-        status.setText(R.string.video_adapt_busy)
-        exportWorker.execute {
-            val result = runCatching { VideoAdaptationDevice.collect(context, screen) }
-            result.onSuccess { device ->
-                VideoAdaptationStore.update(context) { it.put("device", device) }
-                AutomaticVideoSuite.ready(context, id)
-            }.onFailure { AutomaticVideoSuite.stop(context, "device_query_failed:${it.javaClass.simpleName}") }
-            handler.post { if (!disposed) { resumeAutomatic(); update() } }
-        }
-        handler.removeCallbacks(autoPoll); handler.postDelayed(autoPoll, 500)
-        update()
-    }
-    private fun resumeAutomatic() {
-        if (!visible || disposed || exporting || capturing) return
-        val state = AutomaticVideoSuite.read(activity)
-        if (state.optBoolean("cleanupPending")) return
-        if (!AutomaticVideoSuite.active(activity)) {
-            if (state.optString("id").isNotEmpty() && !state.has("exportPath")) saveAutomaticReport()
-            return
-        }
-        if (!state.optBoolean("ready") || active || prefs.getString("pending_token", null) != null) return
-        val next = state.optInt("index", -1)
-        if (next !in ColorTestRun.cases.indices) { stopAutomatic("invalid_case_index"); return }
-        run.select(next); range = run.current.color.range; standard = null; savedPicture = false
-        active = true; playCurrent()
-    }
-    private fun automaticRecorded(index: Int, evidence: JSONObject, verdict: String) {
-        autoDeadline?.let(handler::removeCallbacks); autoDeadline = null
-        autoCapture?.let(handler::removeCallbacks); autoCapture = null
-        val id = evidence.optString("auto_run_id")
-        if (id != AutomaticVideoSuite.read(activity).optString("id")) return
-        if (!AutomaticVideoSuite.record(activity, id, index, evidence, verdict)) {
-            stop(); saveAutomaticReport(); return
-        }
-        releaseAutomaticPlayer(id) { if (!disposed) { resumeAutomatic(); update() } }
-    }
-    private fun releaseAutomaticPlayer(id: String, done: () -> Unit) {
-        if (id.isEmpty() || AutomaticVideoCleanup.blocked()) { stop(); return }
-        val context = activity.applicationContext
-        // Page reconstruction and cancellation must obey the same cross-worker barrier as advancement.
-        AutomaticVideoSuite.cleanup(context, id, true, false)
-        stop()
-        AutomaticVideoCleanup.await(context, id, player::afterCleanup, done)
-    }
-    private fun stopAutomatic(reason: String) {
-        val id = AutomaticVideoSuite.read(activity).optString("id")
-        AutomaticVideoSuite.stop(activity, reason)
-        if (prefs.getString("pending_token", null) == null) {
-            releaseAutomaticPlayer(id) {}
-            saveAutomaticReport()
-        } else stop()
-    }
-    private fun saveAutomaticReport() {
-        val state = AutomaticVideoSuite.read(activity)
-        val id = state.optString("id")
-        if (id.isEmpty() || automaticExportId == id || exporting || disposed) return
-        automaticExportId = id; exporting = true; update()
-        val value = VideoAdaptationStore.read(activity).put("automaticSuite", state)
-        value.put("manualAdaptationSamplesReference", value.remove("samples") ?: JSONArray())
-        value.put("separateColorTestHistory", JSONArray().apply {
-            val history = historyJson()
-            for (i in 0 until history.length()) {
-                val row = history.getJSONObject(i)
-                if (row.optJSONObject("evidence")?.optString("auto_run_id") == id) put(row)
-            }
-        })
-        val frozen = JSONObject(value.toString())
-        val context = activity.applicationContext
-        exportWorker.execute {
-            val result = runCatching {
-                val zip = VideoAdaptationExport.zip(context, frozen)
-                val saved = DiagnosticExportStore.saveFileWithoutPicker(context, zip, "application/zip")
-                AutomaticVideoSuite.exported(context, id, saved.savedPath ?: zip.absolutePath, !saved.savedInApp)
-                saved
-            }
-            handler.post {
-                exporting = false
-                if (disposed) return@post
-                result.onSuccess { saved ->
-                    status.text = activity.getString(if (saved.savedInApp) R.string.video_auto_private_saved else R.string.video_auto_saved,
-                        saved.savedPath ?: "Download/Apple CarPlay")
-                }.onFailure { status.text = activity.getString(R.string.video_adapt_failed, it.javaClass.simpleName) }
-                update()
-            }
+        AutomaticVideoCleanup.await(activity, java.util.UUID.randomUUID().toString(), player::afterCleanup) {
+            if (!disposed && !AutomaticVideoCleanup.blocked()) {
+                DecoderDiagnosticsService.start(activity, VideoAdaptationDevice.screen(activity))
+                handler.removeCallbacks(autoPoll); handler.postDelayed(autoPoll, 500)
+            } else if (!disposed) status.setText(R.string.decoder_system_previous_release_failed)
         }
     }
-
     private fun export() {
         if (exporting || disposed || capturing) return
         if (prefs.getString("pending_token", null) != null) { status.setText(R.string.color_main_closing); return }

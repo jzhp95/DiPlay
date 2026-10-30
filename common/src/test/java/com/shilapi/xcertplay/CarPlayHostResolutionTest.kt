@@ -141,9 +141,8 @@ class CarPlayHostResolutionTest {
         ShadowMediaCodecList.addCodec(codec)
     }
 
-    private fun get(name: String): Any? = activity.javaClass.getDeclaredField(name)
-        .apply { isAccessible = true }.get(activity)
+    private fun get(name: String): Any? = HostSessionFixture.getField<Any?>(activity, name)
     private fun set(name: String, value: Any?) {
-        activity.javaClass.getDeclaredField(name).apply { isAccessible = true }.set(activity, value)
+        HostSessionFixture.setField(activity, name, value)
     }
 }

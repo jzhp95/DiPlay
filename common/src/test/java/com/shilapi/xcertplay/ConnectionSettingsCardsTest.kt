@@ -41,13 +41,14 @@ class ConnectionSettingsCardsTest {
         shadowOf(Looper.getMainLooper()).idle()
     }
 
-    @Test fun connectionAndAuthenticationChoicesShareOneCard() {
+    @Test fun connectionMethodHasOneCardWithoutTheRetiredAuthenticationSelector() {
         val parent = cards()
         assertEquals(2, parent.childCount)
         val first = descendants(parent.getChildAt(0)).filterIsInstance<TextView>().toList()
-        for (id in listOf(R.string.settings_connection_method, R.string.mfi_certificate_signing_target)) {
+        for (id in listOf(R.string.settings_connection_method)) {
             assertTrue(first.any { it.text.startsWith(activity.getString(id) + " · ") })
         }
+        assertFalse(first.any{it.text.startsWith(activity.getString(R.string.mfi_certificate_signing_target)+" · ")})
     }
 
     @Test fun onlyTheSelectedNetworkDetailsCardIsShown() {

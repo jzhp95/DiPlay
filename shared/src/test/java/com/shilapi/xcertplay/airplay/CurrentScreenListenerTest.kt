@@ -158,7 +158,7 @@ class CurrentScreenListenerTest {
             .get(screen) as ScreenStream.Listener
 
     private fun testSession(): AirPlaySession = AirPlaySession(
-        socket = Socket(),
+        socket = LoopbackControlSocket(),
         config = AirPlayConfig(
             deviceName = "test",
             deviceId = "02:00:00:00:00:02",
