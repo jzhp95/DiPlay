@@ -396,7 +396,6 @@
     <string name="settings_reconnect_now">立即重新连接</string>
     <string name="settings_advanced_media">视频与音频</string>
     <string name="settings_wheel_keys">方向盘按键</string>
-    <string name="settings_experimental_display">显示（实验性）</string>
     <string name="settings_diagnostics_summary">排查连接问题时保存本地报告</string>
     <string name="settings_full_screen_description">在 Apple CarPlay 与 CarPlay 中隐藏状态栏及导航栏。</string>
     <string name="settings_vehicle_description">车辆和仪表盘功能因车型和固件而异。启用实验性设置前，请先在高级设置中查看。</string>
@@ -704,10 +703,6 @@
     <string name="carplay_dock_bottom">底部</string>
     <string name="carplay_dock_hint">CarPlay 显示应用、时钟和状态的位置。在“驾驶员一侧”和“底部”之间切换立即生效；“自动”由 iPhone 决定，重新连接后生效。</string>
     <string name="auto_grant_incomplete">未验证全部请求权限。请检查下方各项状态；开启网络 ADB 后重试，或使用手动设置。现有权限保持不变。</string>
-    <string name="side_panel">CarPlay 旁的侧边面板（实验性）</string>
-    <string name="side_panel_description">CarPlay 可移到屏幕的三分之二，Apple CarPlay 在其余部分显示自己的面板：横屏时在乘客一侧，竖屏时在底部（时钟，以及已读取时的电量）。可在会话菜单中显示或隐藏。下次连接时生效。</string>
-    <string name="side_panel_show">侧边面板</string>
-    <string name="side_panel_full_screen">⤢ 全屏</string>
     <string name="main_buffered_audio">缓冲音乐（实验性）</string>
     <string name="main_buffered_audio_description">支持此功能的应用（如 Apple Music）会提前发送约两分钟的音乐，因此短暂的 Wi-Fi 中断不会被听到。其他应用保持原样。会重新连接 CarPlay。</string>
     <string name="settings_car_bluetooth_audio">通过车辆蓝牙播放 CarPlay 音频（实验性）</string>

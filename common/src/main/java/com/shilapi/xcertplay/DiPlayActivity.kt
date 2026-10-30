@@ -84,7 +84,6 @@ internal enum class SettingsSection {
     AUTOMATIC_CONNECTION,
     USB_CONNECTION,
     DISPLAY_AND_PERFORMANCE,
-    EXPERIMENTAL_DISPLAY,
     ADVANCED_MEDIA,
     AUDIO_ROUTING,
     NAVIGATION_WHEEL,
@@ -114,7 +113,6 @@ internal object SettingsInformationArchitecture {
         SettingsCategory.DIAGNOSTICS to setOf(SettingsSection.DIAGNOSTICS),
         SettingsCategory.ADVANCED to setOf(
             SettingsSection.CLUSTER_MAP,
-            SettingsSection.EXPERIMENTAL_DISPLAY,
             SettingsSection.ADVANCED_MEDIA,
             SettingsSection.NAVIGATION_WHEEL,
         ),
@@ -1516,13 +1514,6 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                 getString(R.string.settings_force_full_settings_hint), SettingsLayoutPreferences.forceFull(this)) {
                 SettingsLayoutPreferences.saveForceFull(this, it)
                 render()
-            }
-        }
-        filteredSection(content, SettingsSection.EXPERIMENTAL_DISPLAY,
-            getString(R.string.settings_experimental_display), R.drawable.ic_dp_display) { card ->
-            toggle(card, getString(R.string.side_panel), getString(R.string.side_panel_description), SidePanelSettings.enabled(this)) {
-                SidePanelSettings.setEnabled(this, it)
-                markReconnectNeeded()
             }
         }
         // Opt-in controls that can cost sound or video on some head units.
