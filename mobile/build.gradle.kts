@@ -66,7 +66,6 @@ android {
     buildTypes {
         debug {
             applicationIdSuffix = ".test"
-            versionNameSuffix = "-test"
         }
         create("optimizedDebug") {
             initWith(getByName("debug"))

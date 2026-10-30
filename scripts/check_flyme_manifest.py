@@ -48,8 +48,8 @@ def main():
     args = parser.parse_args()
     debug_code, debug_name = check_manifest(args.debug, "com.shihab.diplay.flyme.test", True)
     release_code, release_name = check_manifest(args.release, "com.shihab.diplay.flyme", False)
-    if not release_code or not release_name or debug_code != release_code or debug_name != release_name + "-test":
-        raise ValueError("Debug/release version codes must match; only the -test name suffix may differ")
+    if not release_code or not release_name or debug_code != release_code or debug_name != release_name:
+        raise ValueError("Debug/release version codes and version names must match")
     print(f"Flyme manifests verified: release=com.shihab.diplay.flyme {release_name}/{release_code}; debug=com.shihab.diplay.flyme.test {debug_name}/{debug_code}")
 
 

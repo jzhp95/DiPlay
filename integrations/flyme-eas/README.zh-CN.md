@@ -81,7 +81,7 @@ common/FlymeWheelIntegration.kt
 
 ## 构建及签名
 
-本分支只输出 Flyme 版本，不再提供普通包或 `flymeSystem` 切换。当前基本版本为 0.2.26／45；debug 显示为 0.2.26-test。
+本分支只输出 Flyme 版本，不再提供普通包或 `flymeSystem` 切换。当前基本版本为 0.2.26／45；debug 显示为 0.2.26。
 
 | 类型 | applicationId | 说明 |
 | --- | --- | --- |
