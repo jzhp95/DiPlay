@@ -41,6 +41,8 @@ Set `ANDROID_HOME` or `local.properties` if Gradle cannot find the SDK.
 
 本项目实际适配的 Flyme Auto 车机运行 Android 9（API 28），开发、修复和上游代码合并均须以该运行环境为兼容性基准。
 
+目标车机 CPU ABI 已确认是 `arm64-v8a`。共享模块仅编译该 ABI，主应用也仅打包该 ABI 的原生库；除非用户明确修改目标硬件，不恢复 `armeabi-v7a`、`x86` 或 `x86_64` 安装包。构建后运行 `python3 scripts/check_arm64_apk.py` 核对实际 APK，不能只检查 Gradle 配置。
+
 - 不得默认目标车机运行 Android 10／11 或更高版本；使用高于 API 28 的平台接口时，必须提供版本判断和适用于 Android 9 的实现或明确降级。
 - 网络连接与断线检测、蓝牙、Wi-Fi／热点、USB、音频模式、权限及后台生命周期等行为，必须检查 Android 9 上的执行路径，不能仅凭较新 Android 版本的行为判断兼容性。
 - Android 9（API 28）是本项目的兼容性下限。仅为 Android 9 以下版本（Android 8.1／API 27 及更低版本）提供兼容的上游补丁不合并，也不为这些版本新增兼容逻辑；已明确要求清理 Android 9 以下兼容实现；主应用、共享模块、Flyme EAS 和原生代码的最低版本统一为 API 28，禁止重新引入更低版本的兼容分支。

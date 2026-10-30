@@ -36,6 +36,10 @@ jobs:
           set +e
           ./gradlew :flyme-eas:testDebugUnitTest :shared:testDebugUnitTest :common:testDebugUnitTest :mobile:lintDebug :mobile:assembleDebug --continue --console=plain --stacktrace > build/architecture-validation/checks.log 2>&1
           status=$?
+          if [ "$status" -eq 0 ]; then
+            python3 scripts/check_arm64_apk.py --output build/architecture-validation/apk-abi.json >> build/architecture-validation/checks.log 2>&1
+            status=$?
+          fi
           cat build/architecture-validation/checks.log
           printf '%s\n' "$status" > build/architecture-validation/command-exit.txt
           exit "$status"
