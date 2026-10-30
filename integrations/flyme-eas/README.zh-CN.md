@@ -4,7 +4,7 @@
 
 本模块以 `carplay-wheel-replica-demo` 中实车成功的 **system UID + Flyme EAS** 路径为基线，默认媒体源 **36**。用户已确认基线 demo 能接管焦点、收到上一曲/下一曲，且车机原音乐不响应。这里是该协议的 DiPlay 集成，**集成版本尚未实车验证**，不能把 demo 的测试结果当作本 APK 的测试结果。
 
-本分支只保留 Flyme 构建，默认声明 system UID 并启用 EAS；正式包名为 `com.shihab.diplay.flyme`，测试包名为 `com.shihab.diplay.flyme.test`。声明系统身份不等于实际获得 system UID：还需要与车机平台相符的签名、成功加入共享 UID、OEM 媒体权限和对应 MediaCenter 服务。只在 Manifest 写 `android.uid.system` 不足以通过安装和运行授权。
+本分支默认输出普通包便于日常调试；通过 `-PflymeSystem=true` 构建 Flyme 系统包（正式包名 `com.shihab.diplay.flyme`，测试包名 `com.shihab.diplay.flyme.test`，声明 system UID 并启用 EAS）。声明系统身份不等于实际获得 system UID：还需要与车机平台相符的签名、成功加入共享 UID、OEM 媒体权限和对应 MediaCenter 服务。只在 Manifest 写 `android.uid.system` 不足以通过安装和运行授权。
 
 本次不添加 UI 设置，不移植 MediaBridge 的自动拉起或持续抢焦点策略，不改 iAP2/AirPlay 协议实现。支持播放、暂停、上一曲、下一曲；音量仍归系统，Siri 沿用 DiPlay 原有路径。demo 中仅显示的快进/快退/退出等事件没有映射为不存在的 iPhone 指令，也不会伪装成处理成功。
 
@@ -81,7 +81,7 @@ common/FlymeWheelIntegration.kt
 
 ## 构建及签名
 
-本分支只输出 Flyme 版本，不再提供普通包或 `flymeSystem` 切换。当前基本版本为 0.2.26／45；debug 显示为 0.2.26。
+本分支默认输出普通包，支持通过 `-PflymeSystem=true` 切换 Flyme 车机系统包。当前基本版本为 0.2.26／45；debug 显示为 0.2.26。
 
 | 类型 | applicationId | 说明 |
 | --- | --- | --- |

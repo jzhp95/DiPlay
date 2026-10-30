@@ -26,7 +26,7 @@ jobs:
         run: ./scripts/check_local_auth_assets.sh
       - name: Flyme debug and release package identities
         run: |
-          ./gradlew :mobile:processDebugMainManifest :mobile:processReleaseMainManifest --stacktrace
+          ./gradlew -PflymeSystem=true :mobile:processDebugMainManifest :mobile:processReleaseMainManifest --stacktrace
           python3 scripts/check_flyme_manifest.py
       - name: Unit tests, lint and source-only Flyme debug build
         run: |

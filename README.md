@@ -12,7 +12,7 @@
 
 ## 开发与验证
 
-项目规则见 [AGENTS.md](AGENTS.md)，构建说明见 [docs/BUILD.md](docs/BUILD.md)。本分支只构建 Flyme 版本：正式包名 `com.shihab.diplay.flyme`，测试包名 `com.shihab.diplay.flyme.test`。`:mobile:assembleDebug` 默认生成 Flyme 测试包，系统 UID 与 EAS 声明位于 `mobile/src/main/AndroidManifest.xml`。认证资产与签名须按构建说明配置，勿提交密钥。
+项目规则见 [AGENTS.md](AGENTS.md)，构建说明见 [docs/BUILD.md](docs/BUILD.md)。默认生成普通包以便日常调试；传 `-PflymeSystem=true` 生成 Flyme 系统包（正式包名 `com.shihab.diplay.flyme`，测试包名 `com.shihab.diplay.flyme.test`，声明系统 UID 与 EAS）。认证资产与签名须按构建说明配置，勿提交密钥。
 
 当前安装、兼容范围和测试入口见 `docs/`；逐次清理的验证证据保留在 `docs/validation/`。单元测试、模拟截图和构建成功不能替代 Android 9 实车验证。
 

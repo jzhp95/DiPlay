@@ -69,10 +69,11 @@ mobile/build/outputs/apk/debug/mobile-debug.apk
 
 The target head unit ABI is **arm64-v8a**. Both the shared native build and application packaging are restricted to arm64-v8a; APKs are not intended for 32-bit ARM or x86 devices/emulators. Check the built archive and ELF headers with `python3 scripts/check_arm64_apk.py`.
 
-By default, the branch builds Flyme system packages. The debug application ID is `com.shihab.diplay.flyme.test`.
-The release application ID is `com.shihab.diplay.flyme`.
-Both declare `android.uid.system` and enable Flyme EAS metadata.
-Use `-PflymeSystem=false` for ordinary packages without system UID or EAS opt-in; their debug and release application IDs are `com.shihab.diplay.test` and `com.shihab.diplay`.
+By default, the branch builds ordinary packages for development and UI tuning without system UID or EAS opt-in; their debug and release application IDs are `com.shihab.diplay.test` and `com.shihab.diplay`.
+Use `-PflymeSystem=true` for Flyme system packages with `android.uid.system` and EAS opt-in; their debug and release application IDs are `com.shihab.diplay.flyme.test` and `com.shihab.diplay.flyme`.
+
+
+
 The `optimizedDebug` build retains the corresponding debug application ID, so each R8/non-R8 pair replaces the same installation rather than installing side by side.
 The debug version suffix is `-test`; the base version and version code are unchanged.
 

@@ -30,6 +30,8 @@ val stageLocalAuthenticationAssets = localAuthenticationAssets?.let { directory 
     }
 }
 
+val isFlymeSystem = providers.gradleProperty("flymeSystem").orNull == "true"
+
 android {
     namespace = "com.shilapi.xcertplay"
     compileSdk {
@@ -37,7 +39,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.shihab.diplay.flyme"
+        applicationId = if (isFlymeSystem) "com.shihab.diplay.flyme" else "com.shihab.diplay"
         minSdk = 28
         targetSdk = 37
         ndk { abiFilters += "arm64-v8a" }
@@ -46,6 +48,10 @@ android {
 
     }
 
+
+    if (isFlymeSystem) {
+        sourceSets.getByName("main").manifest.srcFile("src/flyme/AndroidManifest.xml")
+    }
 
     if (localAuthenticationAssets != null) {
         sourceSets.getByName("main").assets.directories.add(generatedAuthenticationAssets.get().asFile.absolutePath)
@@ -62,7 +68,7 @@ android {
             keyPassword = providers.environmentVariable("ANDROID_KEY_PASSWORD").getOrElse("")
         }
         val platformKeystore = rootProject.file("AOSP-platform-signing/platform.jks")
-        if (platformKeystore.isFile) {
+        if (isFlymeSystem && platformKeystore.isFile) {
             getByName("debug") {
                 storeFile = platformKeystore
                 storePassword = "android"
@@ -170,13 +176,4 @@ tasks.register("assembleStandaloneOptimizedDebug") {
     group = "build"
     description = "Build a standalone car-test APK with R8 and explicitly provisioned authentication."
     dependsOn(verifyStandaloneAuthentication, "assembleOptimizedDebug")
-}
-
-if (providers.gradleProperty("flymeSystem").orNull == "false") {
-    android {
-        defaultConfig {
-            applicationId = "com.shihab.diplay"
-        }
-        sourceSets.getByName("main").manifest.srcFile("src/ordinary/AndroidManifest.xml")
-    }
 }
