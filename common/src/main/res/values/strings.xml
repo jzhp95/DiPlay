@@ -144,7 +144,6 @@
     <string name="carplay_control_running">CarPlay 控制通道运行中</string>
     <string name="carplay_control_window_ended">CarPlay 控制会话已结束</string>
     <string name="carplay_icon">CarPlay 图标</string>
-    <string name="carplay_map_on_instrument_cluster_experimental">CarPlay 地图共享（实验性）</string>
     <string name="carplay_service_already_running">CarPlay 服务已在运行</string>
     <string name="carplay_session_already_running">CarPlay 会话已在运行</string>
     <string name="carplay_session_ended_reconnecting">CarPlay 会话已结束；正在重新连接</string>
@@ -502,8 +501,6 @@
     <string name="turn_card_distance_m">%1$d 米</string>
     <string name="turn_card_distance_km">%1$.1f 公里</string>
     <string name="turn_card_exit">出口 %1$d</string>
-    <string name="center_map_follows_dashboard">主屏幕地图与仪表盘同步</string>
-    <string name="center_map_follows_dashboard_description">开启：主屏幕卡片镜像仪表盘地图。关闭：主屏幕不显示该卡片，仪表盘地图只出现在仪表盘上。不会改变 CarPlay 主屏自己的画面。</string>
     <string name="cluster_small_window_off">关</string>
     <string name="cluster_small_window_on">开 · 使用小屏位置</string>
     <string name="cluster_small_window_auto">自动（实验性）</string>
@@ -589,20 +586,8 @@
     <string name="widget_distance_km">%1$d 公里</string>
     <string name="widget_minutes">%1$d 分钟</string>
     <string name="widget_hours_minutes">%1$d 小时 %2$02d 分钟</string>
-    <string name="center_map_card">中控屏上的仪表盘地图</string>
-    <string name="shows_the_iphone_s_cluster_map_virtual_stream_description">向 iPhone 申请独立的 CarPlay 仪表/桌面地图流（Stream 111），供无液晶仪表车机的中控桌面悬浮卡片或第三方桌面内嵌使用。</string>
-    <string name="center_map_card_virtual_description">在中控屏桌面上显示标准 16:9 比例的浮动地图卡片，比例自然不再呈细长条状，支持随意拖拽与双指缩放。</string>
-    <string name="center_map_auto_hide">离开桌面时自动隐藏卡片</string>
-    <string name="center_map_auto_hide_description">打开音乐、倒车影像、全屏设置等应用时自动隐藏悬浮窗，返回桌面时自动恢复</string>
-    <string name="center_map_auto_hide_active">离开桌面自动隐藏：已开启（使用情况访问权限 / 无障碍服务）</string>
-    <string name="center_map_auto_hide_needed">离开桌面自动隐藏：未开启。请开启无障碍服务或通过 ADB 授予使用情况访问权限。</string>
     <string name="center_map_overlay_allowed">显示在其他应用上层：已允许</string>
     <string name="center_map_overlay_missing">显示在其他应用上层：未允许。请在应用设置中允许，或通过 ADB：adb shell appops set %1$s SYSTEM_ALERT_WINDOW allow</string>
-    <string name="center_map_usage_allowed">使用情况访问权限：已允许，卡片只在主屏幕上显示</string>
-    <string name="center_map_usage_missing">使用情况访问权限：未允许，因此卡片会显示在所有应用上层。通过 ADB：adb shell appops set %1$s GET_USAGE_STATS allow</string>
-    <string name="center_map_no_permission_screen">此车机没有该权限的设置界面，请通过 ADB 允许。</string>
-    <string name="launcher_map_sharing">与其他启动器共享实时地图</string>
-    <string name="launcher_map_sharing_description">支持 Apple CarPlay 的启动器可以在自己的主屏幕中显示实时仪表盘地图。默认关闭，因为开启后车机上的任何应用都可以请求该地图。详见 docs/LAUNCHER_INTEGRATION.md。</string>
     <string name="usb_auto_confirm_status_on">USB 弹窗自动确认：已开启</string>
     <string name="usb_auto_confirm_dialog_msg">开启自动确认需要无障碍服务支持。若车机无法从系统设置开启，可通过本地 ADB 申请权限。\n\n此次设置还会为桌面地图申请使用情况访问权限和悬浮窗权限，并保留现有无障碍服务。\n\n是否通过车机本地 ADB 申请这三项权限？</string>
     <string name="usb_auto_confirm_active_hint">✓ 无障碍服务已激活（连接 iPhone 时将自动确认）</string>

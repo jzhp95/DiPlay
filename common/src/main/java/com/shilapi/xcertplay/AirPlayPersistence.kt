@@ -893,28 +893,28 @@ object AirPlayPersistence {
             .apply()
     }
 
-    fun loadClusterMapEnabled(context: Context): Boolean =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_CLUSTER_MAP, false)
+    @Suppress("UNUSED_PARAMETER")
+    fun loadClusterMapEnabled(context: Context): Boolean = false
 
     fun saveClusterMapEnabled(context: Context, enabled: Boolean) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_CLUSTER_MAP, enabled).apply()
     }
 
     /** The dashboard map as a card on the centre screen while DiPlay is in the background. */
-    fun loadCenterMapOverlay(context: Context): Boolean =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_CENTER_MAP_OVERLAY, false)
+    @Suppress("UNUSED_PARAMETER")
+    fun loadCenterMapOverlay(context: Context): Boolean = false
 
     /** Automatically hide the floating card when non-launcher apps are in the foreground. */
-    fun loadCenterMapAutoHide(context: Context): Boolean =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_CENTER_MAP_AUTO_HIDE, true)
+    @Suppress("UNUSED_PARAMETER")
+    fun loadCenterMapAutoHide(context: Context): Boolean = false
 
     fun saveCenterMapAutoHide(context: Context, enabled: Boolean) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_CENTER_MAP_AUTO_HIDE, enabled).apply()
     }
 
     /** Other launchers may show the live dashboard map in their own screen (MapEmbedService). */
-    fun loadLauncherMapSharing(context: Context): Boolean =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_LAUNCHER_MAP_SHARING, false)
+    @Suppress("UNUSED_PARAMETER")
+    fun loadLauncherMapSharing(context: Context): Boolean = false
 
     fun saveLauncherMapSharing(context: Context, enabled: Boolean) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_LAUNCHER_MAP_SHARING, enabled).apply()

@@ -88,7 +88,6 @@ internal enum class SettingsSection {
     AUDIO_ROUTING,
     NAVIGATION_WHEEL,
     LOCATION,
-    CLUSTER_MAP,
     PERMISSIONS_AND_HELP,
 }
 
@@ -112,7 +111,6 @@ internal object SettingsInformationArchitecture {
         ),
         SettingsCategory.DIAGNOSTICS to setOf(SettingsSection.DIAGNOSTICS),
         SettingsCategory.ADVANCED to setOf(
-            SettingsSection.CLUSTER_MAP,
             SettingsSection.ADVANCED_MEDIA,
             SettingsSection.NAVIGATION_WHEEL,
         ),
@@ -371,7 +369,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
     private fun openOverlayPermission() {
         val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
         if (runCatching { startActivity(intent) }.isFailure) {
-            android.widget.Toast.makeText(this, R.string.center_map_no_permission_screen, android.widget.Toast.LENGTH_LONG).show()
+            toast(getString(R.string.wheel_keys_no_settings))
         }
     }
 
@@ -379,14 +377,12 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         super.onStart()
         // Results from the image picker and crop screens arrive before onResume.
         enforceInterfaceSize()
-        CenterMapOverlay.onDiPlayScreenShown()
     }
 
     override fun onStop() {
         cancelUsbPermissionSetup()
         startupHotspotCancelled = true
         super.onStop()
-        if (!isFinishing && !isChangingConfigurations) CenterMapOverlay.scheduleShow()
     }
 
     override fun onResume() {
@@ -1686,52 +1682,6 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                 AirPlayPersistence.loadLocationReportingEnabled(this), save = ::onLocationReportingChanged)
             card.addView(label(getString(R.string.location_reporting_reconnects), 14, MUTED))
         }
-        filteredSection(content, SettingsSection.CLUSTER_MAP,
-            getString(R.string.carplay_map_on_instrument_cluster_experimental), R.drawable.ic_dp_dashboard) { card ->
-            val clusterMapEnabled = AirPlayPersistence.loadClusterMapEnabled(this)
-            reconnectingToggle(card, getString(R.string.carplay_map_on_instrument_cluster_experimental),
-                getString(R.string.shows_the_iphone_s_cluster_map_virtual_stream_description),
-                clusterMapEnabled) {
-                AirPlayPersistence.saveClusterMapEnabled(this, it)
-                render()
-            }
-            if (clusterMapEnabled) {
-                clusterMusicControls(card)
-                toggle(card, getString(R.string.center_map_card),
-                    getString(R.string.center_map_card_virtual_description),
-                    AirPlayPersistence.loadCenterMapOverlay(this)) {
-                    AirPlayPersistence.saveCenterMapOverlay(this, it)
-                    if (it && !CenterMapOverlay.permitted(this)) openOverlayPermission()
-                    render()
-                }
-                if (AirPlayPersistence.loadCenterMapOverlay(this)) {
-                    toggle(card, getString(R.string.center_map_follows_dashboard), getString(R.string.center_map_follows_dashboard_description),
-                        AirPlayPersistence.loadCenterMapFollowsDashboard(this)) {
-                        AirPlayPersistence.saveCenterMapFollowsDashboard(this, it)
-                    }
-                    toggle(card, getString(R.string.center_map_auto_hide), getString(R.string.center_map_auto_hide_description),
-                        AirPlayPersistence.loadCenterMapAutoHide(this)) {
-                        AirPlayPersistence.saveCenterMapAutoHide(this, it)
-                    }
-                }
-                toggle(card, getString(R.string.launcher_map_sharing), getString(R.string.launcher_map_sharing_description),
-                    AirPlayPersistence.loadLauncherMapSharing(this)) {
-                    AirPlayPersistence.saveLauncherMapSharing(this, it)
-                }
-                if (AirPlayPersistence.loadCenterMapOverlay(this)) {
-                    val overlay = CenterMapOverlay.permitted(this)
-                    card.addView(label(if (overlay) getString(R.string.center_map_overlay_allowed)
-                        else getString(R.string.center_map_overlay_missing, packageName), 14, if (overlay) MUTED else WARNING))
-                    val usage = HomeScreenMonitor.hasAccess(this)
-                    card.addView(label(if (usage) getString(R.string.center_map_auto_hide_active)
-                        else getString(R.string.center_map_auto_hide_needed), 14, if (usage) MUTED else WARNING))
-                    if (!usage) {
-                        card.addView(button(getString(R.string.btn_auto_apply_permissions), false) { autoApplyPermissions() }, matchButton(8, 54))
-                    }
-                }
-
-            }
-        }
         filteredSection(content, SettingsSection.PERMISSIONS_AND_HELP,
             getString(R.string.permissions_and_connection_help), R.drawable.ic_dp_permissions) { card ->
             card.addView(label(getString(R.string.nearby_devices_connects_your_iphone_microphone_enables_sir), 16, MUTED))
@@ -2219,6 +2169,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         else -> "$positive ${step * CarPlayClusterDisplay.MARKER_STEP_PERCENT} %"
     }
 
+    @Suppress("UNUSED")
     private fun clusterMusicControls(card: LinearLayout) {
         toggle(card, getString(R.string.settings_cluster_music), getString(R.string.settings_cluster_music_description),
             ClusterMusicSettings.enabled(this)) {
@@ -2384,7 +2335,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             if (!UsbAutoConfirmService.openSettings(this)) toast(getString(R.string.wheel_keys_no_settings))
         }, matchButton(0, 56))
 
-        val overlayOn = CenterMapOverlay.permitted(this)
+        val overlayOn = Settings.canDrawOverlays(this)
         body.addView(button(if (overlayOn) getString(R.string.center_map_overlay_allowed) else getString(R.string.btn_open_overlay_setting), false) {
             openOverlayPermission()
         }, matchButton(10, 56))
@@ -2392,7 +2343,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         UsbPermissionSetup.snapshot(this).forEach { (permission, granted) ->
             val title = getString(when (permission) {
                 UsbPermissionSetup.Permission.ACCESSIBILITY -> R.string.usb_auto_confirm_title
-                UsbPermissionSetup.Permission.USAGE -> R.string.center_map_auto_hide
+                UsbPermissionSetup.Permission.USAGE -> R.string.clipboard_usage_access
                 UsbPermissionSetup.Permission.OVERLAY -> R.string.btn_open_overlay_setting
             })
             body.addView(label("$title: ${getString(if (granted) R.string.permission_enabled_ready else R.string.permission_not_enabled)}", 14, if (granted) MUTED else WARNING))
