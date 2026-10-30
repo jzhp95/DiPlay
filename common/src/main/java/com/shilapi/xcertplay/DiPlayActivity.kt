@@ -1520,25 +1520,9 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         }
         filteredSection(content, SettingsSection.EXPERIMENTAL_DISPLAY,
             getString(R.string.settings_experimental_display), R.drawable.ic_dp_display) { card ->
-            toggle(card, getString(R.string.carplay_rotation), getString(R.string.carplay_rotation_description),
-                CarPlayRotation.enabled(this)) {
-                CarPlayRotation.setEnabled(this, it)
-                render()
-                markReconnectNeeded()
-            }
             toggle(card, getString(R.string.side_panel), getString(R.string.side_panel_description), SidePanelSettings.enabled(this)) {
                 SidePanelSettings.setEnabled(this, it)
                 markReconnectNeeded()
-            }
-            if (CarPlayRotation.enabled(this)) {
-                val pictures = CarPlayRotation.Picture.entries
-                choice(card, getString(R.string.carplay_rotation_picture), listOf(
-                    getString(R.string.carplay_rotation_smoother),
-                    getString(R.string.carplay_rotation_sharper),
-                ), pictures.indexOf(CarPlayRotation.picture(this)), reconnects = false) {
-                    CarPlayRotation.setPicture(this, pictures[it])
-                    markReconnectNeeded()
-                }
             }
         }
         // Opt-in controls that can cost sound or video on some head units.

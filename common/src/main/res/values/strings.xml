@@ -703,11 +703,6 @@
     <string name="carplay_dock_driver_side">驾驶员一侧</string>
     <string name="carplay_dock_bottom">底部</string>
     <string name="carplay_dock_hint">CarPlay 显示应用、时钟和状态的位置。在“驾驶员一侧”和“底部”之间切换立即生效；“自动”由 iPhone 决定，重新连接后生效。</string>
-    <string name="carplay_rotation">随屏幕旋转 CarPlay，无需重新连接</string>
-    <string name="carplay_rotation_description">适用于屏幕可旋转的车机。CarPlay 会获得包含横屏和竖屏的方形画面，旋转屏幕时直接重新绘制，无需重新连接。更大的方形画面可能增加视频处理负担并降低流畅度，尤其是在大屏上选择“更清晰”时。如果很少旋转屏幕，关闭此选项可能有所帮助。自定义安全区域不适用于方形画面。下次连接时生效。</string>
-    <string name="carplay_rotation_picture">方形画面</string>
-    <string name="carplay_rotation_smoother">更流畅（1920）</string>
-    <string name="carplay_rotation_sharper">更清晰（屏幕尺寸）</string>
     <string name="auto_grant_incomplete">未验证全部请求权限。请检查下方各项状态；开启网络 ADB 后重试，或使用手动设置。现有权限保持不变。</string>
     <string name="side_panel">CarPlay 旁的侧边面板（实验性）</string>
     <string name="side_panel_description">CarPlay 可移到屏幕的三分之二，Apple CarPlay 在其余部分显示自己的面板：横屏时在乘客一侧，竖屏时在底部（时钟，以及已读取时的电量）。可在会话菜单中显示或隐藏。下次连接时生效。</string>

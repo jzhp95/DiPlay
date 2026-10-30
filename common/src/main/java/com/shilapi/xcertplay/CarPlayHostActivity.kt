@@ -4544,41 +4544,14 @@ class CarPlayHostActivity : ComponentActivity() {
             mainDisplayDisableSafeArea = disableSafeArea,
             useIphoneCornerMask = nativeMasks,
         )
-        // A fixed dock, side panel or a turning screen declares several areas the car switches
-        // between live.
-        val inSplitScreen = isMultiWindowActive()
+        // A fixed dock or side panel declares several areas the car switches between live.
         val dock = CarPlayDock.load(this).also { sessionDock = it }
-        val screen = android.util.DisplayMetrics().also { windowManager.defaultDisplay.getRealMetrics(it) }
-        val longPixels = maxOf(display.widthPixels, display.heightPixels)
-        val square = if (CarPlayRotation.enabled(this) && !inSplitScreen) {
-            CarPlayRotation.squareSide(longPixels, CarPlayRotation.picture(this), sessionHevc, hevcSoftwareDecoderEnabled)
-        } else null
-        val canvas = if (square == null) display else {
-            // The square is drawn across the screen's long side whatever its pixel count, so it reports that
-            // side's real length: CarPlay then sizes its UI for the real screen, and a smaller square (the
-            // smoother picture) only lowers the resolution, not the scale. It has no room for the custom
-            // safe area.
-            val squareMm = if (display.widthPixels >= display.heightPixels) display.widthPhysicalMm else display.heightPhysicalMm
-            display.copy(widthPixels = square, heightPixels = square, widthPhysicalMm = squareMm,
-                heightPhysicalMm = squareMm, viewArea = null, safeArea = null)
-        }
-        val viewAreas = if (square == null) {
-            CarPlayViewAreas.build(display.widthPixels, display.heightPixels, listOf(
-                CarPlayViewAreas.Screen(display.widthPixels, display.heightPixels, portrait = display.heightPixels > display.widthPixels),
-            ), dock, startPortrait = display.heightPixels > display.widthPixels,
-                sidePanel = SidePanelSettings.enabled(this), rightHandDrive = rightHandDrive)
-        } else {
-            val (landscape, portrait) = CarPlayRotation.turningAreas(square, size.width, size.height,
-                screen.widthPixels, screen.heightPixels)
-            CarPlayViewAreas.build(square, square, listOf(
-                CarPlayViewAreas.Screen(landscape.first, landscape.second, portrait = false),
-                CarPlayViewAreas.Screen(portrait.first, portrait.second, portrait = true),
-            ), dock, startPortrait = size.height > size.width, sidePanel = SidePanelSettings.enabled(this),
-                rightHandDrive = rightHandDrive)
-        }
+        val viewAreas = CarPlayViewAreas.build(display.widthPixels, display.heightPixels, listOf(
+            CarPlayViewAreas.Screen(display.widthPixels, display.heightPixels, portrait = display.heightPixels > display.widthPixels),
+        ), dock, startPortrait = display.heightPixels > display.widthPixels,
+            sidePanel = SidePanelSettings.enabled(this), rightHandDrive = rightHandDrive)
         pendingViewAreas = viewAreas
-        val declared = if (viewAreas == null) canvas else canvas.copy(viewAreas = viewAreas.areas, initialViewArea = viewAreas.current)
-        if (square != null) appendLog("Turning screen: square canvas ${square}x$square, areas ${viewAreas?.areas}")
+        val declared = if (viewAreas == null) display else display.copy(viewAreas = viewAreas.areas, initialViewArea = viewAreas.current)
         val requestSummary = "Display request selected=${CarPlayUiScale.label(requestedPercent)} percent=$requestedPercent " +
             "surface=${size.width}x${size.height} resolution=${requestedResolutionPercent}% " +
             "base=${requestedResolutionDisplay.widthPixels}x${requestedResolutionDisplay.heightPixels} " +
