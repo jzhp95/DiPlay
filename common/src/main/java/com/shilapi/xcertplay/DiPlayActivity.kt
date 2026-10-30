@@ -2130,11 +2130,8 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
     private fun carHotspotDetailsMissing() = com.shilapi.xcertplay.network.CarHotspotProfiles.confirmed(this) == null &&
         hotspotError(storedSsid(), storedPassword()) != null
 
-    private fun manualHotspotProfile() = com.shilapi.xcertplay.network.CarHotspotProfile(
-        AirPlayPersistence.loadManualHotspotSsid(this), AirPlayPersistence.loadManualHotspotPassphrase(this),
-        AirPlayPersistence.loadManualHotspotSecurity(this), AirPlayPersistence.loadManualHotspotBand(this),
-        AirPlayPersistence.loadManualHotspotChannel(this),
-    )
+    private fun manualHotspotProfile(): com.shilapi.xcertplay.network.CarHotspotProfile? =
+        AirPlayPersistence.loadConfiguredManualHotspotProfile(this)
 
     private fun saveHotspotCredentials(ssid: String, password: String, security: ManualHotspotSecurity) {
         val previous = com.shilapi.xcertplay.network.CarHotspotProfiles.saved(this)

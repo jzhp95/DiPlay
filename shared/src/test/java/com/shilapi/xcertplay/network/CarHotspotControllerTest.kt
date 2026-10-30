@@ -47,6 +47,17 @@ class CarHotspotControllerTest {
         assertFalse(result.success); assertEquals("Old", Wifi.value.SSID)
     }
 
+    @Test fun observingSystemHotspotExtractsSsidEvenWhenPasswordIsMasked() {
+        Wifi.value = WifiConfiguration().apply { SSID = "CarHotspot_5G"; preSharedKey = "*"; allowedKeyManagement.set(4) }
+        assertNull(CarHotspotController(app).read())
+        val observed = CarHotspotController(app).observe()
+        assertNotNull(observed)
+        assertEquals("CarHotspot_5G", observed?.ssid)
+        assertFalse(observed?.passwordAvailable ?: true)
+        assertNull(observed?.rawPassword)
+        assertEquals(ManualHotspotSecurity.WPA2, observed?.security)
+    }
+
     @Test fun enablingUsesSavedCredentialsInsteadOfOldSystemConfiguration() {
         seedSavedProfile()
 

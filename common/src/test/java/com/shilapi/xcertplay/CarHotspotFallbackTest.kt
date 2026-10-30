@@ -110,6 +110,7 @@ class CarHotspotFallbackTest {
     private fun controller(mode: WirelessHotspotMode = WirelessHotspotMode.MANUAL): CarPlayController = CarPlayController(app,
         CarPlayRuntimeConfig(mfiTarget = MfiTarget.LOCAL, transport = CarPlayTransport.WIRELESS,
             wirelessHotspotMode = mode, manualHotspotSsid = "Car hotspot",
+            manualHotspotConfigured = true,
             existingWifiSsid = "Pocket", existingWifiPassphrase = "pocket-password",
             manualHotspotPassphrase = "12345678", identification = Iap2IdentificationConfig(
                 name = "test", modelIdentifier = "test", manufacturer = "test", serialNumber = "test",

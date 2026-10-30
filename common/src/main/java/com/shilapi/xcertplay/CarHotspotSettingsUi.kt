@@ -17,6 +17,7 @@ import com.shilapi.xcertplay.network.CarHotspotControlResult
 import com.shilapi.xcertplay.network.CarHotspotProfile
 import com.shilapi.xcertplay.network.CarHotspotProfiles
 import com.shilapi.xcertplay.network.CarHotspotSettings
+import com.shilapi.xcertplay.network.ObservedHotspotInfo
 import com.shilapi.xcertplay.orchestration.ManualHotspotBand
 import com.shilapi.xcertplay.orchestration.ManualHotspotSecurity
 import com.shilapi.xcertplay.orchestration.ManualHotspotValidation
@@ -34,7 +35,12 @@ internal class CarHotspotSettingsUi(
     @Volatile private var closed = false
     private var busy = false
     private var initialReadStarted = false
+    private var activeSyncGeneration = 0
+    private var editVersion = 0
     private var pendingInitialProfile: CarHotspotProfile? = null
+    private var pendingObservedHotspot: ObservedHotspotInfo? = null
+    private var pendingIsForceSync = false
+    private var pendingStartEditVersion = 0
     private var edited = false
     private var nameText: String? = null
     private var passwordText: String? = null
@@ -61,17 +67,13 @@ internal class CarHotspotSettingsUi(
     }
     private fun control() = controller ?: CarHotspotController(activity, ::log)
     private fun log(message: String) { DetailedDebugLog.record("hotspot-control", message) }
-    private fun legacyProfile() = CarHotspotProfile(
-        AirPlayPersistence.loadManualHotspotSsid(activity), AirPlayPersistence.loadManualHotspotPassphrase(activity),
-        AirPlayPersistence.loadManualHotspotSecurity(activity), AirPlayPersistence.loadManualHotspotBand(activity),
-        AirPlayPersistence.loadManualHotspotChannel(activity),
-    ).takeIf { it.error() == null }
+    private fun legacyProfile() = AirPlayPersistence.loadConfiguredManualHotspotProfile(activity)
 
     fun build(parent: LinearLayout) {
         val saved = CarHotspotProfiles.saved(activity)
         val initial = saved ?: legacyProfile()
-        if (nameText == null) nameText = initial?.ssid ?: AirPlayPersistence.DEFAULT_MANUAL_HOTSPOT_SSID
-        if (passwordText == null) passwordText = initial?.passphrase ?: AirPlayPersistence.DEFAULT_MANUAL_HOTSPOT_PASSPHRASE
+        if (nameText == null) nameText = initial?.ssid ?: ""
+        if (passwordText == null) passwordText = initial?.passphrase ?: ""
         if (securitySelection == null) securitySelection = initial?.security ?: ManualHotspotSecurity.WPA2
         if (bandSelection == null) bandSelection = initial?.band ?: ManualHotspotBand.AUTO
         if (channelSelection == null) channelSelection = initial?.channel ?: 0
@@ -101,17 +103,27 @@ internal class CarHotspotSettingsUi(
         }
         fun channelTitle() = if (channelSelection == 0) activity.getString(R.string.auto) else channelSelection.toString()
         choice(parent, R.string.settings_hotspot_security, { securities.zip(securityTitles) },
-            { securitySelection ?: ManualHotspotSecurity.WPA2 }) { securitySelection = it }
+            { securitySelection ?: ManualHotspotSecurity.WPA2 }) {
+            securitySelection = it
+            editVersion++
+            edited = true
+        }
         var channelRow: Button? = null
         choice(parent, R.string.settings_hotspot_band, { bands.zip(bandTitles) },
             { bandSelection ?: ManualHotspotBand.AUTO }) {
             bandSelection = it
+            editVersion++
+            edited = true
             if ((channelSelection ?: 0) !in channels()) channelSelection = 0
             channelRow?.text = activity.getString(R.string.settings_hotspot_channel) + " · " + channelTitle()
         }
         channelRow = choice(parent, R.string.settings_hotspot_channel,
             { channels().map { it to if (it == 0) activity.getString(R.string.auto) else it.toString() } },
-            { channelSelection ?: 0 }) { channelSelection = it }
+            { channelSelection ?: 0 }) {
+            channelSelection = it
+            editVersion++
+            edited = true
+        }
         val error = label("").apply {
             visibility = View.GONE
             accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
@@ -130,30 +142,38 @@ internal class CarHotspotSettingsUi(
                 CarHotspotProfiles.saveSaved(activity, profile)
                 nameText = profile.ssid
                 passwordText = profile.passphrase
+                editVersion++
                 edited = false
                 status = activity.getString(R.string.settings_hotspot_credentials_saved)
                 error.visibility = View.GONE
                 changed()
             }
         }
+        val syncButton = button(R.string.settings_hotspot_sync) {
+            status = activity.getString(R.string.settings_hotspot_reading)
+            redraw()
+            loadInitialProfile(forceSync = true)
+        }
         val startButton = button(R.string.settings_hotspot_start) { startSavedHotspot() }
+        FlymeAutoStyle.action(syncButton, palette, textOnly = true)
         FlymeAutoStyle.action(startButton, palette, textOnly = true)
         FlymeAutoStyle.action(saveButton, palette, primary = true)
         val actions = LinearLayout(activity).apply {
             orientation = if (FlymeAutoStyle.compact(activity) || activity.resources.configuration.fontScale > 1.3f)
                 LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
         }
-        listOf(startButton, saveButton).forEachIndexed { index, action ->
+        listOf(syncButton, startButton, saveButton).forEachIndexed { index, action ->
             actions.addView(action, LinearLayout.LayoutParams(
                 if (actions.orientation == LinearLayout.HORIZONTAL) 0 else -1, -2,
                 if (actions.orientation == LinearLayout.HORIZONTAL) 1f else 0f).apply {
-                if (index == 0 && actions.orientation == LinearLayout.HORIZONTAL) marginEnd = dp(FlymeAutoStyle.CONTROL_GAP_DP)
-                if (index == 1 && actions.orientation == LinearLayout.VERTICAL) topMargin = dp(FlymeAutoStyle.CONTROL_GAP_DP)
+                if (index > 0 && actions.orientation == LinearLayout.HORIZONTAL) marginStart = dp(FlymeAutoStyle.CONTROL_GAP_DP)
+                if (index > 0 && actions.orientation == LinearLayout.VERTICAL) topMargin = dp(FlymeAutoStyle.CONTROL_GAP_DP)
             })
         }
         actions.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
             if (actions.orientation == LinearLayout.HORIZONTAL) {
-                val tallest = maxOf(startButton.height, saveButton.height)
+                val tallest = maxOf(syncButton.height, startButton.height, saveButton.height)
+                if (syncButton.minimumHeight < tallest) syncButton.minimumHeight = tallest
                 if (startButton.minimumHeight < tallest) startButton.minimumHeight = tallest
                 if (saveButton.minimumHeight < tallest) saveButton.minimumHeight = tallest
             }
@@ -180,6 +200,7 @@ internal class CarHotspotSettingsUi(
                 if (!closed && draft != it) {
                     draft = it
                     save(it)
+                    editVersion++
                     edited = true
                     update()
                 }
@@ -188,29 +209,138 @@ internal class CarHotspotSettingsUi(
         parent.addView(row, gap())
     }
 
-    private fun loadInitialProfile() {
-        initialReadStarted = true
+    private fun loadInitialProfile(forceSync: Boolean = false) {
+        if (!forceSync) initialReadStarted = true
+        val requestGeneration = ++activeSyncGeneration
+        val startEditVersion = editVersion
+        if (forceSync) {
+            busy = true
+            status = activity.getString(R.string.settings_hotspot_reading)
+            redraw()
+        }
         Thread({
-            val profile = runCatching { CarHotspotProfiles.resolve(activity, manual = ::legacyProfile, log = ::log)?.profile }.getOrNull()
+            val systemProfile = if (forceSync) runCatching { control().read() }.getOrNull() else null
+            val observed = runCatching { control().observe() }.getOrNull()
+            val resolved = if (!forceSync && systemProfile == null && observed == null) {
+                runCatching { CarHotspotProfiles.resolve(activity, manual = ::legacyProfile, log = ::log)?.profile }.getOrNull()
+            } else null
+
             activity.runOnUiThread {
-                if (closed || activity.isFinishing || activity.isDestroyed || edited || profile == null) return@runOnUiThread
-                pendingInitialProfile = profile
-                if (activeDialog?.isShowing != true) restoreInitialProfile()
+                if (forceSync) {
+                    busy = false
+                }
+                if (closed || activity.isFinishing || activity.isDestroyed) return@runOnUiThread
+                if (requestGeneration != activeSyncGeneration) return@runOnUiThread
+                if (editVersion != startEditVersion) {
+                    if (forceSync && activeDialog?.isShowing != true) redraw()
+                    return@runOnUiThread
+                }
+
+                pendingStartEditVersion = startEditVersion
+                pendingIsForceSync = forceSync
+                if (systemProfile != null) {
+                    pendingInitialProfile = systemProfile
+                    pendingObservedHotspot = null
+                } else if (observed != null) {
+                    pendingObservedHotspot = observed
+                    pendingInitialProfile = null
+                } else if (resolved != null) {
+                    pendingInitialProfile = resolved
+                    pendingObservedHotspot = null
+                } else if (!forceSync) {
+                    pendingInitialProfile = CarHotspotProfiles.saved(activity)
+                    pendingObservedHotspot = null
+                } else {
+                    pendingInitialProfile = null
+                    pendingObservedHotspot = null
+                    status = activity.getString(R.string.settings_hotspot_sync_failed)
+                }
+
+                if (activeDialog?.isShowing != true) {
+                    restoreInitialProfile()
+                }
             }
         }, "carplay-hotspot-read").start()
     }
 
     private fun restoreInitialProfile() {
-        val pending = pendingInitialProfile ?: return
+        val isForce = pendingIsForceSync
+        val reqEditVersion = pendingStartEditVersion
+        val pendingProfile = pendingInitialProfile
+        val pendingObserved = pendingObservedHotspot
         pendingInitialProfile = null
-        if (closed || activity.isFinishing || activity.isDestroyed || edited) return
-        val latest = CarHotspotProfiles.saved(activity) ?: pending
-        nameText = latest.ssid
-        passwordText = latest.passphrase
-        securitySelection = latest.security
-        bandSelection = latest.band
-        channelSelection = latest.channel
-        redraw()
+        pendingObservedHotspot = null
+        pendingIsForceSync = false
+        if (closed || activity.isFinishing || activity.isDestroyed) return
+        if (isForce && editVersion != reqEditVersion) return
+        if (!isForce && (edited || editVersion != reqEditVersion)) return
+
+        if (isForce) {
+            if (pendingProfile != null) {
+                nameText = pendingProfile.ssid
+                passwordText = pendingProfile.passphrase
+                securitySelection = pendingProfile.security
+                bandSelection = pendingProfile.band
+                channelSelection = pendingProfile.channel
+                status = activity.getString(R.string.settings_hotspot_sync_success_prompt_save)
+                editVersion++
+                edited = true
+                redraw()
+                return
+            } else if (pendingObserved != null) {
+                nameText = pendingObserved.ssid
+                if (pendingObserved.passwordAvailable && !pendingObserved.rawPassword.isNullOrBlank()) {
+                    passwordText = pendingObserved.rawPassword
+                    status = activity.getString(R.string.settings_hotspot_sync_success_prompt_save)
+                } else {
+                    passwordText = ""
+                    status = activity.getString(R.string.settings_hotspot_observed_fill_password)
+                }
+                securitySelection = pendingObserved.security
+                bandSelection = pendingObserved.band
+                channelSelection = pendingObserved.channel
+                editVersion++
+                edited = true
+                redraw()
+                return
+            } else {
+                redraw()
+                return
+            }
+        }
+
+        val saved = CarHotspotProfiles.saved(activity)
+        if (saved != null) {
+            nameText = saved.ssid
+            passwordText = saved.passphrase
+            securitySelection = saved.security
+            bandSelection = saved.band
+            channelSelection = saved.channel
+            redraw()
+            return
+        }
+        if (pendingProfile != null) {
+            nameText = pendingProfile.ssid
+            passwordText = pendingProfile.passphrase
+            securitySelection = pendingProfile.security
+            bandSelection = pendingProfile.band
+            channelSelection = pendingProfile.channel
+            redraw()
+        } else if (pendingObserved != null) {
+            nameText = pendingObserved.ssid
+            passwordText = if (pendingObserved.passwordAvailable && !pendingObserved.rawPassword.isNullOrEmpty()) {
+                pendingObserved.rawPassword
+            } else {
+                ""
+            }
+            if (!pendingObserved.passwordAvailable) {
+                status = activity.getString(R.string.settings_hotspot_observed_fill_password)
+            }
+            securitySelection = pendingObserved.security
+            bandSelection = pendingObserved.band
+            channelSelection = pendingObserved.channel
+            redraw()
+        }
     }
 
     private fun <T> choice(parent: LinearLayout, title: Int, options: () -> List<Pair<T, String>>,
@@ -232,6 +362,7 @@ internal class CarHotspotSettingsUi(
                 .setPositiveButton(R.string.save) { _, _ ->
                     if (!closed && values[index].first != selected()) {
                         save(values[index].first)
+                        editVersion++
                         edited = true
                         update()
                     }

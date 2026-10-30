@@ -2557,10 +2557,15 @@ class CarPlayController(
         }
         val effectiveCarHotspot = if (hotspotMode == WirelessHotspotMode.MANUAL) {
             com.shilapi.xcertplay.network.CarHotspotProfiles.resolve(appContext,
-                manual = { config.manualHotspotSsid?.let { ssid -> com.shilapi.xcertplay.network.CarHotspotProfile(
-                    ssid, config.manualHotspotPassphrase.orEmpty(), config.manualHotspotSecurity,
-                    config.manualHotspotBand, config.manualHotspotChannel,
-                ) } }, log = ::debugLog)?.profile
+                manual = {
+                    if (!config.manualHotspotConfigured) return@resolve null
+                    val ssid = config.manualHotspotSsid
+                    if (ssid.isNullOrBlank()) null
+                    else com.shilapi.xcertplay.network.CarHotspotProfile(
+                        ssid, config.manualHotspotPassphrase.orEmpty(), config.manualHotspotSecurity,
+                        config.manualHotspotBand, config.manualHotspotChannel,
+                    ).takeIf { it.error() == null }
+                }, log = ::debugLog)?.profile
         } else null
         var pastOffReport = false
         if (hotspotMode == WirelessHotspotMode.MANUAL) {

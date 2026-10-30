@@ -37,6 +37,20 @@ data class CarHotspotProfile(
 enum class CarHotspotProfileSource { SAVED, SYSTEM, CONFIRMED, MANUAL }
 data class ResolvedCarHotspotProfile(val profile: CarHotspotProfile, val source: CarHotspotProfileSource)
 
+/**
+ * Observed system hotspot state. Unlike [CarHotspotProfile], this represents partial information
+ * (e.g. when the car system exposes the SSID but masks or omits the passphrase).
+ * It is never used to execute connections or configure APs directly; it only guides UI pre-filling and prompts.
+ */
+data class ObservedHotspotInfo(
+    val ssid: String,
+    val passwordAvailable: Boolean,
+    val rawPassword: String? = null,
+    val security: ManualHotspotSecurity = ManualHotspotSecurity.WPA2,
+    val band: ManualHotspotBand = ManualHotspotBand.AUTO,
+    val channel: Int = 0,
+)
+
 object CarHotspotProfileSelection {
     /** Initial import order only; an existing saved profile is resolved before these loaders. */
     fun resolve(

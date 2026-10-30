@@ -861,6 +861,10 @@
     <string name="settings_hotspot_operation_failed">热点操作失败或未能确认生效。</string>
     <string name="settings_hotspot_no_profile">请先保存热点名称和密码。</string>
     <string name="settings_hotspot_security">加密方式</string>
+    <string name="settings_hotspot_sync">从车机读取</string>
+    <string name="settings_hotspot_sync_success_prompt_save">已读取车机热点，请保存配置</string>
+    <string name="settings_hotspot_observed_fill_password">已读取车机热点名，请补齐密码后保存</string>
+    <string name="settings_hotspot_sync_failed">未读取到车机热点信息</string>
     <string name="settings_hotspot_save">保存热点配置</string>
     <string name="settings_hotspot_credentials_saved">热点配置已保存，下次连接生效。</string>
     <string name="settings_hotspot_ssid_placeholder">请输入热点名称</string>

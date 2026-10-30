@@ -10,6 +10,7 @@ import kotlin.concurrent.withLock
 
 interface CarHotspotOperations {
     fun read(): CarHotspotProfile?
+    fun observe(): ObservedHotspotInfo? = null
     fun apply(profile: CarHotspotProfile, cancelled: () -> Boolean = { false }): CarHotspotControlResult
     fun enable(cancelled: () -> Boolean = { false }): CarHotspotControlResult
 }
@@ -25,6 +26,7 @@ class CarHotspotController(context: Context, private val log: (String) -> Unit =
     ), log)
 
     override fun read(): CarHotspotProfile? = control.read()
+    override fun observe(): ObservedHotspotInfo? = control.observe()
 
     /** Run on a worker. All callers share the lock, including boot and UI requests. */
     override fun apply(profile: CarHotspotProfile, cancelled: () -> Boolean): CarHotspotControlResult {
@@ -96,6 +98,27 @@ private class ModernHotspotApi(private val wifi: WifiManager) : CarHotspotApi {
         return profile(invoke(config, "getSsid") as? String, invoke(config, "getPassphrase") as? String, security,
             band(radioBand, true), (invoke(config, "getChannel") as? Int) ?: 0)
     }
+    override fun observe(): ObservedHotspotInfo? {
+        val config = runCatching { configuration() }.getOrNull() ?: return null
+        val name = ssid(invoke(config, "getSsid") as? String) ?: return null
+        val rawPassword = invoke(config, "getPassphrase") as? String
+        val passwordAvailable = !rawPassword.isNullOrBlank() && rawPassword != "*"
+        val security = when (invoke(config, "getSecurityType") as? Int) {
+            0 -> ManualHotspotSecurity.OPEN; 1 -> ManualHotspotSecurity.WPA2
+            2 -> ManualHotspotSecurity.WPA3_TRANSITION; 3 -> ManualHotspotSecurity.WPA3
+            else -> ManualHotspotSecurity.WPA2
+        }
+        val radioBand = invoke(config, "getBand") as? Int ?: -1
+        val channel = (invoke(config, "getChannel") as? Int) ?: 0
+        return ObservedHotspotInfo(
+            ssid = name,
+            passwordAvailable = passwordAvailable,
+            rawPassword = rawPassword.takeIf { passwordAvailable },
+            security = security,
+            band = band(radioBand, true),
+            channel = channel,
+        )
+    }
     override fun enabled() = runCatching { invoke(wifi, "isWifiApEnabled") as? Boolean }.getOrNull()
     override fun supports(profile: CarHotspotProfile) = runCatching { Class.forName("android.net.wifi.SoftApConfiguration\$Builder") }.isSuccess
     override fun configure(profile: CarHotspotProfile): Boolean {
@@ -141,6 +164,28 @@ private class LegacyHotspotApi(private val wifi: WifiManager) : CarHotspotApi {
         if (radioBand !in -1..1) return null
         return profile(config.SSID, config.preSharedKey?.removeSurrounding("\""), security, band(radioBand, false), channel)
     }
+    override fun observe(): ObservedHotspotInfo? {
+        val config = invoke(wifi, "getWifiApConfiguration") as? WifiConfiguration ?: return null
+        val name = ssid(config.SSID) ?: return null
+        val rawPassword = config.preSharedKey?.removeSurrounding("\"")
+        val passwordAvailable = !rawPassword.isNullOrBlank() && rawPassword != "*"
+        val security = when {
+            config.allowedKeyManagement[8] -> ManualHotspotSecurity.WPA3
+            config.allowedKeyManagement[4] || config.allowedKeyManagement[1] -> ManualHotspotSecurity.WPA2
+            config.allowedKeyManagement[0] -> ManualHotspotSecurity.OPEN
+            else -> ManualHotspotSecurity.WPA2
+        }
+        val radioBand = runCatching { config.javaClass.getField("apBand").getInt(config) }.getOrDefault(-1)
+        val channel = runCatching { config.javaClass.getField("apChannel").getInt(config) }.getOrDefault(0)
+        return ObservedHotspotInfo(
+            ssid = name,
+            passwordAvailable = passwordAvailable,
+            rawPassword = rawPassword.takeIf { passwordAvailable },
+            security = security,
+            band = band(radioBand, false),
+            channel = channel,
+        )
+    }
     override fun enabled() = runCatching { invoke(wifi, "isWifiApEnabled") as? Boolean }.getOrNull()
     override fun supports(profile: CarHotspotProfile) = profile.security in listOf(ManualHotspotSecurity.OPEN, ManualHotspotSecurity.WPA2)
     override fun configure(profile: CarHotspotProfile): Boolean {
@@ -179,6 +224,17 @@ private class EcarxHotspotApi(context: Context) : CarHotspotApi {
     // This API does not expose a complete security configuration. Android must read back the
     // complete profile; never infer WPA2/WPA3 or reuse an unrelated password to claim success.
     override fun read(): CarHotspotProfile? = null
+    override fun observe(): ObservedHotspotInfo? {
+        val name = ssid(getter("getWifi6ApSsid", "getWifiApSsid", "getSsid") as? String) ?: return null
+        return ObservedHotspotInfo(
+            ssid = name,
+            passwordAvailable = false,
+            rawPassword = null,
+            security = ManualHotspotSecurity.WPA2,
+            band = ManualHotspotBand.AUTO,
+            channel = 0,
+        )
+    }
     override fun enabled() = getter("getWifi6ApEnabled") as? Boolean
     override fun supports(profile: CarHotspotProfile) = profile.channel == 0 && profile.security == ManualHotspotSecurity.WPA2
     override fun configure(profile: CarHotspotProfile): Boolean {

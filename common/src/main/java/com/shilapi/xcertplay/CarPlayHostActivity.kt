@@ -177,8 +177,7 @@ class CarPlayHostActivity : ComponentActivity() {
         // fields untouched: saving unrelated host settings must not overwrite manual fallback data.
         val effectiveHotspot = if (wirelessEnabled && wirelessHotspotMode == WirelessHotspotMode.MANUAL) {
             com.shilapi.xcertplay.network.CarHotspotProfiles.resolve(this,
-                manual = { com.shilapi.xcertplay.network.CarHotspotProfile(manualHotspotSsid,
-                    manualHotspotPassphrase, manualHotspotSecurity, manualHotspotBand, manualHotspotChannel) },
+                manual = { AirPlayPersistence.loadConfiguredManualHotspotProfile(this) },
                 log = { DetailedDebugLog.record("hotspot-runtime", it) })?.profile
         } else null
         return CarPlayRuntimeConfig(
@@ -223,6 +222,7 @@ class CarPlayHostActivity : ComponentActivity() {
         manualHotspotChannel = effectiveHotspot?.channel ?: manualHotspotChannel,
         manualHotspotSecurity = effectiveHotspot?.security ?: manualHotspotSecurity,
         manualHotspotInterface = manualHotspotInterface,
+        manualHotspotConfigured = AirPlayPersistence.hasConfiguredManualHotspot(this) || effectiveHotspot != null,
         existingWifiSsid = existingWifiSsid,
         existingWifiPassphrase = existingWifiPassphrase,
         locationReportingEnabled = locationReportingEnabled,

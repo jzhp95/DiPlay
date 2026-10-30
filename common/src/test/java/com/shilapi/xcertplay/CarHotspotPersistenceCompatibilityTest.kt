@@ -1,6 +1,7 @@
 package com.shilapi.xcertplay
 
 import com.shilapi.xcertplay.network.CarHotspotProfile
+import com.shilapi.xcertplay.network.CarHotspotProfileSource
 import com.shilapi.xcertplay.network.CarHotspotProfiles
 import com.shilapi.xcertplay.orchestration.ManualHotspotBand
 import com.shilapi.xcertplay.orchestration.ManualHotspotSecurity
@@ -44,5 +45,32 @@ class CarHotspotPersistenceCompatibilityTest {
         assertEquals(CarHotspotProfile("Saved car", "updated-password", ManualHotspotSecurity.WPA3_TRANSITION,
             ManualHotspotBand.AUTO, 0), selected?.profile)
         assertEquals("eth0.3", AirPlayPersistence.loadManualHotspotInterface(app))
+    }
+
+    @Test fun unconfiguredStateDoesNotReturnDefaultManualHotspotProfile() {
+        app.getSharedPreferences("diplay_managed_hotspot", 0).edit().clear().commit()
+        app.getSharedPreferences("xcertplay_airplay", 0).edit().clear().commit()
+
+        assertFalse(AirPlayPersistence.hasConfiguredManualHotspot(app))
+        assertNull(AirPlayPersistence.loadConfiguredManualHotspotProfile(app))
+        assertNull(CarHotspotProfiles.resolve(app, manual = { AirPlayPersistence.loadConfiguredManualHotspotProfile(app) }))
+        assertNull(CarHotspotProfiles.saved(app))
+    }
+
+    @Test fun userExplicitlySavingDefaultNameReturnsConfiguredProfile() {
+        app.getSharedPreferences("diplay_managed_hotspot", 0).edit().clear().commit()
+        app.getSharedPreferences("xcertplay_airplay", 0).edit().clear().commit()
+
+        AirPlayPersistence.saveManualHotspotSsid(app, AirPlayPersistence.DEFAULT_MANUAL_HOTSPOT_SSID)
+        AirPlayPersistence.saveManualHotspotPassphrase(app, "87654321")
+
+        assertTrue(AirPlayPersistence.hasConfiguredManualHotspot(app))
+        val profile = AirPlayPersistence.loadConfiguredManualHotspotProfile(app)
+        assertNotNull(profile)
+        assertEquals(AirPlayPersistence.DEFAULT_MANUAL_HOTSPOT_SSID, profile?.ssid)
+        assertEquals("87654321", profile?.passphrase)
+        val resolved = CarHotspotProfiles.resolve(app, manual = { AirPlayPersistence.loadConfiguredManualHotspotProfile(app) })
+        assertEquals(AirPlayPersistence.DEFAULT_MANUAL_HOTSPOT_SSID, resolved?.profile?.ssid)
+        assertEquals(CarHotspotProfileSource.MANUAL, resolved?.source)
     }
 }

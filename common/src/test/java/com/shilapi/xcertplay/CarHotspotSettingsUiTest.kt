@@ -40,8 +40,14 @@ class CarHotspotSettingsUiTest {
         @Volatile var applied: CarHotspotProfile? = null
         @Volatile var enabled = false
         var beforeApply: () -> Unit = {}
+        var beforeObserve: () -> Unit = {}
         @Volatile var completed = false
+        @Volatile var observed: ObservedHotspotInfo? = null
         override fun read(): CarHotspotProfile? = null
+        override fun observe(): ObservedHotspotInfo? {
+            beforeObserve()
+            return observed
+        }
         override fun apply(profile: CarHotspotProfile, cancelled: () -> Boolean): CarHotspotControlResult {
             beforeApply()
             if (cancelled()) { completed = true; return CarHotspotControlResult(false, false, null, "cancelled") }
@@ -212,6 +218,217 @@ class CarHotspotSettingsUiTest {
         button(parent,R.string.settings_hotspot_save).performClick()
         assertEquals("eth0.3", AirPlayPersistence.loadManualHotspotInterface(activity))
         assertEquals(profile.copy(passphrase="abcdefgh"), CarHotspotProfiles.saved(activity))
+    }
+
+    @Test fun syncingSystemHotspotPrepopulatesObservedSsid() {
+        val root = LinearLayout(activity)
+        var redraws = 0
+        lateinit var testUi: CarHotspotSettingsUi
+        testUi = CarHotspotSettingsUi(activity, changed = {}, redraw = {
+            redraws++
+            root.removeAllViews()
+            testUi.build(root)
+        }, controller = fake)
+        fake.observed = ObservedHotspotInfo(ssid = "CarSystemHotspot", passwordAvailable = false)
+        testUi.build(root)
+        button(root, R.string.settings_hotspot_sync).performClick()
+        await { redraws > 0 && views(root).filterIsInstance<Button>().any { it.text.contains("CarSystemHotspot") } }
+        assertTrue(views(root).filterIsInstance<Button>().any { it.text.contains("CarSystemHotspot") })
+        assertNull(CarHotspotProfiles.saved(activity))
+    }
+
+    @Test fun syncingSystemHotspotReplacesExistingSavedProfileInUi() {
+        val oldSaved = CarHotspotProfile("OldWIFI", "12345678", ManualHotspotSecurity.WPA2)
+        CarHotspotProfiles.saveSaved(activity, oldSaved)
+        val root = LinearLayout(activity)
+        var redraws = 0
+        lateinit var testUi: CarHotspotSettingsUi
+        testUi = CarHotspotSettingsUi(activity, changed = {}, redraw = {
+            redraws++
+            root.removeAllViews()
+            testUi.build(root)
+        }, controller = fake)
+        fake.observed = ObservedHotspotInfo(ssid = "NewCarHotspot", passwordAvailable = false)
+        testUi.build(root)
+        assertTrue(views(root).filterIsInstance<Button>().any { it.text.contains("OldWIFI") })
+
+        button(root, R.string.settings_hotspot_sync).performClick()
+        await { redraws > 0 && views(root).filterIsInstance<Button>().any { it.text.contains("NewCarHotspot") } }
+        assertTrue(views(root).filterIsInstance<Button>().any { it.text.contains("NewCarHotspot") })
+        assertFalse(views(root).filterIsInstance<Button>().any { it.text.contains("OldWIFI") })
+    }
+
+    @Test fun syncingFailsExplicitlyWhenSystemReturnsNull() {
+        val root = LinearLayout(activity)
+        var redraws = 0
+        lateinit var testUi: CarHotspotSettingsUi
+        testUi = CarHotspotSettingsUi(activity, changed = {}, redraw = {
+            redraws++
+            root.removeAllViews()
+            testUi.build(root)
+        }, controller = fake)
+        fake.observed = null
+        testUi.build(root)
+
+        button(root, R.string.settings_hotspot_sync).performClick()
+        await { redraws > 0 && views(root).filterIsInstance<TextView>().any { it.text == activity.getString(R.string.settings_hotspot_sync_failed) } }
+        assertTrue(views(root).filterIsInstance<TextView>().any { it.text == activity.getString(R.string.settings_hotspot_sync_failed) })
+    }
+
+    @Test fun syncingFailsAndPreservesDraftWhenSystemReturnsNullEvenIfSavedProfileExists() {
+        val oldSaved = CarHotspotProfile("OldSavedCar", "12345678", ManualHotspotSecurity.WPA2)
+        CarHotspotProfiles.saveSaved(activity, oldSaved)
+        val root = LinearLayout(activity)
+        var redraws = 0
+        lateinit var testUi: CarHotspotSettingsUi
+        testUi = CarHotspotSettingsUi(activity, changed = {}, redraw = {
+            redraws++
+            root.removeAllViews()
+            testUi.build(root)
+        }, controller = fake)
+        fake.observed = null
+        testUi.build(root)
+        assertTrue(views(root).filterIsInstance<Button>().any { it.text.contains("OldSavedCar") })
+
+        editHotspotDraft(activity, root, R.string.hotspot_name, "CurrentDraftSSID")
+        assertTrue(views(root).filterIsInstance<Button>().any { it.text.contains("CurrentDraftSSID") })
+
+        button(root, R.string.settings_hotspot_sync).performClick()
+        await { redraws > 0 && views(root).filterIsInstance<TextView>().any { it.text == activity.getString(R.string.settings_hotspot_sync_failed) } }
+
+        assertTrue(views(root).filterIsInstance<TextView>().any { it.text == activity.getString(R.string.settings_hotspot_sync_failed) })
+        assertFalse(views(root).filterIsInstance<TextView>().any { it.text == activity.getString(R.string.settings_hotspot_sync_success_prompt_save) })
+        assertTrue("Current draft must be preserved on sync failure", views(root).filterIsInstance<Button>().any { it.text.contains("CurrentDraftSSID") })
+        assertFalse("Old saved profile must not overwrite draft on sync failure", views(root).filterIsInstance<Button>().any { it.text.contains("OldSavedCar") })
+        assertEquals(oldSaved, CarHotspotProfiles.saved(activity))
+    }
+
+    @Test fun editsMadeDuringAsyncSyncAreNotOverwritten() {
+        val root = LinearLayout(activity)
+        var redraws = 0
+        lateinit var testUi: CarHotspotSettingsUi
+        testUi = CarHotspotSettingsUi(activity, changed = {}, redraw = {
+            redraws++
+            root.removeAllViews()
+            testUi.build(root)
+        }, controller = fake)
+        fake.observed = ObservedHotspotInfo(ssid = "LateArrivingSSID", passwordAvailable = false)
+        testUi.build(root)
+
+        button(root, R.string.settings_hotspot_sync).performClick()
+        editHotspotDraft(activity, root, R.string.hotspot_name, "UserCustomSSID")
+        shadowOf(Looper.getMainLooper()).idle()
+
+        Thread.sleep(100)
+        shadowOf(Looper.getMainLooper()).idle()
+
+        assertTrue(views(root).filterIsInstance<Button>().any { it.text.contains("UserCustomSSID") })
+        assertFalse(views(root).filterIsInstance<Button>().any { it.text.contains("LateArrivingSSID") })
+    }
+
+    @Test fun startingHotspotAfterSyncWithoutSavingIsBlockedAndDoesNotApplyOldSavedProfile() {
+        val oldSaved = CarHotspotProfile("OldWIFI", "12345678", ManualHotspotSecurity.WPA2)
+        CarHotspotProfiles.saveSaved(activity, oldSaved)
+        val root = LinearLayout(activity)
+        var redraws = 0
+        lateinit var testUi: CarHotspotSettingsUi
+        testUi = CarHotspotSettingsUi(activity, changed = {}, redraw = {
+            redraws++
+            root.removeAllViews()
+            testUi.build(root)
+        }, controller = fake)
+        fake.observed = ObservedHotspotInfo(ssid = "NewCarHotspot", passwordAvailable = false)
+        testUi.build(root)
+
+        button(root, R.string.settings_hotspot_sync).performClick()
+        await { redraws > 0 && views(root).filterIsInstance<Button>().any { it.text.contains("NewCarHotspot") } }
+
+        button(root, R.string.settings_hotspot_start).performClick()
+        shadowOf(Looper.getMainLooper()).idle()
+        assertNull("Starting without saving must not apply the old saved profile", fake.applied)
+        assertTrue(views(root).filterIsInstance<TextView>().any { it.text == activity.getString(R.string.settings_hotspot_save_first) })
+
+        editHotspotDraft(activity, root, R.string.hotspot_password, "newpassword")
+        button(root, R.string.settings_hotspot_save).performClick()
+        button(root, R.string.settings_hotspot_start).performClick()
+        await { fake.applied != null }
+        assertEquals("NewCarHotspot", fake.applied?.ssid)
+        assertEquals("newpassword", fake.applied?.passphrase)
+    }
+
+    @Test fun initialReadImportsConfirmedProfileAndDisplaysItWhenNoSavedOrManualProfileExists() {
+        val root = LinearLayout(activity)
+        var redraws = 0
+        fake.observed = null
+        val confirmedProfile = CarHotspotProfile("ConfirmedCar", "12345678", ManualHotspotSecurity.WPA2)
+        CarHotspotProfiles.saveConfirmed(activity, confirmedProfile)
+        lateinit var testUi: CarHotspotSettingsUi
+        testUi = CarHotspotSettingsUi(activity, changed = {}, redraw = {
+            redraws++
+            root.removeAllViews()
+            testUi.build(root)
+        }, controller = fake)
+        testUi.build(root)
+
+        await { redraws > 0 && views(root).filterIsInstance<Button>().any { it.text.contains("ConfirmedCar") } }
+        assertTrue(views(root).filterIsInstance<Button>().any { it.text.contains("ConfirmedCar") })
+        assertEquals("ConfirmedCar", CarHotspotProfiles.saved(activity)?.ssid)
+    }
+
+    @Test fun resyncingAfterDraftEditOverwritesDraftWithCarHotspot() {
+        val root = LinearLayout(activity)
+        var redraws = 0
+        lateinit var testUi: CarHotspotSettingsUi
+        testUi = CarHotspotSettingsUi(activity, changed = {}, redraw = {
+            redraws++
+            root.removeAllViews()
+            testUi.build(root)
+        }, controller = fake)
+        testUi.build(root)
+
+        editHotspotDraft(activity, root, R.string.hotspot_name, "TemporaryDraft")
+        assertTrue(views(root).filterIsInstance<Button>().any { it.text.contains("TemporaryDraft") })
+
+        fake.observed = ObservedHotspotInfo(ssid = "RealCarHotspot", passwordAvailable = false)
+        button(root, R.string.settings_hotspot_sync).performClick()
+
+        await { redraws > 0 && views(root).filterIsInstance<Button>().any { it.text.contains("RealCarHotspot") } }
+        assertTrue(views(root).filterIsInstance<Button>().any { it.text.contains("RealCarHotspot") })
+        assertFalse(views(root).filterIsInstance<Button>().any { it.text.contains("TemporaryDraft") })
+        assertTrue(views(root).filterIsInstance<TextView>().any { it.text == activity.getString(R.string.settings_hotspot_observed_fill_password) })
+    }
+
+    @Test fun initialReadBackfillsWhenDialogWasOpenedDuringReadAndThenCancelled() {
+        val root = LinearLayout(activity)
+        var redraws = 0
+        val readStarted = CountDownLatch(1)
+        val readRelease = CountDownLatch(1)
+        fake.beforeObserve = {
+            readStarted.countDown()
+            readRelease.await(3, TimeUnit.SECONDS)
+        }
+        fake.observed = ObservedHotspotInfo(ssid = "SystemCarAp", passwordAvailable = false)
+        lateinit var testUi: CarHotspotSettingsUi
+        testUi = CarHotspotSettingsUi(activity, changed = {}, redraw = {
+            redraws++
+            root.removeAllViews()
+            testUi.build(root)
+        }, controller = fake)
+        testUi.build(root)
+
+        assertTrue(readStarted.await(3, TimeUnit.SECONDS))
+        val dialog = openHotspotEditor(activity, root, R.string.hotspot_name)
+        assertTrue(dialog.isShowing)
+
+        readRelease.countDown()
+        Thread.sleep(50)
+        shadowOf(Looper.getMainLooper()).idle()
+
+        dialog.getButton(AlertDialog.BUTTON_NEGATIVE).performClick()
+        shadowOf(Looper.getMainLooper()).idle()
+
+        await { redraws > 0 && views(root).filterIsInstance<Button>().any { it.text.contains("SystemCarAp") } }
+        assertTrue(views(root).filterIsInstance<Button>().any { it.text.contains("SystemCarAp") })
     }
 
     private fun card() = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL; ui.build(this) }

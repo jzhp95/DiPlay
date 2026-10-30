@@ -17,6 +17,7 @@ import com.shilapi.xcertplay.orchestration.ManualHotspotBand
 import com.shilapi.xcertplay.orchestration.ManualHotspotSecurity
 import com.shilapi.xcertplay.orchestration.MfiTarget
 import com.shilapi.xcertplay.orchestration.WirelessHotspotMode
+import com.shilapi.xcertplay.network.CarHotspotProfile
 import com.shilapi.xcertplay.network.CarHotspotProfiles
 import com.shilapi.xcertplay.network.WifiP2pChannels
 import com.shilapi.xcertplay.transport.LockdownPairRecord
@@ -445,6 +446,20 @@ object AirPlayPersistence {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putString("existing_wifi_ssid", ssid)
             .putString("existing_wifi_passphrase", passphrase).apply()
+    }
+
+    fun hasConfiguredManualHotspot(context: Context): Boolean =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).contains(KEY_MANUAL_HOTSPOT_SSID)
+
+    fun loadConfiguredManualHotspotProfile(context: Context): CarHotspotProfile? {
+        if (!hasConfiguredManualHotspot(context)) return null
+        val ssid = loadManualHotspotSsid(context).trim()
+        if (ssid.isEmpty()) return null
+        val password = loadManualHotspotPassphrase(context)
+        val security = loadManualHotspotSecurity(context)
+        val band = loadManualHotspotBand(context)
+        val channel = loadManualHotspotChannel(context)
+        return CarHotspotProfile(ssid, password, security, band, channel).takeIf { it.error() == null }
     }
 
     fun loadManualHotspotSsid(context: Context): String =

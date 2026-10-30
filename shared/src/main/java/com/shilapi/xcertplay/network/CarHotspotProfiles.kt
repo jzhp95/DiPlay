@@ -31,6 +31,9 @@ object CarHotspotProfiles {
     fun saveDraft(context: Context, profile: CarHotspotProfile) = save(context, "draft", profile)
     fun saveConfirmed(context: Context, profile: CarHotspotProfile) = save(context, "confirmed", profile)
 
+    fun observeSystem(context: Context, log: (String) -> Unit = {}): ObservedHotspotInfo? =
+        CarHotspotController(context, log).observe()
+
     fun resolve(context: Context, manual: () -> CarHotspotProfile?, log: (String) -> Unit = {}): ResolvedCarHotspotProfile? {
         saved(context)?.let {
             log("hotspot configuration source=SAVED")

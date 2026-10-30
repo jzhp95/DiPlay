@@ -4,6 +4,7 @@ package com.shilapi.xcertplay.network
 internal interface CarHotspotApi {
     val name: String
     fun read(): CarHotspotProfile?
+    fun observe(): ObservedHotspotInfo? = null
     fun enabled(): Boolean?
     fun supports(profile: CarHotspotProfile): Boolean
     fun configure(profile: CarHotspotProfile): Boolean
@@ -28,6 +29,10 @@ internal class CarHotspotControl(
 ) {
     fun read(): CarHotspotProfile? = apis.firstNotNullOfOrNull { api ->
         attempt(api, "read") { api.read()?.takeIf { it.error() == null } }
+    }
+
+    fun observe(): ObservedHotspotInfo? = apis.firstNotNullOfOrNull { api ->
+        attempt(api, "observe") { api.observe() }
     }
 
     fun apply(profile: CarHotspotProfile, cancelled: () -> Boolean = { false }): CarHotspotControlResult {
