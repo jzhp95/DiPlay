@@ -68,6 +68,17 @@ android {
             applicationIdSuffix = ".test"
             versionNameSuffix = "-test"
         }
+        create("optimizedDebug") {
+            initWith(getByName("debug"))
+            matchingFallbacks += listOf("debug")
+            optimization {
+                enable = true
+            }
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+        }
         release {
             optimization {
                 enable = false
@@ -146,4 +157,18 @@ tasks.register("assembleStandaloneDebug") {
     group = "build"
     description = "Build a standalone car-test APK with explicitly provisioned authentication."
     dependsOn(verifyStandaloneAuthentication, "assembleDebug")
+}
+tasks.register("assembleStandaloneOptimizedDebug") {
+    group = "build"
+    description = "Build a standalone car-test APK with R8 and explicitly provisioned authentication."
+    dependsOn(verifyStandaloneAuthentication, "assembleOptimizedDebug")
+}
+
+if (providers.gradleProperty("flymeSystem").orNull == "false") {
+    android {
+        defaultConfig {
+            applicationId = "com.shihab.diplay"
+        }
+        sourceSets.getByName("main").manifest.srcFile("src/ordinary/AndroidManifest.xml")
+    }
 }

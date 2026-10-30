@@ -67,9 +67,13 @@ Check that this file exists:
 mobile/build/outputs/apk/debug/mobile-debug.apk
 ```
 
-The branch builds only Flyme packages. The debug application ID is `com.shihab.diplay.flyme.test`.
+The target head unit ABI is **arm64-v8a**. Both the shared native build and application packaging are restricted to arm64-v8a; APKs are not intended for 32-bit ARM or x86 devices/emulators. Check the built archive and ELF headers with `python3 scripts/check_arm64_apk.py`.
+
+By default, the branch builds Flyme system packages. The debug application ID is `com.shihab.diplay.flyme.test`.
 The release application ID is `com.shihab.diplay.flyme`.
-Both declare `android.uid.system` and enable Flyme EAS metadata; there is no ordinary-package build switch.
+Both declare `android.uid.system` and enable Flyme EAS metadata.
+Use `-PflymeSystem=false` for ordinary packages without system UID or EAS opt-in; their debug and release application IDs are `com.shihab.diplay.test` and `com.shihab.diplay`.
+The `optimizedDebug` build retains the corresponding debug application ID, so each R8/non-R8 pair replaces the same installation rather than installing side by side.
 The debug version suffix is `-test`; the base version and version code are unchanged.
 
 The former `com.shihab.diplay.flyme.hudtest` test package is a different Android application.
@@ -142,8 +146,13 @@ Check both files in the APK against your selected local inputs:
 - `assets/offline-mfi/certificate.p7b`.
 
 The APK must be signed with the target platform certificate before installing as a system UID app.
-Run `integrations/flyme-eas/build-apks.sh` (or `build-apks.ps1` on Windows) to build and platform-sign the Flyme test APK.
-Output: `build/car-test-apks/Apple-CarPlay-flyme-test-YYYYMMDD-HHMMSS.apk`.
+Run `integrations/flyme-eas/build-apks.sh` (or `build-apks.ps1` on Windows) to build and platform-sign the four test APKs:
+- `Apple-CarPlay-v0.2.26-normal.apk`: Ordinary package (`com.shihab.diplay.test`), without system UID, non-R8.
+- `Apple-CarPlay-v0.2.26-normal-r8.apk`: Ordinary package (`com.shihab.diplay.test`), without system UID, with R8 optimization.
+- `Apple-CarPlay-v0.2.26-system.apk`: Flyme system package (`com.shihab.diplay.flyme.test`), with `android.uid.system` and EAS opt-in, non-R8.
+- `Apple-CarPlay-v0.2.26-system-r8.apk`: Flyme system package (`com.shihab.diplay.flyme.test`), with `android.uid.system` and EAS opt-in, with R8 optimization.
+
+Output directory: `build/car-test-apks/`.
 Updates with the same new application ID and signing key preserve that installation’s settings.
 Different application IDs do not automatically share settings, even when using a shared UID.
 

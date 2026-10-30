@@ -1,5 +1,5 @@
 #requires -Version 5.1
-# Build and platform-sign the Flyme test APK on Windows.
+# Build four test APKs (normal, normal-r8, system, system-r8) and platform-sign each on Windows.
 [CmdletBinding()]
 param()
 
@@ -33,9 +33,16 @@ $signingDir = $env:DIPLAY_PLATFORM_SIGNING_DIR
 if (-not $signingDir) { $signingDir = Join-Path $repoRoot 'AOSP-platform-signing' }
 $buildTools = Join-Path $androidSdk 'build-tools\36.1.0'
 $apkOutputDir = Join-Path $repoRoot 'build\car-test-apks'
-# Keep this APK and its checksum together under one local-time stamp.
-$buildStamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-$flymeApk = "Apple-CarPlay-flyme-test-$buildStamp.apk"
+$versionName = '0.2.26'
+$buildGradle = Get-Content -LiteralPath (Join-Path $repoRoot 'mobile\build.gradle.kts') -Raw
+$versionMatch = [regex]::Match($buildGradle, 'versionName\s*=\s*"([^"]+)"')
+if ($versionMatch.Success) { $versionName = $versionMatch.Groups[1].Value }
+$versionTag = "v$versionName"
+$normalApk = "Apple-CarPlay-$versionTag-normal.apk"
+$normalR8Apk = "Apple-CarPlay-$versionTag-normal-r8.apk"
+$systemApk = "Apple-CarPlay-$versionTag-system.apk"
+$systemR8Apk = "Apple-CarPlay-$versionTag-system-r8.apk"
+
 $privateKey = Join-Path $signingDir 'platform.pk8'
 $certificate = Join-Path $signingDir 'platform.x509.pem'
 $gradle = Join-Path $repoRoot 'gradlew.bat'
@@ -51,16 +58,6 @@ if ($env:JAVA_HOME) {
 } elseif (-not (Get-Command java.exe -ErrorAction SilentlyContinue)) {
     throw 'Install a JDK (JDK 25 is used by CI) and set JAVA_HOME or add java.exe to PATH.'
 }
-# Fail early with an actionable message for interrupted SDK installations.
-$nativeBuild = Get-Content -LiteralPath (Join-Path $repoRoot 'shared\build.gradle') -Raw
-$ndkMatch = [regex]::Match($nativeBuild, 'ndkVersion\s*=\s*[''"]([^''"]+)[''"]')
-if ($ndkMatch.Success) {
-    $ndkVersion = $ndkMatch.Groups[1].Value
-    $ndkMetadata = Join-Path $androidSdk "ndk\$ndkVersion\source.properties"
-    if (-not (Test-Path -LiteralPath $ndkMetadata -PathType Leaf)) {
-        throw "Install the complete NDK $ndkVersion in Android Studio SDK Manager. Missing: $ndkMetadata"
-    }
-}
 
 # Compute the certificate's DER SHA-256 using .NET; OpenSSL is not required.
 $pem = Get-Content -LiteralPath $certificate -Raw
@@ -72,22 +69,38 @@ try {
     $expectedCertificate = ([BitConverter]::ToString($sha256.ComputeHash($certificateDer))).Replace('-', '').ToLowerInvariant()
 } finally { $sha256.Dispose() }
 
-$buildTask = ':mobile:assembleDebug'
+$taskDebug = ':mobile:assembleDebug'
+$taskOptimized = ':mobile:assembleOptimizedDebug'
+$standalone = $false
 if ($env:DIPLAY_AUTH_ASSETS_DIR -or (Test-Path -LiteralPath (Join-Path $repoRoot 'offline-mfi') -PathType Container)) {
-    $buildTask = ':mobile:assembleStandaloneDebug'
+    $taskDebug = ':mobile:assembleStandaloneDebug'
+    $taskOptimized = ':mobile:assembleStandaloneOptimizedDebug'
+    $standalone = $true
     Write-Host 'Using local CarPlay authentication input (standalone build).'
 } else {
-    Write-Warning 'No root offline-mfi/ or DIPLAY_AUTH_ASSETS_DIR: source-only Flyme test APK.'
+    Write-Warning 'No root offline-mfi/ or DIPLAY_AUTH_ASSETS_DIR: source-only test APKs.'
 }
 
 function Build-One {
-    param([string]$Kind, [string]$PackageName, [string]$FinalName)
-    Write-Host "`nBuilding $Kind"
-    Invoke-Checked -FilePath $gradle -ArgumentList @($buildTask, '--console=plain')
-    $unsignedApk = Join-Path $repoRoot 'mobile\build\outputs\apk\debug\mobile-debug.apk'
+    param(
+        [string]$Kind,
+        [bool]$System,
+        [bool]$R8,
+        [string]$PackageName,
+        [string]$FinalName
+    )
+    $task = if ($R8) { $taskOptimized } else { $taskDebug }
+    $relativeApk = if ($R8) { 'mobile\build\outputs\apk\optimizedDebug\mobile-optimizedDebug.apk' } else { 'mobile\build\outputs\apk\debug\mobile-debug.apk' }
+    $unsignedApk = Join-Path $repoRoot $relativeApk
+
+    Write-Host "`nBuilding $Kind (flymeSystem=$System, r8=$R8)"
+    if (Test-Path -LiteralPath $unsignedApk) { Remove-Item -LiteralPath $unsignedApk -Force }
+    $systemProp = "-PflymeSystem=$($System.ToString().ToLower())"
+    Invoke-Checked -FilePath $gradle -ArgumentList @($systemProp, $task, '--console=plain', '--no-configuration-cache')
     Assert-File $unsignedApk
     if ((Get-Item -LiteralPath $unsignedApk).Length -eq 0) { throw 'Build output APK is empty.' }
-    if ($buildTask -eq ':mobile:assembleStandaloneDebug') {
+
+    if ($standalone) {
         Add-Type -AssemblyName System.IO.Compression.FileSystem
         $archive = [System.IO.Compression.ZipFile]::OpenRead($unsignedApk)
         try {
@@ -118,13 +131,28 @@ function Build-One {
         throw "Unexpected APK package; expected $PackageName"
     }
     $manifestText = $manifest -join "`n"
-    if (-not $manifestText.Contains('android.uid.system') -or -not $manifestText.Contains('com.shilapi.flymeeas.ENABLED')) {
-        throw 'Flyme APK is missing the shared UID or EAS opt-in.'
+    if ($System) {
+        if (-not $manifestText.Contains('android.uid.system') -or -not $manifestText.Contains('com.shilapi.flymeeas.ENABLED')) {
+            throw 'System APK is missing the shared UID or EAS opt-in.'
+        }
+    } else {
+        if ($manifestText.Contains('android.uid.system') -or $manifestText.Contains('com.shilapi.flymeeas.ENABLED')) {
+            throw 'Ordinary APK unexpectedly contains shared UID or EAS opt-in.'
+        }
     }
     $finalApk = Join-Path $apkOutputDir $FinalName
     Move-Item -LiteralPath $candidateApk -Destination $finalApk -Force
     foreach ($temporary in @($alignedApk, "$candidateApk.idsig")) {
         if (Test-Path -LiteralPath $temporary) { Remove-Item -LiteralPath $temporary -Force }
+    }
+    if ($R8) {
+        $mappingSrc = Join-Path $repoRoot 'mobile\build\outputs\mapping\optimizedDebug\mapping.txt'
+        if (Test-Path -LiteralPath $mappingSrc) {
+            $mappingName = [System.IO.Path]::GetFileNameWithoutExtension($FinalName) + "-mapping.txt"
+            $mappingFinal = Join-Path $apkOutputDir $mappingName
+            Copy-Item -LiteralPath $mappingSrc -Destination $mappingFinal -Force
+            Write-Host "Archived R8 mapping: $mappingFinal"
+        }
     }
     Write-Host "Verified: $finalApk"
 }
@@ -132,12 +160,15 @@ function Build-One {
 Push-Location -LiteralPath $repoRoot
 try {
     New-Item -ItemType Directory -Path $apkOutputDir -Force | Out-Null
-    Build-One -Kind flyme-test -PackageName com.shihab.diplay.flyme.test -FinalName $flymeApk
-    $checksums = foreach ($name in @($flymeApk)) {
+    Build-One -Kind normal -System $false -R8 $false -PackageName com.shihab.diplay.test -FinalName $normalApk
+    Build-One -Kind normal-r8 -System $false -R8 $true -PackageName com.shihab.diplay.test -FinalName $normalR8Apk
+    Build-One -Kind system -System $true -R8 $false -PackageName com.shihab.diplay.flyme.test -FinalName $systemApk
+    Build-One -Kind system-r8 -System $true -R8 $true -PackageName com.shihab.diplay.flyme.test -FinalName $systemR8Apk
+
+    $checksums = foreach ($name in @($normalApk, $normalR8Apk, $systemApk, $systemR8Apk)) {
         $hash = (Get-FileHash -LiteralPath (Join-Path $apkOutputDir $name) -Algorithm SHA256).Hash.ToLowerInvariant()
         "$hash  $name"
     }
-    $checksums | Set-Content -LiteralPath (Join-Path $apkOutputDir "SHA256SUMS-$buildStamp.txt") -Encoding ASCII
-    Write-Host "`nFlyme test APK verified. Output: $apkOutputDir"
-    Write-Host 'Actual system UID and OEM grants must still be checked after installation on the car.'
+    $checksums | Set-Content -LiteralPath (Join-Path $apkOutputDir "SHA256SUMS-$versionTag.txt") -Encoding ASCII
+    Write-Host "`nAll four test APKs verified. Output: $apkOutputDir"
 } finally { Pop-Location }
