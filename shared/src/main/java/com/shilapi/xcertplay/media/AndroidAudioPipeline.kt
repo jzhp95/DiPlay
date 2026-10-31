@@ -199,16 +199,29 @@ internal class AndroidAudioPipeline(
     private val mediaAudioTypes = mutableSetOf<AudioStreamId>()
     private val closingAudio=ConcurrentHashMap.newKeySet<AudioRenderer>()
     private val closingMicrophones=ConcurrentHashMap.newKeySet<MicrophoneUplink>()
-    fun resourceCounts():Map<String,Int> = mapOf(
-        "audioRenderers" to audioRenderers.size,"microphoneUplinks" to microphoneUplinks.size,
-        "retiringAudioRenderers" to closingAudio.size,"retiringMicrophones" to closingMicrophones.size,
-    )
+    private fun pruneRetiredWorkers() {
+        closingAudio.removeIf { it.exited }
+        closingMicrophones.removeIf { it.captureExited() }
+    }
+    fun resourceCounts(): Map<String, Int> {
+        pruneRetiredWorkers()
+        return mapOf(
+            "audioRenderers" to audioRenderers.size, "microphoneUplinks" to microphoneUplinks.size,
+            "retiringAudioRenderers" to closingAudio.size, "retiringMicrophones" to closingMicrophones.size,
+        )
+    }
     fun released():Boolean {
-        closingAudio.removeIf{it.exited};closingMicrophones.removeIf{it.captureExited()}
+        pruneRetiredWorkers()
         return audioRenderers.isEmpty() && microphoneUplinks.isEmpty() && closingAudio.isEmpty() && closingMicrophones.isEmpty()
     }
-    private fun retire(renderer:AudioRenderer){closingAudio+=renderer;renderer.close()}
-    private fun retire(microphone:MicrophoneUplink){closingMicrophones+=microphone;microphone.close()}
+    private fun retire(renderer: AudioRenderer) {
+        closingAudio += renderer
+        try { renderer.close() } finally { pruneRetiredWorkers() }
+    }
+    private fun retire(microphone: MicrophoneUplink) {
+        closingMicrophones += microphone
+        try { microphone.close() } finally { pruneRetiredWorkers() }
+    }
     private val audioRenderers = ConcurrentHashMap<AudioStreamId, AudioRenderer>()
     @Volatile private var navigationAttenuationDb = NavigationAudioGain.clamp(navigationAttenuationDb)
 
@@ -276,6 +289,7 @@ internal class AndroidAudioPipeline(
                     echoReference = if (config.audioType == TELEPHONY_AUDIO_TYPE) callEchoReferences[id] else null,
                     gainDb = experimentalAudio.microphoneGainDb)
             }
+            uplink.onReleased = { closingMicrophones.remove(uplink); Unit }
             if (!uplink.start()) {
                 microphoneUplinks.remove(id, uplink)
                 restoreAudioMode(id)
@@ -398,6 +412,7 @@ internal class AndroidAudioPipeline(
             echoReference = echoReference,
             voiceFilter = callVoiceFilter && format.audioType == TELEPHONY_AUDIO_TYPE,
         ).also {
+            it.onReleased = { closingAudio.remove(it); Unit }
             it.experiments = experimentalAudio
             it.setNavigationAttenuationDb(navigationAttenuationDb)
             if (format.audioType == TELEPHONY_AUDIO_TYPE) it.onRoutedToEarpiece = { moveCallToLoudspeaker(id) }
@@ -509,6 +524,7 @@ private class AudioRenderer(
     private var lastDecoderOutputMetadata: String? = null
     private var decoderOutputReports = 0
     val exited:Boolean get()=!thread.isAlive
+    @Volatile var onReleased: (() -> Unit)? = null
     private val thread = Thread(::run, "carplay-audio").apply { isDaemon = true }
 
     fun start() {
@@ -518,6 +534,7 @@ private class AudioRenderer(
     }
 
     fun submit(rtp: ByteArray, sample: Int) {
+        if (!running) return
         if (started) {
             packetsReceived.incrementAndGet()
             val now = System.nanoTime()
@@ -536,7 +553,8 @@ private class AudioRenderer(
                 }
             }
         }
-        if (!started || !queue.offer(AudioPacket(rtp, sample))) {
+        // Serialize enqueue with final cleanup so a late RTP callback cannot refill a retired worker.
+        if (!started || !synchronized(queue) { running && queue.offer(AudioPacket(rtp, sample)) }) {
             if (started) packetsDropped.incrementAndGet()
             if (started && !droppedPacketsLogged) {
                 droppedPacketsLogged = true
@@ -604,6 +622,10 @@ private class AudioRenderer(
             running = false
             runCatching { logStatsIfDue(force = true) }
             release()
+            onReleased?.let { callback ->
+                onReleased = null
+                callback()
+            }
         }
     }
 
@@ -1370,7 +1392,15 @@ private class AudioRenderer(
                 // Best effort.
             }
         }
-        releaseTrack()
+        try {
+            releaseTrack()
+        } finally {
+            synchronized(queue) {
+                running = false
+                queue.clear()
+            }
+            pcm = ByteArray(0)
+        }
     }
 
     private fun releaseTrack() {

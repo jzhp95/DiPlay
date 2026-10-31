@@ -56,6 +56,7 @@ internal class MicrophoneUplink(
     @Volatile private var echoCanceller: CallEchoCanceller? = null
     @Volatile private var thread: Thread? = null
     internal fun captureExited():Boolean=thread?.isAlive!=true
+    @Volatile internal var onReleased: (() -> Unit)? = null
 
     fun start(): Boolean {
         if (!running.compareAndSet(false, true)) return true
@@ -367,6 +368,10 @@ internal class MicrophoneUplink(
             stats.flush(ended = true, routeType = routeInfo)
             running.set(false)
             release()
+            onReleased?.let { callback ->
+                onReleased = null
+                callback()
+            }
         }
     }
 
