@@ -788,6 +788,8 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         val split = row().apply { gravity = Gravity.TOP }
         // The rail scrolls on its own only when the window is too short for every destination.
         split.addView(ScrollView(this@DiPlayActivity).apply {
+            isVerticalScrollBarEnabled = false
+            overScrollMode = View.OVER_SCROLL_NEVER
             addView(column().apply {
                 setPadding(0, 0, 0, dp(12))
                 addView(settingsRail())

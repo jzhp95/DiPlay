@@ -2223,6 +2223,8 @@ class CarPlayHostActivity : ComponentActivity() {
         }
         val railScroll = ScrollView(this).apply {
             isFillViewport = true
+            isVerticalScrollBarEnabled = false
+            overScrollMode = View.OVER_SCROLL_NEVER
             setBackgroundColor(ColorUtils.blendARGB(MENU_BACKGROUND, overlayPalette.surface, 0.55f))
             addView(rail)
         }

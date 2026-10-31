@@ -1177,6 +1177,8 @@ class AdaptiveSettingsUiTest {
     fun expandedRailUsesAnIconForEveryDestination() {
         val screen = openSettings()
         val rail = ReflectionHelpers.getField<ScrollView>(screen, "settingsRailScroll")
+        assertFalse("Settings rail scrollbar must be disabled", rail.isVerticalScrollBarEnabled)
+        assertEquals(View.OVER_SCROLL_NEVER, rail.overScrollMode)
         val destinations = descendants(rail).filter { destination ->
             SettingsCategory.entries.any { category ->
                 val title=ReflectionHelpers.callInstanceMethod<String>(screen,"settingsCategoryTitle",ReflectionHelpers.ClassParameter(SettingsCategory::class.java,category))

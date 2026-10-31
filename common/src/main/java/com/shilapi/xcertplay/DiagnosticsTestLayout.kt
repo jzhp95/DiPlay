@@ -74,7 +74,12 @@ internal class DiagnosticsTestLayout(private val context: Context, private val p
         }, LinearLayout.LayoutParams(-1, -2).apply {
             topMargin = FlymeAutoStyle.dp(context, FlymeAutoStyle.BLOCK_GAP_DP)
         })
-        val railScroll = ScrollView(context).apply { isFillViewport = true; addView(rail) }
+        val railScroll = ScrollView(context).apply {
+            isFillViewport = true
+            isVerticalScrollBarEnabled = false
+            overScrollMode = View.OVER_SCROLL_NEVER
+            addView(rail)
+        }
         val picker = if (compact) Button(context).apply {
             FlymeAutoStyle.button(this, palette)
             val chevron = context.getDrawable(R.drawable.ic_dp_chevron)?.mutate()?.apply {
