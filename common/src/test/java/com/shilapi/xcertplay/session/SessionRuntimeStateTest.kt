@@ -198,4 +198,58 @@ class SessionRuntimeStateTest {
         runtime.stop("done"){}
     }
 
+    @Test fun newConfigurationDuringReconnectionOverwritesPendingRequest() {
+        val clock = Clock()
+        val requests = mutableListOf<SessionStartRequest>()
+        val connection1 = Connection().apply { released = true }
+        val connection2 = Connection().apply { released = true }
+        val factory = SessionConnectionFactory { req, _, _, _ ->
+            requests.add(req)
+            if (requests.size == 1) connection1 else connection2
+        }
+        val runtime = SessionRuntime(factory, { it() }, clock::schedule, Executor { it.run() })
+        runtime.foregroundReady(true)
+        val initial = request()
+        runtime.start(initial)
+        assertEquals(1, requests.size)
+
+        runtime.reconnect("connection_dropped")
+        val updated = initial.copy(media = initial.media.copy(width = 1920, height = 1080))
+        assertTrue(runtime.reconfigure(updated, "display_resize").accepted)
+        clock.advance()
+
+        assertEquals(2, requests.size)
+        assertEquals(1920, requests[1].media.width)
+        assertEquals(1080, requests[1].media.height)
+        runtime.stop("done") {}
+    }
+
+    @Test fun timerDoesNotFakeReleaseWhileNativeResourcesAreHeld() {
+        val clock = Clock()
+        val connection = Connection() // released = false
+        val runtime = SessionRuntime(SessionConnectionFactory { _, _, _, _ -> connection }, { it() }, clock::schedule, Executor { it.run() })
+        runtime.foregroundReady(true)
+        val req = request()
+        runtime.start(req)
+
+        val results = mutableListOf<StopResult>()
+        runtime.stop("user") { results.add(it) }
+
+        // Advance 6.5s timeout:
+        clock.advance()
+        assertEquals(RuntimePhase.BLOCKED_RELEASE, runtime.snapshot().phase)
+        assertEquals(1, results.size)
+        assertFalse(results[0].released)
+
+        // Starting another session while blocked must be rejected:
+        val receipt = runtime.start(req)
+        assertFalse(receipt.accepted)
+        assertEquals("waiting_for_actual_release", receipt.reason)
+
+        // Only when actual release happens:
+        connection.released = true
+        clock.advance()
+        assertEquals(RuntimePhase.IDLE, runtime.snapshot().phase)
+        assertNull(runtime.snapshot().identity)
+    }
 }

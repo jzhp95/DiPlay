@@ -4,6 +4,7 @@ import android.app.Activity
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.SurfaceTexture
+import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.os.*
@@ -202,6 +203,33 @@ class DecoderDiagnosticsActivity : Activity() {
                 awaitConfigured(captureSink,SystemClock.elapsedRealtime()+5000)
                 if(!replay)reader!!.seekTo(0,MediaExtractor.SEEK_TO_CLOSEST_SYNC)
                 var captureIndex=0
+                var firstAccessUnitBytes:ByteArray?=null
+                val isFixedLightOrDark = asset.startsWith("h264_light_") || asset.startsWith("h264_dark_")
+                val refObj = if (isFixedLightOrDark) runCatching {
+                    assets.open("color-test/h1-reference.json").bufferedReader().use { JSONObject(it.readText()) }.getJSONObject("files").getJSONObject(asset)
+                }.getOrNull() else null
+
+                val samplePoints = ArrayList<Pair<Int, Int>>()
+                val patchIndices = ArrayList<Int?>()
+                val nominals = ArrayList<Int?>()
+                if (refObj != null) {
+                    val patches = refObj.getJSONArray("patches")
+                    val patchCount = minOf(patches.length(), 24)
+                    for (i in 0 until patchCount) {
+                        val p = patches.getJSONObject(i)
+                        val rect = p.getJSONArray("rect")
+                        val cx = rect.getInt(0) + rect.getInt(2) / 2
+                        val cy = rect.getInt(1) + rect.getInt(3) / 2
+                        samplePoints.add(Pair(cx, cy))
+                        patchIndices.add(i)
+                        nominals.add(p.optInt("nominal", 0))
+                    }
+                }
+                val captureFrameId = if(replay)replayFrames.getJSONObject(0).getString("frameId")else"$asset:first_random_access_picture"
+                if (samplePoints.isNotEmpty()) {
+                    captureSink.configureDiagnosticSampling(samplePoints, patchIndices, nominals, captureFrameId, "capture_sink")
+                }
+
                 val captureWindow=DecoderDiagnosticsCaptureWindow(SystemClock.elapsedRealtime()+5000)
                 while(running.get()){
                     when(captureWindow.action(SystemClock.elapsedRealtime(),captureSink.liveVideoCounters()?.rendered?:0)){
@@ -219,6 +247,7 @@ class DecoderDiagnosticsActivity : Activity() {
                         check(size>0){"empty_capture_access_unit"}
                         ByteArray(size).also{buffer.position(0);buffer.get(it);reader!!.advance()}
                     }
+                    if(firstAccessUnitBytes==null)firstAccessUnitBytes=bytes
                     captureSink.onVideoFrame(110,bytes)
                     if(replay && captureIndex>=replayFrames.length()){captureWindow.exhausted=true;captureSink.finishInputForDiagnostics()}
                     Thread.sleep(33)
@@ -226,22 +255,71 @@ class DecoderDiagnosticsActivity : Activity() {
                 check((captureSink.liveVideoCounters()?.rendered?:0)>0){"capture_first_frame_deadline"}
                 Thread.sleep(100)
                 val captureEvidence=captureSink.videoColorEvidence()
-                val captureFormat=captureEvidence?.output?.format.orEmpty()
-                val matchedKeys=listOf("hardware-yuv","software-yuv","hardware-yuv-fallback","color-range","color-standard","color-transfer","width","height","crop-left","crop-top","crop-right","crop-bottom")
-                val capturePathMatches=captureEvidence?.output?.decoder==actual?.decoder && captureEvidence?.sourceHash==evidence?.sourceHash && matchedKeys.all{captureFormat[it]==format[it]}
+                var rawSamples = captureSink.latestRawYuvSamples()
+                var rawLocationOverride: String? = null
+                var rawYuvDecoderComponent: String? = null
+                var rawYuvError: String? = null
+                val requiresThreeLayerEvidence = isFixedLightOrDark || (refObj != null && samplePoints.isNotEmpty())
+
+                if (rawSamples.isNotEmpty()) {
+                    rawLocationOverride = "capture_yuv_instance"
+                    rawYuvDecoderComponent = captureEvidence?.output?.decoder
+                } else if (firstAccessUnitBytes != null && requiresThreeLayerEvidence) {
+                    try {
+                        val (comp, decoded) = decodeNoSurfaceRawYuv(
+                            codec = codec,
+                            csd = csd,
+                            frameBytes = firstAccessUnitBytes!!,
+                            points = samplePoints,
+                            patchIndices = patchIndices,
+                            nominals = nominals,
+                            frameId = captureFrameId,
+                            software = spec.optBoolean("software", false)
+                        )
+                        rawYuvDecoderComponent = comp
+                        rawSamples = decoded
+                        if (rawSamples.isNotEmpty()) {
+                            rawLocationOverride = "diagnostic_no_surface_instance"
+                        } else {
+                            rawYuvError = "no_surface_raw_yuv_empty"
+                        }
+                    } catch (e: Exception) {
+                        rawYuvError = "${e.javaClass.simpleName}:${e.message}".take(200)
+                    }
+                } else if (requiresThreeLayerEvidence) {
+                    rawYuvError = "missing_first_access_unit"
+                }
+
+                if (rawYuvDecoderComponent != null) {
+                    result.put("rawYuvDecoderComponent", rawYuvDecoderComponent)
+                }
+                if (rawYuvError != null) {
+                    result.put("rawYuvError", rawYuvError)
+                }
+
+                val pairing = DecoderPixelPairing.evaluate(evidence, captureEvidence, replay, rawSamples, rawLocationOverride)
                 result.put("captureSourceEvidence",ColorProbeEvidence.capture(captureEvidence,true,spec.getBoolean("software"),emptyList(),if(replay)"same_source_frozen_first_picture"else"standard_frozen_first_picture",spec))
-                result.put("captureDecoderInstance",captureEvidence?.output?.instance?:JSONObject.NULL)
-                    .put("performanceDecoderInstance",actual?.instance?:JSONObject.NULL)
-                    .put("captureFrameId",if(replay)replayFrames.getJSONObject(0).getString("frameId")else"$asset:first_random_access_picture")
+                pairing.applyTo(result)
+                result.put("captureFrameId",captureFrameId)
                     .put("captureFrameBasis","fresh_same_path_decoder_first_output_frozen; input_starts_at_random_access")
-                    .put("captureDecoderMatchesPerformance",capturePathMatches)
-                if(!capturePathMatches)result.put("measurementValidity","invalid").put("reason","capture_decoder_or_output_configuration_changed")
+                if(!pairing.capturePathMatches)result.put("measurementValidity","invalid").put("reason","capture_decoder_or_output_configuration_changed")
                 val latch=CountDownLatch(1);val captureResult=JSONObject();val captureOpen=AtomicBoolean(true)
-                main.post{if(captureOpen.get())capture(width,height,id,directory,captureResult,captureOpen){latch.countDown()}}
+                main.post{if(captureOpen.get())capture(width,height,id,directory,captureResult,captureOpen,pairing.rawYuvSamples){latch.countDown()}}
                 if(latch.await(5,TimeUnit.SECONDS))captureResult.keys().forEach{key->result.put(key,captureResult.get(key))}
                 else { captureOpen.set(false);captureCompletionConfirmed=false;result.put("captureError","capture_deadline_5s").put("measurementValidity","invalid") }
+
+                DecoderPixelPairing.recordEvidenceCompleteness(
+                    result = result,
+                    requiresThreeLayerEvidence = requiresThreeLayerEvidence,
+                    rawSamples = rawSamples,
+                    expectedPatchIndices = patchIndices.filterNotNull().toSet(),
+                    captureFrameId = captureFrameId,
+                    traceDropped = trace.dropped,
+                )
             }
-            result.put("evidenceCompleteness",if(result.has("capture") && trace.dropped==0)"complete"else"partial")
+            if (!result.has("evidenceCompleteness")) {
+                result.put("evidenceCompleteness", if (result.has("capture") && trace.dropped == 0) "complete" else "partial")
+            }
         } catch(e:Exception){result.put("execution","failed").put("measurementValidity","invalid").put("evidenceCompleteness","partial")
             result.put("reason","${e.javaClass.simpleName}:${e.message}".take(300))
             if(e is UnsupportedOperationException)result.put("execution","unsupported")
@@ -281,7 +359,7 @@ class DecoderDiagnosticsActivity : Activity() {
         while(running.get() && sink.videoColorEvidence()?.output?.active!=true && SystemClock.elapsedRealtime()<deadline)Thread.sleep(10)
         check(running.get() && sink.videoColorEvidence()?.output?.active==true){"decoder_init_deadline_5s"}
     }
-    private fun capture(width:Int,height:Int,id:String,directory:File,result:JSONObject,open:AtomicBoolean,done:()->Unit){
+    private fun capture(width:Int,height:Int,id:String,directory:File,result:JSONObject,open:AtomicBoolean,rawSamples:List<Map<String,Any?>> = emptyList(),done:()->Unit){
         if(!running.get() || !open.get()){done();return}
         val bitmap=Bitmap.createBitmap(width,height,Bitmap.Config.ARGB_8888)
         fun save(image:Bitmap?){
@@ -302,12 +380,91 @@ class DecoderDiagnosticsActivity : Activity() {
                 if(asset=="h264_clarity1080")result.put("clarity",ClarityReferenceMetrics.measure(image))
                 if(asset.startsWith("h264_light_")||asset.startsWith("h264_dark_")){
                     val reference=assets.open("color-test/h1-reference.json").bufferedReader().use{JSONObject(it.readText())}.getJSONObject("files").getJSONObject(asset)
-                    result.put("highlights",DecoderDiagnosticsMetrics.highlights(image,reference))
+                    result.put("highlights",DecoderDiagnosticsMetrics.highlights(image,reference,rawSamples))
                 }
             }catch(e:Exception){result.put("captureError",e.javaClass.simpleName)}finally{image?.recycle();open.set(false);done()}
         }
         if(texture!=null){bitmap.recycle();save(texture?.getBitmap(width,height))}
         else try{PixelCopy.request(direct!!,bitmap,{code->if(code==PixelCopy.SUCCESS)save(bitmap)else{bitmap.recycle();result.put("captureError",code);done()}},main)}
         catch(e:Exception){bitmap.recycle();result.put("captureError",e.javaClass.simpleName);done()}
+    }
+
+    private fun decodeNoSurfaceRawYuv(
+        codec: VideoCodec,
+        csd: ByteArray,
+        frameBytes: ByteArray,
+        points: List<Pair<Int, Int>>,
+        patchIndices: List<Int?>,
+        nominals: List<Int?>,
+        frameId: String,
+        software: Boolean,
+    ): Pair<String, List<Yuv420Frame.RawSample>> {
+        val mime = if (codec == VideoCodec.H265) MediaFormat.MIMETYPE_VIDEO_HEVC else MediaFormat.MIMETYPE_VIDEO_AVC
+        val startCode = byteArrayOf(0x00, 0x00, 0x00, 0x01)
+        val csdList = if (codec == VideoCodec.H265) {
+            MediaCodecSupport.hevcCodecSpecificData(csd).takeIf { it.isNotEmpty() }?.let { listOf(it) } ?: emptyList()
+        } else {
+            val (sps, pps) = MediaCodecSupport.avcParameterSets(csd)
+            listOfNotNull(
+                sps.takeIf { it.isNotEmpty() }?.let { startCode + it },
+                pps.takeIf { it.isNotEmpty() }?.let { startCode + it },
+            )
+        }
+        val annexB = MediaCodecSupport.toAnnexB(frameBytes)
+        check(annexB.isNotEmpty()) { "annex_b_conversion_failed" }
+
+        val softwareCandidate = if (software) {
+            diagnosticSoftwareDecoderName(diagnosticSoftwareCandidates(), mime) ?: softwareYuvDecoderName(mime)
+        } else null
+        val decoder = if (softwareCandidate != null) {
+            MediaCodec.createByCodecName(softwareCandidate)
+        } else {
+            MediaCodec.createDecoderByType(mime)
+        }
+        val actualComponentName = runCatching { decoder.name }.getOrDefault("unknown")
+
+        try {
+            val format = MediaFormat.createVideoFormat(mime, 1920, 1080).apply {
+                setInteger(MediaFormat.KEY_COLOR_FORMAT, android.media.MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Flexible)
+                csdList.forEachIndexed { index, bytes -> setByteBuffer("csd-$index", ByteBuffer.wrap(bytes)) }
+            }
+            decoder.configure(format, null, null, 0)
+            decoder.start()
+
+            val inIndex = decoder.dequeueInputBuffer(1_000_000)
+            check(inIndex >= 0) { "no_input_buffer_available" }
+            val inBuf = checkNotNull(decoder.getInputBuffer(inIndex)) { "decoder_input_buffer_null" }
+            inBuf.clear()
+            inBuf.put(annexB)
+            decoder.queueInputBuffer(inIndex, 0, annexB.size, 0L, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+
+            val info = MediaCodec.BufferInfo()
+            var samples: List<Yuv420Frame.RawSample> = emptyList()
+            for (attempt in 0..30) {
+                val outIndex = decoder.dequeueOutputBuffer(info, 50_000)
+                if (outIndex >= 0) {
+                    try {
+                        val image = decoder.getOutputImage(outIndex)
+                        if (image != null && samples.isEmpty()) {
+                            try {
+                                val frame = Yuv420Frame().apply { copy(image) }
+                                samples = frame.sample(points, patchIndices, nominals, frameId, actualComponentName)
+                            } finally {
+                                image.close()
+                            }
+                        }
+                    } finally {
+                        decoder.releaseOutputBuffer(outIndex, false)
+                    }
+                }
+                if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0 || samples.isNotEmpty()) {
+                    break
+                }
+            }
+            return Pair(actualComponentName, samples)
+        } finally {
+            runCatching { decoder.stop() }
+            runCatching { decoder.release() }
+        }
     }
 }

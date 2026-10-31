@@ -109,6 +109,16 @@ class AndroidMediaSink(
     fun videoOutputObservation(type:Int=110)=video.videoOutputObservation(type)
     fun videoColorOutput(type:Int=110)=video.videoColorOutput(type)
     fun videoColorEvidence(type:Int=110)=video.videoColorEvidence(type)
+    fun videoCadenceSnapshot(type: Int = 110): Map<String, Any?> = video.videoCadenceSnapshot(type)
+    fun recentBacklogEpisodes(type: Int = 110): List<BacklogEpisode> = video.recentBacklogEpisodes(type)
+    fun latestRawYuvSamples(type: Int = 110): List<Yuv420Frame.RawSample> = video.latestRawYuvSamples(type)
+    fun configureDiagnosticSampling(
+        points: List<Pair<Int, Int>>,
+        patchIndices: List<Int?> = emptyList(),
+        nominals: List<Int?> = emptyList(),
+        frameId: String? = null,
+        instanceId: String? = null,
+    ) = video.configureDiagnosticSampling(110, points, patchIndices, nominals, frameId, instanceId)
     fun setSurface(type:Int,surface:Surface)=video.setSurface(type,surface)
     fun clearSurface(type:Int,surface:Surface)=video.clearSurface(type,surface)
     class SurfaceDetach internal constructor(private val delegate:AndroidVideoPipeline.SurfaceDetach){

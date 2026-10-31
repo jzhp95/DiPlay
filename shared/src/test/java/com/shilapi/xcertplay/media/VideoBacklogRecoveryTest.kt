@@ -91,5 +91,46 @@ class VideoBacklogRecoveryTest {
         assertFalse(recovery.sample(1750, age = 500, span = 400))
     }
 
+    @Test fun recoveryEpisodeRecordsMetricsDurationAndEndReason() {
+        val recovery = VideoBacklogRecovery(maxHistory = 4)
+        assertFalse(recovery.sample(0, age = 400, span = 200, frames = 3))
+        val current = recovery.currentEpisode()
+        assertNotNull(current)
+        assertEquals(400 * MS, current!!.initialAgeNs)
+        assertEquals(200 * MS, current.initialSpanNs)
+        assertEquals(3, current.initialDepth)
+
+        assertFalse(recovery.sample(500, age = 450, span = 250, frames = 5))
+        assertEquals(450 * MS, current.peakAgeNs)
+        assertEquals(250 * MS, current.peakSpanNs)
+        assertEquals(5, current.peakDepth)
+
+        assertTrue(recovery.sample(750, age = 460, span = 310, frames = 6))
+        val triggered = recovery.currentEpisode()
+        assertNotNull("Triggered episode must be available to write back action", triggered)
+        triggered?.action = "reference_chain_reset"
+
+        val history = recovery.recentEpisodes()
+        assertEquals(1, history.size)
+        val recorded = history.first()
+        assertEquals(1L, recorded.episodeId)
+        assertEquals(750 * MS, recorded.durationNs)
+        assertEquals("reference_chain_reset", recorded.action)
+        assertEquals("sustained_growth", recorded.endReason)
+
+        recovery.reset()
+        assertNull(recovery.currentEpisode())
+    }
+
+    @Test fun hardAgeRecoveryEpisodeRecordsHardLimitReason() {
+        val recovery = VideoBacklogRecovery()
+        assertTrue(recovery.sample(100, age = 1500, span = 120, frames = 4))
+        val history = recovery.recentEpisodes()
+        assertEquals(1, history.size)
+        val ep = history.first()
+        assertEquals("trigger_recovery", ep.action)
+        assertEquals("hard_limit", ep.endReason)
+    }
+
     private companion object { const val MS = 1_000_000L }
 }

@@ -60,6 +60,9 @@ class InputCommandQueueTest {
         val queue=InputCommandQueue({session},{true},{it.token},{_,_->now+=50;false},{_,_->fail()},report={observed=it},executor=scheduler,nanoTime={now})
         queue.touch(contact(0.0));now=300;scheduler.runAll()
         assertEquals(200L,observed!!.queueWaitNs);assertEquals(50L,observed!!.sendNs);assertEquals(false,observed!!.written)
+        assertEquals(50L,observed!!.writeAndFlushNs)
+        assertEquals("unknown",observed!!.phoneAcknowledged)
+        assertNull(observed!!.rejectReason)
         queue.shutdownNow()
     }
     @Test fun overflowReportsRejectionEvenWhenNoSendCanRun() {
@@ -89,4 +92,42 @@ class InputCommandQueueTest {
         queue.shutdownNow();scheduler.runAll();assertEquals(2,cancelled)
     }
 
+    @Test fun phoneAcknowledgedIsUnknownAndRejectionReportsReason() {
+        val scheduler = Scheduler()
+        val session = Session()
+        val metrics = mutableListOf<InputCommandMetrics>()
+        val queue = InputCommandQueue({session}, {!it.closed}, {it.token}, {_,_ -> true}, {_,_ ->}, metrics::add, scheduler, capacity = 1)
+        assertTrue(queue.touch(contact(0.1)))
+        scheduler.runAll()
+        val drainedMetric = metrics.last()
+        assertEquals(true, drainedMetric.accepted)
+        assertEquals("unknown", drainedMetric.phoneAcknowledged)
+
+        // Now test capacity overflow
+        assertTrue(queue.touch(contact(0.2)))
+        assertFalse(queue.touch(contact(0.3, false))) // overflows capacity 1
+        val overflowMetric = metrics.last()
+        assertEquals(false, overflowMetric.accepted)
+        assertEquals("queue_capacity_overflow", overflowMetric.rejectReason)
+        assertEquals("unknown", overflowMetric.phoneAcknowledged)
+        queue.shutdownNow()
+    }
+
+    @Test fun multiTouchPointerSetChangeNeverCoalescesAcrossDifferentPointers() {
+        val scheduler = Scheduler()
+        val session = Session()
+        val sent = mutableListOf<List<AirPlayContact>>()
+        val queue = InputCommandQueue({session}, {!it.closed}, {it.token}, {_, value -> sent.add(value); true}, {_,_ ->}, executor = scheduler)
+
+        val oneFinger = listOf(AirPlayContact(1, 0.1, 0.1, true))
+        val twoFingers = listOf(AirPlayContact(1, 0.2, 0.2, true), AirPlayContact(2, 0.5, 0.5, true))
+        assertTrue(queue.touch(oneFinger))
+        assertTrue(queue.touch(twoFingers))
+
+        scheduler.runAll()
+        assertEquals(2, sent.size)
+        assertEquals(1, sent[0].size)
+        assertEquals(2, sent[1].size)
+        queue.shutdownNow()
+    }
 }

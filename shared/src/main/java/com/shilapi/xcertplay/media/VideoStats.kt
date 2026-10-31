@@ -20,6 +20,7 @@ internal class VideoStats(
     private val decodeMicros = IntArray(1024)
     private var decodeSamples = 0
     private var late = 0
+    private var decodedDiscarded = 0
     private var pacingDelayNanos = 0L
 
     @Synchronized fun onReceived(size: Int) {
@@ -41,6 +42,8 @@ internal class VideoStats(
     @Synchronized fun onRendered() { rendered++ }
 
     @Synchronized fun onRecovery() { recoveries++ }
+
+    @Synchronized fun onDecodedDiscarded() { decodedDiscarded++ }
 
     /** Time from queueing a frame into the decoder to dequeueing its output. */
     @Synchronized fun onDecodeLatency(ns: Long) {
@@ -68,18 +71,19 @@ internal class VideoStats(
         val seconds = elapsedNs / 1e9
         if (received == 0 && touchSamples == 0) { windowStartNs = now; return null }
         val touchAvgMs = if (touchSamples == 0) -1 else touchLatencySumNs / touchSamples / 1_000_000
+        val discardedSuffix = if (decodedDiscarded > 0) " discarded=$decodedDiscarded" else ""
         val line = ("video stats$label rx=%.1ffps shown=%.1ffps maxGap=%dms kbps=%d recoveries=%d " +
             "physicalTouchLatency=unknown unassociatedFrameGapAvg=%dms unassociatedFrameGapMax=%dms n=%d touchSendMax=%dms").format(
             received / seconds, rendered / seconds, maxArrivalGapNs / 1_000_000,
             (bytes * 8 / 1000 / seconds).toLong(), recoveries,
             touchAvgMs, maxTouchLatencyNs / 1_000_000, touchSamples, TouchLatencyProbe.maxSendNs / 1_000_000,
-        ) + decodeSummary()
+        ) + discardedSuffix + decodeSummary()
         TouchLatencyProbe.maxSendNs = 0
         Log.i(TAG, line)
         windowStartNs = now
         received = 0; rendered = 0; recoveries = 0; bytes = 0; maxArrivalGapNs = 0
         touchSamples = 0; touchLatencySumNs = 0; maxTouchLatencyNs = 0
-        decodeSamples = 0; late = 0
+        decodeSamples = 0; late = 0; decodedDiscarded = 0
         return line
     }
 

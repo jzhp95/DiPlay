@@ -38,7 +38,7 @@ internal object DecoderDiagnosticsMetrics {
             .put("surfaceReleaseCall", distribution(surface)).put("traceEvents", snapshot.events.size).put("traceDropped", snapshot.dropped)
             .put("scope", "local_app_boundaries; codec_includes_buffering; no_panel_or_complete_touch_latency")
     }
-    fun highlights(bitmap: Bitmap, reference: JSONObject): JSONObject {
+    fun highlights(bitmap: Bitmap, reference: JSONObject, rawSamples: List<Map<String, Any?>> = emptyList()): JSONObject {
         if (bitmap.width != 1920 || bitmap.height != 1080) return JSONObject().put("available", false).put("reason", "capture_not_native_reference_geometry")
         val rows = JSONArray(); val refs = reference.getJSONArray("patches")
         var correct = 0.0; var expanded = 0.0; var whiteCount = 0; var highCount = 0
@@ -54,8 +54,20 @@ internal object DecoderDiagnosticsMetrics {
             val mean = sum/count; val expected = p.getDouble("referenceMean")
             val hypothesis = ((expected-16)*255/219).coerceIn(0.0,255.0)
             if (p.getInt("nominal") >= 224) { correct += abs(mean-expected); expanded += abs(mean-hypothesis); highCount++; whiteCount += clipped }
-            rows.put(JSONObject().put("nominal", p.getInt("nominal")).put("referenceMean", expected).put("observedMean", mean)
-                .put("whiteFraction", clipped.toDouble()/count).put("adjacentDelta", if (i>0) mean-rows.getJSONObject(i-1).getDouble("observedMean") else JSONObject.NULL))
+            val patchObj = JSONObject().put("nominal", p.getInt("nominal")).put("referenceMean", expected).put("observedMean", mean)
+                .put("whiteFraction", clipped.toDouble()/count).put("adjacentDelta", if (i>0) mean-rows.getJSONObject(i-1).getDouble("observedMean") else JSONObject.NULL)
+            val matchingRaw = rawSamples.firstOrNull { (it["nominal"] == p.getInt("nominal")) || (it["patchIndex"] == i) }
+            if (matchingRaw != null) {
+                patchObj.put("rawYuv", JSONObject()
+                    .put("yCode", matchingRaw["yCode"])
+                    .put("uCode", matchingRaw["uCode"])
+                    .put("vCode", matchingRaw["vCode"])
+                    .put("crop", matchingRaw["crop"])
+                    .put("frameId", matchingRaw["frameId"] ?: JSONObject.NULL)
+                    .put("instanceId", matchingRaw["instanceId"] ?: JSONObject.NULL)
+                )
+            }
+            rows.put(patchObj)
         }
         val local=JSONArray()
         for(i in 0 until 8){
@@ -69,6 +81,8 @@ internal object DecoderDiagnosticsMetrics {
             .put("h1Priority", if (expanded+highCount*2 < correct) "repeat_limited_expansion_shape_supported" else "not_supported_by_model_comparison")
             .put("nearWhiteClippedSampleCount", whiteCount).put("thresholdCalibration", "unvalidated_numeric_hypothesis_only")
             .put("mergedGroupVerdict", "requires_calibrated_tolerance; raw_adjacent_deltas_provided")
-            .put("colorPass", JSONObject.NULL).put("responsibleLayer", "not_localized_by_screenshot_alone")
+            .put("colorPass", JSONObject.NULL)
+            .put("responsibleLayer", if (rawSamples.isNotEmpty()) "source_reference -> raw_yuv_sample -> screenshot_rgb" else "not_localized_by_screenshot_alone")
+            .put("rawYuvAvailable", rawSamples.isNotEmpty())
     }
 }

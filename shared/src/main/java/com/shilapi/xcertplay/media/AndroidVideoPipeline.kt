@@ -103,6 +103,28 @@ internal class AndroidVideoPipeline(
             VideoColorMetadata.parse(captured.first, captured.second), captured.third?.takeIf { it.configurationHash == hash }, hash)
     }
 
+    fun videoCadenceSnapshot(type: Int = 110): Map<String, Any?> =
+        synchronized(videoOwnershipLock) { videoDecoders[type]?.cadenceSnapshot().orEmpty() }
+
+    fun recentBacklogEpisodes(type: Int = 110): List<BacklogEpisode> =
+        synchronized(videoOwnershipLock) { videoDecoders[type]?.recentBacklogEpisodes().orEmpty() }
+
+    fun latestRawYuvSamples(type: Int = 110): List<Yuv420Frame.RawSample> =
+        synchronized(videoOwnershipLock) { videoDecoders[type]?.latestRawSamples().orEmpty() }
+
+    fun configureDiagnosticSampling(
+        type: Int = 110,
+        points: List<Pair<Int, Int>>,
+        patchIndices: List<Int?> = emptyList(),
+        nominals: List<Int?> = emptyList(),
+        frameId: String? = null,
+        instanceId: String? = null,
+    ) {
+        synchronized(videoOwnershipLock) {
+            videoDecoders[type]?.configureDiagnosticSampling(points, patchIndices, nominals, frameId, instanceId)
+        }
+    }
+
     override fun setVideoRecoveryHandler(type: Int, handler: () -> Unit) {
         videoRecoveryHandlers[type] = handler
     }
@@ -450,39 +472,82 @@ internal class AndroidVideoPipeline(
 
     private fun newVideoDecoder(type: Int, surface: Surface?, statsLabel: String? = null, startImmediately: Boolean = true,
         colorOverride: VideoColorOverride = videoColorOverride, diagnostic: ((String) -> Unit)? = null): VideoDecoder {
-        val softwareMain = mainScreenSoftwareDecoder && type == MAIN_SCREEN_TYPE && statsLabel == null
+        val isMain = type == MAIN_SCREEN_TYPE && statsLabel == null
+        val softwareMain = mainScreenSoftwareDecoder && isMain
+        val isDiag = (statsLabel != null && statsLabel.contains("diagnostic", ignoreCase = true)) || diagnostic != null
+        val effectivePlan = if (isMain) videoPipelinePlan else null
+
+        val planPurpose = if (isMain && effectivePlan?.request?.purpose != null) {
+            effectivePlan.request.purpose
+        } else if (isDiag) {
+            VideoPurpose.DIAGNOSTIC
+        } else {
+            VideoPurpose.LIVE
+        }
+
+        val planSoftwareYuv = if (isMain) {
+            effectivePlan?.softwareYuv ?: mainScreenSoftwareYuv
+        } else {
+            null
+        }
+
+        val planHardwareYuv = if (isMain) {
+            (effectivePlan?.hardwareYuv == true) || mainScreenHardwareYuv
+        } else {
+            false
+        }
+
+        val planForceSoftware = if (isMain) {
+            (effectivePlan?.decode == VideoDecodePolicy.STRICT_SOFTWARE) || forceSoftwareVideoDecoder || softwareMain
+        } else {
+            forceSoftwareVideoDecoder
+        }
+
+        val planColor = if (isMain && effectivePlan?.request?.color != null) {
+            effectivePlan.request.color
+        } else {
+            colorOverride
+        }
+
         lateinit var created: VideoDecoder
         created = VideoDecoder(
-        type,
-        surface,
-        videoWidth,
-        videoHeight,
-        preferSoftwareHevcDecoder,
-        requestKeyFrame = { requestVideoRecovery(type) },
-        report = { message ->
-            if (diagnostic != null) runCatching { diagnostic(message) }
-            else videoDiagnosticHandlers[type]?.invoke(message)
-        },
-        colorOverride = colorOverride,
-        softwareYuv = mainScreenSoftwareYuv.takeIf { type == MAIN_SCREEN_TYPE && statsLabel == null },
-        hardwareYuvEnabled = mainScreenHardwareYuv && type == MAIN_SCREEN_TYPE && statsLabel == null,
-        forceSoftwareVideoDecoder = forceSoftwareVideoDecoder ||
-            softwareMain,
-        statsLabel = statsLabel,
-        onExit = ::onVideoDecoderExit,
-        onEvidence = {actual->onVideoObservation(VideoOutputObservation(videoPipelinePlan?.planId,
-            actual.decoder.takeIf{it.isNotBlank()},actual.software.takeIf{actual.decoder.isNotBlank()},actual.format,actual.generation))},
-        // Only the main screen goes to the host's SurfaceView; mirrors and the cluster keep their path.
-        pacingDelayNanos = if (type == MAIN_SCREEN_TYPE && statsLabel == null) videoPacingDelayMillis * 1_000_000L else 0L,
-        operatingRate = videoOperatingRate(type, statsLabel, mainVideoFrameRate),
-        vendorLowLatency = vendorLowLatencyDecoder && !softwareMain,
-        // Surface software decoding can deliver output independently of the next input job.
-        // Raw YUV/EGL stays on one owner thread; never migrate its context to this output thread.
-        dedicatedOutputThread = !(type == MAIN_SCREEN_TYPE && statsLabel == null &&
-            (mainScreenSoftwareYuv != null || mainScreenHardwareYuv)) &&
-            ((vendorLowLatencyDecoder && !softwareMain) ||
-                (type == MAIN_SCREEN_TYPE && statsLabel == null && (softwareMain || forceSoftwareVideoDecoder))),
-        framesAtOnce = type == MAIN_SCREEN_TYPE && statsLabel == null && videoPacingDelayMillis > 0,
+            type,
+            surface,
+            videoWidth,
+            videoHeight,
+            preferSoftwareHevcDecoder,
+            requestKeyFrame = { requestVideoRecovery(type) },
+            report = { message ->
+                if (diagnostic != null) runCatching { diagnostic(message) }
+                else videoDiagnosticHandlers[type]?.invoke(message)
+            },
+            colorOverride = planColor,
+            softwareYuv = planSoftwareYuv,
+            hardwareYuvEnabled = planHardwareYuv,
+            forceSoftwareVideoDecoder = planForceSoftware,
+            statsLabel = statsLabel,
+            purpose = planPurpose,
+            onExit = ::onVideoDecoderExit,
+            onEvidence = { actual ->
+                if (isMain) {
+                    onVideoObservation(VideoOutputObservation(
+                        effectivePlan?.planId,
+                        actual.decoder.takeIf { it.isNotBlank() },
+                        actual.software.takeIf { actual.decoder.isNotBlank() },
+                        actual.format,
+                        actual.generation
+                    ))
+                }
+            },
+            // Only the main screen goes to the host's SurfaceView; mirrors and the cluster keep their path.
+            pacingDelayNanos = if (isMain) videoPacingDelayMillis * 1_000_000L else 0L,
+            operatingRate = videoOperatingRate(type, statsLabel, mainVideoFrameRate),
+            vendorLowLatency = vendorLowLatencyDecoder && !softwareMain,
+            // Surface software decoding can deliver output independently of the next input job.
+            // Raw YUV/EGL stays on one owner thread; never migrate its context to this output thread.
+            dedicatedOutputThread = !(isMain && (planSoftwareYuv != null || planHardwareYuv)) &&
+                ((vendorLowLatencyDecoder && !softwareMain) || (isMain && (softwareMain || planForceSoftware))),
+            framesAtOnce = isMain && videoPacingDelayMillis > 0,
         // Keep the experimental MTK mode on the main CarPlay picture only. Mirrors and the
         // cluster have separate timing and must retain their established decoder configuration.
         mtkDecoderTuningEnabled = mtkDecoderTuningEnabled && type == MAIN_SCREEN_TYPE && statsLabel == null && !softwareMain,
@@ -620,9 +685,76 @@ internal fun nextLowLatencyDecoder(requested: String?, used: DecoderAttempt?): S
  */
 internal const val PICTURE_ORDER_PARAMETER = "vendor.qti-ext-dec-picture-order.enable"
 
+internal data class DiagnosticSamplingConfig(
+    val points: List<Pair<Int, Int>>,
+    val patchIndices: List<Int?>,
+    val nominals: List<Int?>,
+    val frameId: String?,
+    val instanceId: String?,
+)
+
+/** Propagate cleanup failures without replacing an earlier rendering failure. */
+internal inline fun <T> withYuvOutputRelease(
+    codec: MediaCodec, item: OutputItem, closeImage: () -> Unit, block: () -> T,
+): T {
+    var primaryFailure: Throwable? = null
+    try {
+        return block()
+    } catch (error: Throwable) {
+        primaryFailure = error
+        throw error
+    } finally {
+        var cleanupFailure: Throwable? = null
+        try { closeImage() } catch (error: Throwable) { cleanupFailure = error }
+        try {
+            item.release(codec, false)
+        } catch (error: Throwable) {
+            val previous = cleanupFailure
+            if (previous == null) cleanupFailure = error
+            else if (previous !== error) previous.addSuppressed(error)
+        }
+        cleanupFailure?.let { error ->
+            val primary = primaryFailure
+            if (primary == null) throw error
+            if (primary !== error) primary.addSuppressed(error)
+        }
+    }
+}
+
+internal class OutputItem(
+    val index: Int,
+    val flags: Int,
+    val size: Int,
+    val offset: Int,
+    val presentationTimeUs: Long,
+    val dequeuedNs: Long,
+    val surfaceGen: Long,
+) {
+    var released: Boolean = false
+        private set
+
+    fun release(codec: MediaCodec, render: Boolean = false) {
+        if (!released) {
+            released = true
+            codec.releaseOutputBuffer(index, render)
+        }
+    }
+
+    fun release(codec: MediaCodec, renderTimestampNs: Long) {
+        if (!released) {
+            released = true
+            codec.releaseOutputBuffer(index, renderTimestampNs)
+        }
+    }
+
+    fun markReleased() {
+        released = true
+    }
+}
+
 /** Serial MediaCodec video decoder: one worker owns configure and frame feeding. */
 private class VideoDecoder(
-    streamType: Int,
+    private val streamType: Int,
     surface: Surface?,
     private val width: Int,
     private val height: Int,
@@ -634,6 +766,7 @@ private class VideoDecoder(
     private val softwareYuv: SoftwareYuvConfig? = null,
     private val hardwareYuvEnabled: Boolean = false,
     private val statsLabel: String? = null,
+    private val purpose: VideoPurpose = VideoPurpose.LIVE,
     pacingDelayNanos: Long = 0L,
     /** Called on the worker as its last step, after it has released its codec. */
     private val onExit: (VideoDecoder) -> Unit = {},
@@ -659,6 +792,7 @@ private class VideoDecoder(
     // frame's local time rather than the queue time.
     private val queuedPresentationUs = LongArray(64)
     private val queuedAtNanos = LongArray(64)
+    private val queuedReceivedNs = LongArray(64)
     private val queuedPaced = BooleanArray(64)
     // Set on the paced frames queued just before a pause in the iPhone's frames: the decoder releases a
     // frame only once about two more are queued, so they waited for that pause, which no display delay
@@ -688,13 +822,14 @@ private class VideoDecoder(
     private val pipelineTiming = VideoPipelineTiming()
     private val diagnosticOutputGate = DiagnosticOutputGate()
     fun freezeFirstOutputForDiagnostics() { diagnosticOutputGate.request() }
-    fun finishInputForDiagnostics() { queue.offer(VideoJob.EndOfDiagnosticInput) }
+    fun finishInputForDiagnostics() { enqueue(VideoJob.EndOfDiagnosticInput) }
     @Volatile private var renderedFrameLogged = false
     // The operating rate still asked for, dropped for this stream once a decoder refuses it; and the rate
     // the current codec was configured with.
     private var operatingRate = operatingRate
     private val colorEvidence = VideoColorEvidenceState(onEvidence)
     private var colorGeneration = 0L
+    private var surfaceGeneration = 0L
     fun colorSnapshot(): VideoDecoderColorEvidence = colorEvidence.snapshot()
     private var configuredRate = 0
     private var maximumMtkMode = if (mtkDecoderTuningEnabled) {
@@ -714,6 +849,7 @@ private class VideoDecoder(
     private var failureReports = 0
     private val referenceChain = VideoReferenceChain()
     private val backlogRecovery = VideoBacklogRecovery()
+    private val cadenceEvidence = VideoCadenceEvidence()
     private var lastKeyFrameRequestNs = 0L
     // The main screen keeps the historical log format; other screens are labelled.
     private val stats = VideoStats(statsLabel ?: if (streamType == MAIN_SCREEN_TYPE) "" else " stream=$streamType")
@@ -723,6 +859,7 @@ private class VideoDecoder(
     private val liveRendered = AtomicLong()
     private val liveDecodeNanos = AtomicLong()
     private val liveDecodeSamples = AtomicLong()
+    private val liveDecodedDiscarded = AtomicLong()
 
     fun liveCounters() = LiveVideoCounters(
         received = liveReceived.get(),
@@ -731,7 +868,34 @@ private class VideoDecoder(
         rendered = liveRendered.get(),
         decodeNanos = liveDecodeNanos.get(),
         decodeSamples = liveDecodeSamples.get(),
+        decodedDiscarded = liveDecodedDiscarded.get(),
     )
+
+    fun cadenceSnapshot(): Map<String, Any?> = cadenceEvidence.snapshot()
+    fun recentBacklogEpisodes(): List<BacklogEpisode> = backlogRecovery.recentEpisodes()
+    fun latestRawSamples(): List<Yuv420Frame.RawSample> = softwareYuvRenderer?.latestRawSamples.orEmpty()
+
+    @Volatile private var diagnosticSamplingConfig: DiagnosticSamplingConfig? = null
+
+    fun configureDiagnosticSampling(
+        points: List<Pair<Int, Int>>,
+        patchIndices: List<Int?> = emptyList(),
+        nominals: List<Int?> = emptyList(),
+        frameId: String? = null,
+        instanceId: String? = null,
+    ) {
+        val config = DiagnosticSamplingConfig(points.toList(), patchIndices.toList(), nominals.toList(), frameId, instanceId)
+        diagnosticSamplingConfig = config
+        softwareYuvRenderer?.configureDiagnosticSampling(config.points, config.patchIndices, config.nominals, config.frameId, config.instanceId)
+    }
+    /** Apply the saved sampling snapshot before a lazily created renderer receives its first image. */
+    private fun <T> createDiagnosticRenderer(
+        factory: () -> T,
+        applySampling: (T, DiagnosticSamplingConfig) -> Unit,
+    ): T = factory().also { renderer ->
+        diagnosticSamplingConfig?.let { applySampling(renderer, it) }
+    }
+
     private val thread = Thread(::run, "carplay-video").apply { isDaemon = true }
     private val outputThread = if (dedicatedOutputThread) {
         Thread(::runOutput, "carplay-video-output").apply { isDaemon = true }
@@ -750,27 +914,33 @@ private class VideoDecoder(
         outputThread?.start()
     }
 
+    private fun enqueue(job: VideoJob) {
+        if (!queue.offer(job)) close()
+    }
+
     fun configure(codec: VideoCodec, codecData: ByteArray) {
-        queue.offer(VideoJob.Config(codec, codecData))
+        enqueue(VideoJob.Config(codec, codecData))
     }
 
     fun submit(nalus: ByteArray, senderNanos: Long = 0L, arrivalNanos: Long = 0L, receivedNs: Long = System.nanoTime()) {
         VideoDiagnosticTrace.event(colorInstance(), "received_queue", receivedNs, senderNanos, arrivalNanos)
+        cadenceEvidence.received(senderNanos.takeIf { it > 0 }, if (arrivalNanos > 0) arrivalNanos else receivedNs)
         stats.onReceived(nalus.size)
         liveReceived.incrementAndGet()
         liveReceivedBytes.addAndGet(nalus.size.toLong())
         // Pacing runs on the worker, in queue order: callbacks of a replaced stream may still deliver here.
-        queue.offer(VideoJob.Frame(nalus, receivedNs = receivedNs, senderNanos = senderNanos, arrivalNanos = arrivalNanos))
+        enqueue(VideoJob.Frame(nalus, receivedNs = receivedNs, senderNanos = senderNanos, arrivalNanos = arrivalNanos))
     }
 
     fun setSurface(surface: Surface?) {
-        queue.offer(VideoJob.SurfaceChanged(surface))
+        enqueue(VideoJob.SurfaceChanged(surface))
     }
 
     /** Asks the worker to stop rendering to [surface], parking the codec when [park]. */
     fun requestDetach(surface: Surface, park: Boolean): SurfaceDetachRequest {
         check(Thread.currentThread() !== thread) { "detach from the decoder worker" }
-        return SurfaceDetachRequest(surface, park).also { queue.offer(VideoJob.DetachSurface(it)) }
+        // A rejected request remains unconfirmed until awaitDetach observes actual worker exit.
+        return SurfaceDetachRequest(surface, park).also { enqueue(VideoJob.DetachSurface(it)) }
     }
 
     /** True once [request] is confirmed or the worker has exited; false when [deadlineNanos] passed first. */
@@ -801,11 +971,12 @@ private class VideoDecoder(
     }
 
     fun refreshPicture() {
-        queue.offer(VideoJob.RefreshPicture)
+        enqueue(VideoJob.RefreshPicture)
     }
 
     override fun close() {
         running = false
+        queue.close()
         thread.interrupt()
     }
 
@@ -829,13 +1000,14 @@ private class VideoDecoder(
                             }
                         }
                         is VideoJob.Frame -> {
+                            if (outputThread == null && decoder != null) drainOutput(decoder!!)
                             val backlog = queue.backlogAfterCurrent()
                             val overloaded = !referenceChain.needsKeyFrame && backlogRecovery.observe(
                                 System.nanoTime(), job.receivedNs,
                                 backlog.pendingFrames, backlog.newestPendingReceivedNs,
                             )
                             if (overloaded) {
-                                recover("video backlog kept growing or exceeded hard limit")
+                                recoverReferenceChain("video backlog kept growing or exceeded hard limit")
                             } else feed(job.nalus, job.receivedNs, localTimeOf(job))
                         }
                         is VideoJob.SurfaceChanged -> changeSurface(job.surface)
@@ -845,7 +1017,7 @@ private class VideoDecoder(
                             lastKeyFrameRequestNs = System.nanoTime()
                             requestKeyFrame()
                         }
-                        is VideoJob.Resync -> recover("video queue overflow")
+                        is VideoJob.Resync -> recoverReferenceChain("video queue overflow")
                         null -> Unit
                     }
                     if (outputThread == null) decoder?.let(::drainOutput)
@@ -929,10 +1101,21 @@ private class VideoDecoder(
                 if (decoder === codec) {
                     try {
                         if (failure != null) throw failure
-                        handleOutput(codec, index, info)
+                        if (index >= 0) {
+                            val item = OutputItem(index, info.flags, info.size, info.offset, info.presentationTimeUs, System.nanoTime(), surfaceGeneration)
+                            try {
+                                handleOutput(codec, item, info)
+                            } finally {
+                                try { item.release(codec, false) } catch (_: Throwable) {}
+                            }
+                        } else if (index == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
+                            logOutputFormat(codec.outputFormat)
+                        }
                     } catch (error: Exception) {
                         if (running) outputFailure = error
                     }
+                } else if (index >= 0) {
+                    runCatching { codec.releaseOutputBuffer(index, false) }
                 }
             }
         }
@@ -1261,6 +1444,11 @@ private class VideoDecoder(
     private fun changeSurface(surface: Surface?): Unit = synchronized(outputLock) {
         if (outputSurface === surface) return
         outputSurface = surface
+        surfaceGeneration++
+        val yuvRenderer = softwareYuvRenderer
+        softwareYuvRenderer = null
+        softwareYuvOutputFormat = null
+        runCatching { yuvRenderer?.close() }
         if (surface == null) {
             releaseDecoder()
             queue.discardCurrentChain()
@@ -1287,7 +1475,7 @@ private class VideoDecoder(
         val annexB = MediaCodecSupport.toAnnexB(nalus)
         val config = lastConfig ?: return
         if (outputSurface == null) return
-        if (annexB.isEmpty()) { recover("invalid video access unit"); return }
+        if (annexB.isEmpty()) { recoverHardStall("invalid video access unit"); return }
         if (!referenceChain.accepts(annexB, config.codec)) {
             requestKeyFrameIfDue()
             return
@@ -1299,7 +1487,7 @@ private class VideoDecoder(
                 System.nanoTime(), receivedNs, queue.backlogAfterCurrent(),
             )) {
             queue.discardCurrentChain()
-            backlogRecovery.reset()
+            backlogRecovery.reset("obsolete_keyframe")
             requestKeyFrameIfDue()
             return
         }
@@ -1318,7 +1506,7 @@ private class VideoDecoder(
         if (index < 0) {
             dropMtkTuning("video decoder input stalled")
             dropMtkCodec2LowLatency("video decoder input stalled")
-            recover("video decoder input stalled")
+            recoverHardStall("video decoder input stalled")
             return
         }
         val input = checkNotNull(codec.getInputBuffer(index)) { "Decoder input buffer unavailable" }
@@ -1336,6 +1524,7 @@ private class VideoDecoder(
                 lastQueuedNanos = queuedNow
                 queuedPresentationUs[queuedSlot] = presentationUs
                 queuedAtNanos[queuedSlot] = queuedNow
+                queuedReceivedNs[queuedSlot] = receivedNs
                 queuedPaced[queuedSlot] = presentNs > 0
                 queuedBeforePause[queuedSlot] = false
                 if (presentNs > 0) {
@@ -1352,7 +1541,7 @@ private class VideoDecoder(
             codec.queueInputBuffer(index, 0, annexB.size, presentationUs, 0)
             referenceChain.onQueued()
         } else {
-            recover("video frame exceeded codec input capacity")
+            recoverHardStall("video frame exceeded codec input capacity")
             return
         }
         if (outputThread == null) drainOutput(codec)
@@ -1360,16 +1549,33 @@ private class VideoDecoder(
 
     private fun colorInstance() = colorEvidence.snapshot().instance
 
-    private fun recover(reason: String) {
-        VideoDiagnosticTrace.event(colorInstance(), "recovery:$reason", 0)
-        Log.w(TAG, "Video recovery: $reason; waiting for keyframe")
+    private fun recoverReferenceChain(reason: String) {
+        val episode = backlogRecovery.currentEpisode()
+        episode?.action = "reference_chain_reset"
+        VideoDiagnosticTrace.event(colorInstance(), "recovery:reference_chain_reset:$reason", 0)
+        Log.w(TAG, "Video recovery (reference chain reset): $reason; waiting for keyframe")
         stats.onRecovery()
-        report("recovery: $reason; waiting for keyframe")
-        // Recreate with codec-specific data: flush can discard CSD before the first output.
+        report("recovery: reference_chain_reset: $reason; waiting for keyframe")
+        queue.discardCurrentChain()
+        referenceChain.reset()
+        requestKeyFrameIfDue()
+    }
+
+    private fun recoverHardStall(reason: String) {
+        val episode = backlogRecovery.currentEpisode()
+        episode?.action = "codec_recreated"
+        VideoDiagnosticTrace.event(colorInstance(), "recovery:codec_recreated:$reason", 0)
+        Log.w(TAG, "Video recovery (codec recreated): $reason; waiting for keyframe")
+        stats.onRecovery()
+        report("recovery: codec_recreated: $reason; waiting for keyframe")
         releaseDecoder()
         queue.discardCurrentChain()
         referenceChain.reset()
         requestKeyFrameIfDue()
+    }
+
+    private fun recover(reason: String) {
+        recoverReferenceChain(reason)
     }
 
     private fun requestKeyFrameIfDue() {
@@ -1384,95 +1590,216 @@ private class VideoDecoder(
 
     private fun drainOutput(codec: MediaCodec) {
         val info = MediaCodec.BufferInfo()
-        while (running) {
-            if (!handleOutput(codec, codec.dequeueOutputBuffer(info, 0), info)) return
+        val batch = ArrayList<OutputItem>(8)
+        val batchStartNs = System.nanoTime()
+        try {
+            while (running) {
+                val index = codec.dequeueOutputBuffer(info, 0)
+                when {
+                    index == MediaCodec.INFO_TRY_AGAIN_LATER -> {
+                        processOutputBatch(codec, batch)
+                        return
+                    }
+                    index == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
+                        processOutputBatch(codec, batch)
+                        logOutputFormat(codec.outputFormat)
+                    }
+                    index >= 0 -> {
+                        val dequeuedNs = System.nanoTime()
+                        val item = OutputItem(index, info.flags, info.size, info.offset, info.presentationTimeUs, dequeuedNs, surfaceGeneration)
+                        batch.add(item)
+                        val isEos = info.size == 0 && info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0
+                        val isConfig = info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG != 0
+                        if (isEos) {
+                            processOutputBatch(codec, batch)
+                            return
+                        }
+                        if (isConfig || batch.size >= 8 || dequeuedNs - batchStartNs >= 2_000_000L) {
+                            processOutputBatch(codec, batch)
+                        }
+                    }
+                    else -> {
+                        processOutputBatch(codec, batch)
+                        return
+                    }
+                }
+            }
+            processOutputBatch(codec, batch)
+        } finally {
+            for (item in batch) {
+                try {
+                    item.release(codec, false)
+                } catch (_: Throwable) {
+                }
+            }
+            batch.clear()
+        }
+    }
+
+    private fun processOutputBatch(codec: MediaCodec, batch: MutableList<OutputItem>) {
+        if (batch.isEmpty()) return
+        try {
+            val count = batch.size
+            for (i in 0 until count) {
+                val item = batch[i]
+                if (item.released) continue
+                if (item.surfaceGen != surfaceGeneration) {
+                    item.release(codec, false)
+                    continue
+                }
+                if (item.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG != 0 ||
+                    (item.size == 0 && item.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0)) {
+                    item.release(codec, false)
+                    continue
+                }
+                val newerOutputAvailable = i < count - 1
+                val slot = queuedSlotOf(item.presentationTimeUs)
+                val now = System.nanoTime()
+                val receivedNs = if (slot >= 0 && queuedReceivedNs[slot] > 0) queuedReceivedNs[slot]
+                    else if (slot >= 0 && queuedAtNanos[slot] > 0) queuedAtNanos[slot]
+                    else item.dequeuedNs
+                val ageNs = (now - receivedNs).coerceAtLeast(0L)
+                val firstFrame = !renderedFrameLogged
+                val isDiagnostic = (purpose == VideoPurpose.DIAGNOSTIC) ||
+                    diagnosticOutputGate.isRequested ||
+                    (statsLabel != null && statsLabel.contains("diagnostic", ignoreCase = true)) ||
+                    (streamType != MAIN_SCREEN_TYPE)
+                val explicitlyPaced = pacingDelay != null && slot >= 0 && queuedPaced[slot]
+
+                val discard = VideoOutputFreshness.shouldDiscardDecodedOutput(
+                    ageNs = ageNs,
+                    newerOutputAvailable = newerOutputAvailable,
+                    firstFrame = firstFrame,
+                    diagnostic = isDiagnostic,
+                    explicitlyPaced = explicitlyPaced,
+                )
+
+                if (discard) {
+                    item.release(codec, false)
+                    liveDecodedDiscarded.incrementAndGet()
+                    stats.onDecodedDiscarded()
+                    VideoDiagnosticTrace.event(colorInstance(), "decoded_discarded", item.presentationTimeUs, ageNs)
+                } else {
+                    val bufferInfo = MediaCodec.BufferInfo().apply {
+                        set(item.offset, item.size, item.presentationTimeUs, item.flags)
+                    }
+                    handleOutput(codec, item, bufferInfo)
+                }
+            }
+        } finally {
+            for (item in batch) {
+                try {
+                    item.release(codec, false)
+                } catch (_: Throwable) {
+                }
+            }
+            batch.clear()
         }
     }
 
     /** Handles one dequeueOutputBuffer result; false when there is nothing more to drain for now. */
-    private fun handleOutput(codec: MediaCodec, index: Int, info: MediaCodec.BufferInfo): Boolean {
-        when {
-            index == MediaCodec.INFO_TRY_AGAIN_LATER -> return false
-            index == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> logOutputFormat(codec.outputFormat)
-            index >= 0 -> {
-                if (info.size == 0 && info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) {
-                    codec.releaseOutputBuffer(index, false); return false
+    private fun handleOutput(codec: MediaCodec, item: OutputItem, info: MediaCodec.BufferInfo): Boolean {
+        try {
+            when {
+                item.index == MediaCodec.INFO_TRY_AGAIN_LATER -> return false
+                item.index == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> logOutputFormat(codec.outputFormat)
+                item.index >= 0 -> {
+                    if (info.size == 0 && info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) {
+                        item.release(codec, false); return false
+                    }
+                    if (yuvConfig != null) return handleYuvOutput(codec, item, info)
+                    val render = outputSurface != null && info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG == 0 && diagnosticOutputGate.allow()
+                    // Parked output goes to the offscreen consumer: it keeps the codec's state, but it is
+                    // not shown, so it is neither paced nor counted.
+                    val shown = render && outputSurface !== parking?.surface
+                    val now = System.nanoTime()
+                    VideoDiagnosticTrace.event(colorInstance(), "codec_output", info.presentationTimeUs)
+                    val slot = queuedSlotOf(info.presentationTimeUs)
+                    val queued = if (slot >= 0) queuedAtNanos[slot] else 0L
+                    val heldOverGap = queued in 1 until resumedAtNanos
+                    if (queued > 0 && !heldOverGap) {
+                        pipelineTiming.output(queued, now)
+                        stats.onDecodeLatency(now - queued)
+                        liveDecodeNanos.addAndGet(now - queued)
+                        liveDecodeSamples.incrementAndGet()
+                    }
+                    val delay = pacingDelay
+                    val paced = shown && delay != null && slot >= 0 && queuedPaced[slot]
+                    val localNs = info.presentationTimeUs * 1000
+                    val pauseHeld = paced && queuedBeforePause[slot]
+                    val targetNs = if (paced && delay != null) {
+                        if (!heldOverGap && !pauseHeld) delay.onFrame(now - localNs)
+                        stats.onPacingDelay(delay.nanos)
+                        localNs + delay.nanos
+                    } else 0L
+                    val releaseStartedNs = System.nanoTime()
+                    if (targetNs - now in 1..MAX_PACING_AHEAD_NS) {
+                        item.release(codec, targetNs)
+                    } else {
+                        if (shown && delay != null && !heldOverGap && !pauseHeld) stats.onLate()
+                        item.release(codec, render)
+                    }
+                    if (shown) {
+                        VideoDiagnosticTrace.event(colorInstance(), "surface_release", info.presentationTimeUs, releaseStartedNs)
+                        pipelineTiming.surfaceRelease(System.nanoTime() - releaseStartedNs)
+                        stats.onRendered()
+                        liveRendered.incrementAndGet()
+                        colorEvidence.rendered(colorGeneration)
+                    }
+                    if (shown && !renderedFrameLogged) {
+                        renderedFrameLogged = true
+                        report("first frame rendered")
+                        Log.i(TAG, "video decoder rendered first frame bytes=${info.size}")
+                    }
+                    if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) return false
                 }
-                if (yuvConfig != null) return handleYuvOutput(codec, index, info)
-                val render = outputSurface != null && info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG == 0 && diagnosticOutputGate.allow()
-                // Parked output goes to the offscreen consumer: it keeps the codec's state, but it is
-                // not shown, so it is neither paced nor counted.
-                val shown = render && outputSurface !== parking?.surface
-                val now = System.nanoTime()
-                VideoDiagnosticTrace.event(colorInstance(), "codec_output", info.presentationTimeUs)
-                val slot = queuedSlotOf(info.presentationTimeUs)
-                val queued = if (slot >= 0) queuedAtNanos[slot] else 0L
-                val heldOverGap = queued in 1 until resumedAtNanos
-                if (queued > 0 && !heldOverGap) {
-                    pipelineTiming.output(queued, now)
-                    stats.onDecodeLatency(now - queued)
-                    liveDecodeNanos.addAndGet(now - queued)
-                    liveDecodeSamples.incrementAndGet()
-                }
-                val delay = pacingDelay
-                val paced = shown && delay != null && slot >= 0 && queuedPaced[slot]
-                val localNs = info.presentationTimeUs * 1000
-                val pauseHeld = paced && queuedBeforePause[slot]
-                val targetNs = if (paced && delay != null) {
-                    if (!heldOverGap && !pauseHeld) delay.onFrame(now - localNs)
-                    stats.onPacingDelay(delay.nanos)
-                    localNs + delay.nanos
-                } else 0L
-                val releaseStartedNs = System.nanoTime()
-                if (targetNs - now in 1..MAX_PACING_AHEAD_NS) {
-                    codec.releaseOutputBuffer(index, targetNs)
-                } else {
-                    if (shown && delay != null && !heldOverGap && !pauseHeld) stats.onLate()
-                    codec.releaseOutputBuffer(index, render)
-                }
-                if (shown) {
-                    VideoDiagnosticTrace.event(colorInstance(), "surface_release", info.presentationTimeUs, releaseStartedNs)
-                    pipelineTiming.surfaceRelease(System.nanoTime() - releaseStartedNs)
-                    stats.onRendered()
-                    liveRendered.incrementAndGet()
-                    colorEvidence.rendered(colorGeneration)
-                }
-                if (shown && !renderedFrameLogged) {
-                    renderedFrameLogged = true
-                    report("first frame rendered")
-                    Log.i(TAG, "video decoder rendered first frame bytes=${info.size}")
-                }
-                if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) return false
+                else -> return false
             }
-            else -> return false
+            return true
+        } finally {
+            try {
+                item.release(codec, false)
+            } catch (_: Throwable) {
+            }
         }
-        return true
     }
 
 
     /** The worker owns both the Image and EGL; the codec never renders this buffer to a Surface. */
-    private fun handleYuvOutput(codec: MediaCodec, index: Int, info: MediaCodec.BufferInfo): Boolean {
+    private fun handleYuvOutput(codec: MediaCodec, item: OutputItem, info: MediaCodec.BufferInfo): Boolean {
         var image: android.media.Image? = null
         var shown = false
         val dequeuedNs = System.nanoTime()
         VideoDiagnosticTrace.event(colorInstance(), "codec_output", info.presentationTimeUs)
-        try {
+        withYuvOutputRelease(codec, item, closeImage = { image?.close() }) {
             if (info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG != 0 ||
-                info.size == 0 && info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) return false
-            val surface = outputSurface ?: return true
-            image = codec.getOutputImage(index)
-            if (image == null && info.size == 0) return true
+                info.size == 0 && info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) {
+                item.release(codec, false)
+                return false
+            }
+            val surface = outputSurface ?: run { item.release(codec, false); return true }
+            image = codec.getOutputImage(item.index)
+            if (image == null && info.size == 0) {
+                item.release(codec, false)
+                return true
+            }
             val frame = checkNotNull(image) { "decoder supplied no YUV Image" }
-            if (!diagnosticOutputGate.allow()) return true
+            if (!diagnosticOutputGate.allow()) {
+                item.release(codec, false)
+                return true
+            }
             val color = SoftwareYuvColor.resolve(checkNotNull(yuvConfig), sourceColor,
                 softwareYuvOutputFormat ?: codec.outputFormat)
-            val renderer = softwareYuvRenderer ?: SoftwareYuvRenderer(surface).also { softwareYuvRenderer = it }
+            val renderer = softwareYuvRenderer ?: createDiagnosticRenderer(
+                factory = { SoftwareYuvRenderer(surface) },
+                applySampling = { newRenderer, cfg ->
+                    newRenderer.configureDiagnosticSampling(cfg.points, cfg.patchIndices, cfg.nominals, cfg.frameId, cfg.instanceId)
+                },
+            ).also { softwareYuvRenderer = it }
             val draw = renderer.draw(frame, color)
-            pipelineTiming.draw(draw.copyNanos, draw.drawNanos)
+            pipelineTiming.draw(draw.copyNanos, draw.drawNanos, draw.textureUploadNanos, draw.drawOnlyNanos, draw.swapNanos, draw.totalNanos)
             VideoDiagnosticTrace.event(colorInstance(), "yuv_draw", info.presentationTimeUs, draw.copyNanos, draw.drawNanos)
             shown = true
-        } finally {
-            try { image?.close() } finally { codec.releaseOutputBuffer(index, false) }
         }
         if (shown) {
             val slot = queuedSlotOf(info.presentationTimeUs)

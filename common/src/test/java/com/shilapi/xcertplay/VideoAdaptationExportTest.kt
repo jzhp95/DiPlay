@@ -65,4 +65,20 @@ class VideoAdaptationExportTest {
                 .put(JSONObject().put("phase", "dynamic").put("valid", true).put("identity", "b")))
         assertTrue(VideoAdaptationStore.gaps(value).contains("静止与动态采样不属于同一会话配置"))
     }
+
+    @Test fun exportIncludesRemediationSchemaInTroubleshootingReport() {
+        val context = RuntimeEnvironment.getApplication()
+        val data = JSONObject().put("samples", JSONArray())
+        val output = VideoAdaptationExport.zip(context, data)
+        try {
+            assertTrue(output.exists() && output.length() > 0)
+            ZipFile(output).use { zip ->
+                val jsonText = zip.getInputStream(zip.getEntry("report.json")).bufferedReader().readText()
+                val report = JSONObject(jsonText)
+                val troubleshooting = report.getJSONObject("troubleshooting")
+                assertEquals(1, troubleshooting.getInt("videoRemediationSchema"))
+                assertEquals("codec", troubleshooting.getString("experimentType"))
+            }
+        } finally { output.delete() }
+    }
 }

@@ -57,6 +57,7 @@ internal class VideoTouchTimeline(private val capacity: Int = 1024) {
                 .put("clock", "receivedNs/enqueueReturnedNs=System.nanoTime; androidEventUptimeMs=uptimeMillis")
                 .put("scope", "local_input_dispatch_and_enqueue_return; no_wire_send_or_phone_ack")
                 .put("touchToPhotonMs", JSONObject.NULL).put("causalFrameAssociation", "unavailable")
+                .put("phoneAcknowledged", "unknown")
         }
     }
 }

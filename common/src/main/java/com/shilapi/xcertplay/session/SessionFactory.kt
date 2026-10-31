@@ -94,7 +94,11 @@ internal class SessionFactory(context:Context):SessionConnectionFactory {
             controller.inputDiagnostic={metrics->
                 com.shilapi.xcertplay.diagnostics.RuntimeEvidence.sessions.record(evidenceIdentity?.id,evidenceIdentity?.generation,"input_command_timing",
                     mapOf("pending" to metrics.pending,"coalescedMoves" to metrics.coalescedMoves,"staleDropped" to metrics.staleDropped,
-                        "overflow" to metrics.overflow,"queueWaitNs" to metrics.queueWaitNs,"sendNs" to metrics.sendNs,"oldestAgeNs" to metrics.oldestAgeNs,"written" to metrics.written,"accepted" to metrics.accepted))
+                        "overflow" to metrics.overflow,"queueWaitNs" to metrics.queueWaitNs,"sendNs" to metrics.sendNs,"oldestAgeNs" to metrics.oldestAgeNs,
+                        "written" to metrics.written,"accepted" to metrics.accepted,
+                        "queueLockWaitNs" to metrics.queueLockWaitNs,"actionDurationNs" to metrics.actionDurationNs,
+                        "lockWaitNs" to metrics.lockWaitNs,"writeAndFlushNs" to metrics.writeAndFlushNs,
+                        "phoneAcknowledged" to metrics.phoneAcknowledged,"rejectReason" to metrics.rejectReason))
             }
             return object:SessionConnection {
                 override val controller=controller

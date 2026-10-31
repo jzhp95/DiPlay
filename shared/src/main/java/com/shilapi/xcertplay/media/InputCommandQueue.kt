@@ -6,8 +6,23 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.RejectedExecutionException
 
-data class InputCommandMetrics(val pending:Int,val coalescedMoves:Long,val staleDropped:Long,val overflow:Long,
-    val queueWaitNs:Long,val sendNs:Long,val oldestAgeNs:Long,val written:Boolean?,val accepted:Boolean?=null)
+data class InputCommandMetrics(
+    val pending: Int,
+    val coalescedMoves: Long,
+    val staleDropped: Long,
+    val overflow: Long,
+    val queueWaitNs: Long,
+    val sendNs: Long,
+    val oldestAgeNs: Long,
+    val written: Boolean?,
+    val accepted: Boolean? = null,
+    val queueLockWaitNs: Long = 0L,
+    val actionDurationNs: Long = 0L,
+    val lockWaitNs: Long = queueLockWaitNs,
+    val writeAndFlushNs: Long = actionDurationNs,
+    val phoneAcknowledged: String = "unknown",
+    val rejectReason: String? = null,
+)
 
 /** One worker and at most 64 waiting inputs. Executor acceptance precedes queue acceptance. */
 internal class InputCommandQueue<S:Any>(
@@ -55,7 +70,10 @@ internal class InputCommandQueue<S:Any>(
     private fun enqueue(session:S,token:Any?,contacts:List<AirPlayContact>?,onDiscard:()->Unit={},action:()->Boolean?):Boolean {
         var overflow=false
         val discarded=mutableListOf<Entry<S>>()
+        val lockStart=nanoTime()
+        var queueLockWaitNs=0L
         val accepted=synchronized(lock){
+            queueLockWaitNs=(nanoTime()-lockStart).coerceAtLeast(0L)
             if(closed || failed)return@synchronized false
             if(previousSession!==session){
                 stale+=pending.size;discarded.addAll(pending);pending.clear();downIds=emptySet();gesture++
@@ -86,18 +104,22 @@ internal class InputCommandQueue<S:Any>(
             true
         }
         discard(discarded)
-        if(!accepted)publishMetrics(accepted=false)
+        if(!accepted)publishMetrics(accepted=false, reason=if(overflow)"queue_capacity_overflow" else if(failed)"queue_failed" else "executor_rejected", queueLockWaitNs=queueLockWaitNs)
         if(overflow)runCatching{fault(session,"input_backpressure")}
         return accepted
     }
     private fun drain(){
         while(true){
-            val entry=synchronized(lock){
+            val lockWaitStart=nanoTime()
+            val entry:Entry<S>
+            val queueLockWaitNs:Long
+            synchronized(lock){
+                queueLockWaitNs=(nanoTime()-lockWaitStart).coerceAtLeast(0L)
                 if(closed || failed || pending.isEmpty()){draining=false;return}
-                pending.removeFirst()
+                entry=pending.removeFirst()
             }
             if(current()!==entry.session || !usable(entry.session) || (entry.touch && screen(entry.session)!==entry.screen)){
-                synchronized(lock){stale++};runCatching{entry.onDiscard()};publishMetrics();continue
+                synchronized(lock){stale++};runCatching{entry.onDiscard()};publishMetrics(reason="stale_session_or_screen", queueLockWaitNs=queueLockWaitNs);continue
             }
             val dequeued=nanoTime()
             var written:Boolean?=null
@@ -105,19 +127,51 @@ internal class InputCommandQueue<S:Any>(
             catch(_:Exception){
                 val dropped=synchronized(lock){failed=true;pending.toList().also{pending.clear()}}
                 runCatching{entry.onDiscard()};discard(dropped)
+                publishMetrics(accepted=false, reason="socket_write_failed", queueLockWaitNs=queueLockWaitNs)
                 runCatching{fault(entry.session,"input_send_failed")}
             }
             val end=nanoTime()
-            val metrics=synchronized(lock){InputCommandMetrics(pending.size,coalesced,stale,overflows,
-                (dequeued-entry.enqueuedNs).coerceAtLeast(0),(end-dequeued).coerceAtLeast(0),
-                pending.peekFirst()?.let{(end-it.enqueuedNs).coerceAtLeast(0)}?:0,written,true)}
+            val actionDurationNs=(end-dequeued).coerceAtLeast(0L)
+            val queueWaitNs=(dequeued-entry.enqueuedNs).coerceAtLeast(0L)
+            val metrics=synchronized(lock){InputCommandMetrics(
+                pending=pending.size,
+                coalescedMoves=coalesced,
+                staleDropped=stale,
+                overflow=overflows,
+                queueWaitNs=queueWaitNs,
+                sendNs=actionDurationNs,
+                oldestAgeNs=pending.peekFirst()?.let{(end-it.enqueuedNs).coerceAtLeast(0)}?:0,
+                written=written,
+                accepted=true,
+                queueLockWaitNs=queueLockWaitNs,
+                actionDurationNs=actionDurationNs,
+                lockWaitNs=queueLockWaitNs,
+                writeAndFlushNs=actionDurationNs,
+                phoneAcknowledged="unknown",
+                rejectReason=null,
+            )}
             runCatching{report(metrics)}
         }
     }
-    private fun publishMetrics(accepted:Boolean?=null) {
+    private fun publishMetrics(accepted:Boolean?=null, reason:String?=null, queueLockWaitNs:Long=0L) {
         val now=nanoTime()
-        val metrics=synchronized(lock){InputCommandMetrics(pending.size,coalesced,stale,overflows,0,0,
-            pending.peekFirst()?.let{(now-it.enqueuedNs).coerceAtLeast(0)}?:0,null,accepted)}
+        val metrics=synchronized(lock){InputCommandMetrics(
+            pending=pending.size,
+            coalescedMoves=coalesced,
+            staleDropped=stale,
+            overflow=overflows,
+            queueWaitNs=0L,
+            sendNs=0L,
+            oldestAgeNs=pending.peekFirst()?.let{(now-it.enqueuedNs).coerceAtLeast(0)}?:0,
+            written=null,
+            accepted=accepted,
+            queueLockWaitNs=queueLockWaitNs,
+            actionDurationNs=0L,
+            lockWaitNs=queueLockWaitNs,
+            writeAndFlushNs=0L,
+            phoneAcknowledged="unknown",
+            rejectReason=reason,
+        )}
         runCatching{report(metrics)}
     }
     fun shutdownNow(){

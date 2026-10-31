@@ -65,6 +65,8 @@ internal class VideoAdaptationWindow(val phase: String, private val first: Video
             .put("yuvCopyMillis", average(y.yuvCopyNanos - x.yuvCopyNanos, y.yuvSamples - x.yuvSamples))
             .put("yuvDrawAndSwapMillis", average(y.yuvDrawNanos - x.yuvDrawNanos, y.yuvSamples - x.yuvSamples))
             .put("surfaceReleaseCallMillis", average(y.surfaceReleaseNanos - x.surfaceReleaseNanos, y.surfaceSamples - x.surfaceSamples))
+            .put("cadence", b.evidence.optJSONObject("cadence") ?: JSONObject.NULL)
+            .put("displayFpsAudit", b.evidence.optJSONObject("displayFpsAudit") ?: JSONObject.NULL)
             .put("scope", "app_measurements_not_physical_display_or_touch_latency")
         return JSONObject().put("durationSeconds", seconds).put("pipeline", pipeline)
             .put("receivedFrames", b.counters.received - a.counters.received)
@@ -73,6 +75,7 @@ internal class VideoAdaptationWindow(val phase: String, private val first: Video
             .put("payloadKbps", if (seconds > 0) (b.counters.receivedBytes - a.counters.receivedBytes) * 8 / 1000.0 / seconds else JSONObject.NULL)
             .put("receivedFps", if (seconds > 0) (b.counters.received - a.counters.received) / seconds else JSONObject.NULL)
             .put("submittedToDisplayFps", if (seconds > 0) (b.counters.rendered - a.counters.rendered) / seconds else JSONObject.NULL)
+            .put("decodedDiscardedFrames", b.counters.decodedDiscarded - a.counters.decodedDiscarded)
             .put("queueToOutputMillis", if (count > 0) (b.counters.decodeNanos - a.counters.decodeNanos) / count / 1e6 else JSONObject.NULL)
             .put("processCpuCorePercent", if (seconds > 0) (b.cpuMillis - a.cpuMillis) / (seconds * 10) else JSONObject.NULL)
     }

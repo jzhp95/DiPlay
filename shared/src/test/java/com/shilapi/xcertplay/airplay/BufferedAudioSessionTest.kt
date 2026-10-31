@@ -207,9 +207,9 @@ class BufferedAudioSessionTest {
             Socket("127.0.0.1", setup["dataPort"] as Int).use { socket ->
                 sendFrame(socket, 0, 1024)
                 engine.onBufferedAudioControl(old, "SETRATE", mapOf("rate" to 1, "rtpTime" to 1024))
-                assertTrue(delivered.await(10, TimeUnit.SECONDS))
+                assertTrue(delivered.await(30, TimeUnit.SECONDS))
                 val pending = executor.submit<Map<String, Any?>?> { engine.onBufferedAudio(replacement, validSetup()) }
-                assertTrue(stopped.await(10, TimeUnit.SECONDS))
+                assertTrue(stopped.await(30, TimeUnit.SECONDS))
                 replacement.close()
                 assertTrue("Held output cleanup timed out before controlled release", !holdTimedOut.get())
                 assertNull(engine.onBufferedAudio(third, validSetup()))

@@ -37,4 +37,18 @@ class VideoPlanResolverTest {
         assertNotEquals(first.planId,diagnostic.planId)
         assertNull(first.supported)
     }
+    @Test fun colorDecisionCategorizesPoliciesCorrectly() {
+        val spsPlan = VideoPlanResolver.resolve(VideoPipelineRequest(color = VideoColorOverride(fromSps = true)))
+        assertEquals("from_sps", spsPlan.colorDecision.policy)
+        assertEquals("explicit_sps_color_requested", spsPlan.colorDecision.reason)
+
+        val manualPlan = VideoPlanResolver.resolve(VideoPipelineRequest(color = VideoColorOverride(range = 1)))
+        assertEquals("manual_override", manualPlan.colorDecision.policy)
+
+        val yuvPlan = VideoPlanResolver.resolve(VideoPipelineRequest(hardwareYuv = true))
+        assertEquals("app_yuv_correction", yuvPlan.colorDecision.policy)
+
+        val defaultPlan = VideoPlanResolver.resolve(VideoPipelineRequest())
+        assertEquals("decoder_default", defaultPlan.colorDecision.policy)
+    }
 }

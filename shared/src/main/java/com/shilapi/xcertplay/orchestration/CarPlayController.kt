@@ -162,7 +162,7 @@ internal fun isWirelessHandoffInProgress(
 class CarPlayController(
     context: Context,
     private val config: CarPlayRuntimeConfig,
-    private val airPlayConfig: AirPlayConfig,
+    val airPlayConfig: AirPlayConfig,
     private val identity: AirPlayIdentity,
     private val pairings: PairingStore,
     listener: AirPlaySessionListener,

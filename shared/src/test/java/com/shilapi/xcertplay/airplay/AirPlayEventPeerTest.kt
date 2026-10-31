@@ -57,13 +57,38 @@ class AirPlayEventPeerTest {
     @Test
     fun aStrangerCannotTakeTheEventSlot() = withSession { session ->
         val port = openEvent(session)
-        Socket(InetAddress.getByName("::1"), port).use { Thread.sleep(500) }
+        val stranger = Socket(InetAddress.getByName("::1"), port)
         try {
-            Socket(InetAddress.getByName("127.0.0.1"), port).use { Thread.sleep(500) }
-        } catch (error: java.net.ConnectException) {
-            fail("control peer could not connect after a stranger took the slot: $error")
+            val eof = try { stranger.getInputStream().read() } catch (_: java.net.SocketException) { -1 }
+            org.junit.Assert.assertEquals("stranger connection should be closed by server immediately", -1, eof)
+        } finally {
+            stranger.close()
         }
+
+        val deadline = System.currentTimeMillis() + 2000
+        while (System.currentTimeMillis() < deadline && logs.none { it.contains("airplay event rejected sender outside the control session") }) {
+            Thread.sleep(10)
+        }
+        assertTrue("rejection log was not recorded: $logs",
+            logs.any { it.contains("airplay event rejected sender outside the control session") })
         assertTrue("stranger was accepted: $logs", logs.none { it.contains("accepted from /0:0:0:0:0:0:0:1") })
+
+        var controlSocket: Socket? = null
+        var lastError: Exception? = null
+        val deadlineConnect = System.currentTimeMillis() + 2000
+        while (System.currentTimeMillis() < deadlineConnect) {
+            try {
+                controlSocket = Socket(InetAddress.getByName("127.0.0.1"), port)
+                break
+            } catch (e: Exception) {
+                lastError = e
+                Thread.sleep(50)
+            }
+        }
+        if (controlSocket == null) {
+            fail("control peer could not connect after stranger was rejected: $lastError")
+        }
+        controlSocket.use { Thread.sleep(300) }
         assertTrue("control peer was not accepted: $logs", logs.any { it.contains("accepted from /127.0.0.1") })
     }
 

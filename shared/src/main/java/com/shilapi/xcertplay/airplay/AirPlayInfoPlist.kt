@@ -28,6 +28,16 @@ object AirPlayInfoPlist {
     fun features(config: AirPlayConfig): Long =
         if (config.disableAudioOutput) CARPLAY_FEATURES_NO_AUDIO else CARPLAY_FEATURES
 
+    /**
+     * Audit summary of frame rate declaration chain: user requested setting vs sanitized maxFPS upper bound.
+     * Note: selectedFps remains null as CarPlay protocol does not report phone's internal render rate.
+     */
+    fun describeDisplayFps(config: AirPlayConfig): Map<String, Any?> = linkedMapOf(
+        "fpsSetting" to config.main.fps,
+        "advertisedMaxFps" to AirPlayDisplaySettings.sanitizeFps(config.main.fps),
+        "selectedFps" to null,
+    )
+
     fun build(config: AirPlayConfig): Map<String, Any?> {
         val displays = arrayListOf<Any?>(
             displayEntry(config.main, STREAM_TYPE_MAIN_SCREEN, MAIN_UUID),

@@ -4590,6 +4590,41 @@ class CarPlayHostActivity : ComponentActivity() {
             .put("uiSelectedResolutionPercent", displayScalePercent)
             .put("physicalWidthMmSetting", AirPlayPersistence.loadWidthPhysicalMm(this))
             .put("thermal", VideoAdaptationDevice.thermal(this))
+        val cadence = owner.videoCadenceSnapshot()
+        evidence.put("cadence", org.json.JSONObject(cadence))
+        controller?.airPlayConfig?.let { airPlayConfig ->
+            evidence.put("displayFpsAudit", org.json.JSONObject(com.shilapi.xcertplay.airplay.AirPlayInfoPlist.describeDisplayFps(airPlayConfig)))
+        }
+        val rawSamples = owner.latestRawYuvSamples()
+        if (rawSamples.isNotEmpty()) {
+            val yuvArray = org.json.JSONArray()
+            for (s in rawSamples) {
+                yuvArray.put(org.json.JSONObject().apply {
+                    put("x", s.x)
+                    put("y", s.y)
+                    put("yCode", s.yCode)
+                    put("uCode", s.uCode)
+                    put("vCode", s.vCode)
+                })
+            }
+            evidence.put("rawYuvSamples", yuvArray)
+        }
+        val recentEpisodes = owner.recentBacklogEpisodes()
+        if (recentEpisodes.isNotEmpty()) {
+            val epArray = org.json.JSONArray()
+            for (ep in recentEpisodes) {
+                epArray.put(org.json.JSONObject().apply {
+                    put("episodeId", ep.episodeId)
+                    put("startNs", ep.startNs)
+                    put("initialAgeNs", ep.initialAgeNs)
+                    put("peakAgeNs", ep.peakAgeNs)
+                    put("durationNs", ep.durationNs)
+                    put("action", ep.action ?: org.json.JSONObject.NULL)
+                    put("endReason", ep.endReason ?: org.json.JSONObject.NULL)
+                })
+            }
+            evidence.put("backlogEpisodes", epArray)
+        }
         return VideoAdaptationSample(key, System.nanoTime(), counters, android.os.Process.getElapsedCpuTime(), evidence)
     }
 

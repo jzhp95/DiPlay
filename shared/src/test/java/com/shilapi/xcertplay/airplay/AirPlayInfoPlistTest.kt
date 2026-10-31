@@ -99,6 +99,29 @@ class AirPlayInfoPlistTest {
     }
 
     @Test
+    fun fpsDeclarationChainMaintainsUpperLimitSemanticsAndNullSelectedFps() {
+        val config60 = AirPlayConfig(
+            deviceName = "test", deviceId = "02:00:00:00:00:02", btMac = "02:00:00:00:00:02",
+            sourceVersion = "366.0",
+            main = AirPlayDisplayConfig(widthPixels = 1280, heightPixels = 720, fps = 60),
+        )
+        val audit60 = AirPlayInfoPlist.describeDisplayFps(config60)
+        assertEquals(60, audit60["fpsSetting"])
+        assertEquals(60, audit60["advertisedMaxFps"])
+        org.junit.Assert.assertNull(audit60["selectedFps"])
+
+        val configSanitized = AirPlayConfig(
+            deviceName = "test", deviceId = "02:00:00:00:00:02", btMac = "02:00:00:00:00:02",
+            sourceVersion = "366.0",
+            main = AirPlayDisplayConfig(widthPixels = 1280, heightPixels = 720, fps = 58),
+        )
+        val auditSanitized = AirPlayInfoPlist.describeDisplayFps(configSanitized)
+        assertEquals(58, auditSanitized["fpsSetting"])
+        assertEquals(60, auditSanitized["advertisedMaxFps"])
+        org.junit.Assert.assertNull(auditSanitized["selectedFps"])
+    }
+
+    @Test
     fun squareOemIconIsAdvertisedWithItsOriginalBytes() {
         val iconBytes = byteArrayOf(0x01, 0x02, 0x03, 0x04)
         val info = AirPlayInfoPlist.build(

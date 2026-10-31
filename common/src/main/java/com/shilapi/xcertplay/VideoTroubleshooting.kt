@@ -30,6 +30,13 @@ internal object VideoTroubleshooting {
     }
     fun report(value: JSONObject): JSONObject {
         val rows = value.optJSONArray("samples") ?: JSONArray()
+        val experimentType = value.optString("experimentType").ifBlank { "codec" }
+        val changedFactor = when (experimentType) {
+            "mtk_tuning" -> "mtkTuning"
+            "output_path" -> "output_path"
+            "before_after" -> "remediation_strategy"
+            else -> "codec"
+        }
         val comparisons = JSONArray()
         for (phase in listOf("static", "dynamic")) {
             fun latest(round: String): JSONObject? = (0 until rows.length()).reversed().mapNotNull { rows.optJSONObject(it) }
@@ -48,12 +55,55 @@ internal object VideoTroubleshooting {
                         gaps.put(label + "_active_round_not_sampled")
                 }
                 val ac = condition(a); val bc = condition(b)
-                for ((key, v) in ac) {
-                    if (v.isBlank() || bc[key].isNullOrBlank()) gaps.put("unreported_" + key)
-                    else if (v != bc[key]) gaps.put("different_" + key)
+                when (experimentType) {
+                    "codec" -> {
+                        for ((key, v) in ac) {
+                            if (v.isBlank() || bc[key].isNullOrBlank()) gaps.put("unreported_" + key)
+                            else if (v != bc[key]) gaps.put("different_" + key)
+                        }
+                        if (codec(a) != "H264") gaps.put("A_actual_codec_not_H264")
+                        if (codec(b) != "H265") gaps.put("B_actual_codec_not_HEVC")
+                    }
+                    "mtk_tuning" -> {
+                        for ((key, v) in ac) {
+                            if (key == "mtkTuning") continue
+                            if (v.isBlank() || bc[key].isNullOrBlank()) gaps.put("unreported_" + key)
+                            else if (v != bc[key]) gaps.put("different_" + key)
+                        }
+                        if (codec(a).isNotBlank() && codec(a) != codec(b)) gaps.put("different_codec")
+                        if (ac["mtkTuning"] == bc["mtkTuning"]) gaps.put("mtkTuning_not_changed")
+                    }
+                    "output_path" -> {
+                        for ((key, v) in ac) {
+                            if (key == "path" || key == "view") continue
+                            if (v.isBlank() || bc[key].isNullOrBlank()) gaps.put("unreported_" + key)
+                            else if (v != bc[key]) gaps.put("different_" + key)
+                        }
+                        if (codec(a).isNotBlank() && codec(a) != codec(b)) gaps.put("different_codec")
+                        if (ac["path"] == bc["path"] && ac["view"] == bc["view"]) gaps.put("output_path_not_changed")
+                    }
+                    "before_after" -> {
+                        for ((key, v) in ac) {
+                            if (key in setOf("software", "softwareYuv", "hardwareYuv", "path", "view")) continue
+                            if (v.isBlank() || bc[key].isNullOrBlank()) gaps.put("unreported_" + key)
+                            else if (v != bc[key]) gaps.put("different_" + key)
+                        }
+                        if (codec(a).isNotBlank() && codec(a) != codec(b)) gaps.put("different_codec")
+                        val aDec = a.optJSONObject("begin")?.optString("selected_decoder").orEmpty()
+                        val bDec = b.optJSONObject("begin")?.optString("selected_decoder").orEmpty()
+                        val aSoft = a.optJSONObject("begin")?.optBoolean("selected_decoder_software") ?: false
+                        val bSoft = b.optJSONObject("begin")?.optBoolean("selected_decoder_software") ?: false
+                        val aStrat = a.optJSONObject("begin")?.optString("remediation_strategy").orEmpty()
+                        val bStrat = b.optJSONObject("begin")?.optString("remediation_strategy").orEmpty()
+                        if (aDec == bDec && aSoft == bSoft && aStrat == bStrat &&
+                            ac["softwareYuv"] == bc["softwareYuv"] && ac["hardwareYuv"] == bc["hardwareYuv"] && ac["path"] == bc["path"]) {
+                            gaps.put("remediation_strategy_not_changed")
+                        }
+                    }
+                    else -> {
+                        gaps.put("unsupported_experiment_type")
+                    }
                 }
-                if (codec(a) != "H264") gaps.put("A_actual_codec_not_H264")
-                if (codec(b) != "H265") gaps.put("B_actual_codec_not_HEVC")
                 for ((label, row) in listOf("A" to a, "B" to b)) {
                     if (row.optJSONObject("begin")?.optString("selected_decoder").isNullOrBlank()) gaps.put(label + "_decoder_missing")
                 }
@@ -62,7 +112,9 @@ internal object VideoTroubleshooting {
             comparisons.put(JSONObject().put("phase", phase).put("status", if (gaps.length() == 0) "conditions_matched" else "blocked")
                 .put("missingOrDifferent", gaps).put("A", summary(a)).put("B", summary(b)))
         }
-        return JSONObject().put("schema", 1).put("comparison", comparisons)
+        return JSONObject().put("schema", 1).put("videoRemediationSchema", 1)
+            .put("experimentType", experimentType).put("changedFactor", changedFactor)
+            .put("comparison", comparisons)
             .put("colorReference", JSONObject().put("id", REFERENCE_ID).put("sourcePresentation", "manual_attestation_only")
                 .put("physicalScreenPhoto", "not_attached").put("calibratedColorVerdict", JSONObject.NULL))
             .put("touchToPhotonMs", JSONObject.NULL).put("phoneProcessingAndNetworkRoundTrip", "not_measured")
@@ -94,10 +146,15 @@ internal object VideoTroubleshooting {
             "missing_valid_A" -> "尚无基线 A"; "missing_valid_B" -> "尚无对照 B"
             "A_actual_codec_not_H264" -> "A 未实际使用 H.264"
             "B_actual_codec_not_HEVC" -> "B 未实际使用 HEVC"
+            "different_codec" -> "A/B 编码格式不一致"
+            "mtkTuning_not_changed" -> "MTK 调节参数未变化"
+            "output_path_not_changed" -> "输出路径未变化"
             "A_sample_invalid" -> "A 采样中断或无效"; "B_sample_invalid" -> "B 采样中断或无效"
             "A_active_round_not_sampled" -> "新一轮 A 尚未采集"; "B_active_round_not_sampled" -> "新一轮 B 尚未采集"
             "A_decoder_missing" -> "A 解码器未知"; "B_decoder_missing" -> "B 解码器未知"
             "B_not_after_A" -> "请先采 A 再采 B"
+            "unsupported_experiment_type" -> "不支持的对比实验类型"
+            "remediation_strategy_not_changed" -> "修正策略或解码路径未发生变化"
             else -> "待核对采集条件"
         }
     }

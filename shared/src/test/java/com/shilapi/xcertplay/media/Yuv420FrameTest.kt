@@ -49,4 +49,67 @@ class Yuv420FrameTest {
         assertThrows(IllegalArgumentException::class.java) { frame.copy(4, 4, -1, 0, 4, 4, listOf(small, small, small)) }
         assertThrows(IllegalArgumentException::class.java) { frame.copy(8192, 8192, 0, 0, 1, 1, listOf(small, small, small)) }
     }
+    @Test fun samplingRawPointsExtractsBoundedValues() {
+        val frame = Yuv420Frame()
+        val y = Yuv420Frame.Plane(ByteBuffer.wrap(ByteArray(16) { (it * 10).toByte() }), 4, 1)
+        val u = Yuv420Frame.Plane(ByteBuffer.wrap(ByteArray(4) { 100.toByte() }), 2, 1)
+        val v = Yuv420Frame.Plane(ByteBuffer.wrap(ByteArray(4) { 150.toByte() }), 2, 1)
+        frame.copy(4, 4, 0, 0, 4, 4, listOf(y, u, v))
+        val samples = frame.sample(listOf(0 to 0, 1 to 1, 3 to 3, 10 to 10))
+        assertEquals(3, samples.size)
+        assertEquals(0, samples[0].x)
+        assertEquals(0, samples[0].y)
+        assertEquals(0, samples[0].yCode)
+        assertEquals(100, samples[0].uCode)
+        assertEquals(150, samples[0].vCode)
+        assertEquals(50, samples[1].yCode)
+        assertEquals(150, samples[2].yCode)
+    }
+
+    @Test fun oddCropOffsetsProduceCorrectChromaOffsetAndScale() {
+        val frame = Yuv420Frame()
+        val y = Yuv420Frame.Plane(ByteBuffer.wrap(ByteArray(64) { it.toByte() }), 8, 1)
+        val uv = Yuv420Frame.Plane(ByteBuffer.wrap(ByteArray(32) { (100 + it).toByte() }), 8, 2)
+        // odd crop: left = 1, top = 1, right = 6, bottom = 5 -> width = 5, height = 4
+        frame.copy(8, 8, 1, 1, 6, 5, listOf(y, uv, uv))
+        assertEquals(5, frame.width)
+        assertEquals(4, frame.height)
+        assertEquals(3, frame.chromaWidth)
+        assertEquals(3, frame.chromaHeight)
+        assertEquals(1f / 6f, frame.chromaOffset[0], 0.0001f)
+        assertEquals(1f / 6f, frame.chromaOffset[1], 0.0001f)
+        assertEquals(5f / 6f, frame.chromaScale[0], 0.0001f)
+        assertEquals(2f / 3f, frame.chromaScale[1], 0.0001f)
+
+        val samples = frame.sample(listOf(0 to 0))
+        assertEquals(1, samples.size)
+        assertEquals(9, samples[0].yCode)
+    }
+
+    @Test fun oddCropChromaMappingReadsCorrectSubsampledPixel() {
+        val frame = Yuv420Frame()
+        val y = Yuv420Frame.Plane(ByteBuffer.wrap(ByteArray(32) { (it + 1).toByte() }), 8, 1)
+        val u = Yuv420Frame.Plane(ByteBuffer.wrap(byteArrayOf(10, 20, 30, 40, 50, 60, 70, 80)), 4, 1)
+        val v = Yuv420Frame.Plane(ByteBuffer.wrap(byteArrayOf(11, 21, 31, 41, 51, 61, 71, 81)), 4, 1)
+
+        // left = 1, width = 4 (right = 5), top = 0, height = 4 (bottom = 4)
+        frame.copy(8, 4, 1, 0, 5, 4, listOf(y, u, v))
+        assertEquals(4, frame.width)
+        assertEquals(3, frame.chromaWidth)
+
+        // px = 0 -> coded luma x = 1 -> coded chroma x = 0 (first sample: 10, 11)
+        // px = 1 -> coded luma x = 2 -> coded chroma x = 1 (second sample: 20, 21)
+        // px = 2 -> coded luma x = 3 -> coded chroma x = 1 (second sample: 20, 21)
+        // px = 3 -> coded luma x = 4 -> coded chroma x = 2 (third sample: 30, 31)
+        val samples = frame.sample(listOf(0 to 0, 1 to 0, 2 to 0, 3 to 0))
+        assertEquals(4, samples.size)
+        assertEquals(10, samples[0].uCode)
+        assertEquals(11, samples[0].vCode)
+        assertEquals(20, samples[1].uCode)
+        assertEquals(21, samples[1].vCode)
+        assertEquals(20, samples[2].uCode)
+        assertEquals(21, samples[2].vCode)
+        assertEquals(30, samples[3].uCode)
+        assertEquals(31, samples[3].vCode)
+    }
 }

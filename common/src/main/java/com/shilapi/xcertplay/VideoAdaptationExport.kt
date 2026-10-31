@@ -31,7 +31,9 @@ internal object VideoAdaptationExport {
         val directory = File(context.getExternalFilesDir(null) ?: context.filesDir, "diagnostic-reports").apply { mkdirs() }
         val stamp = java.text.SimpleDateFormat("yyyyMMdd-HHmmss", java.util.Locale.ROOT).format(java.util.Date())
         val prefix = if (value.optString("sourceScope") == "live_carplay_only") "live-carplay" else "decoder-diagnostics"
-        val file = File(directory, "$prefix-$stamp-${java.util.UUID.randomUUID().toString().take(8)}.zip")
+        val id = java.util.UUID.randomUUID().toString().take(8)
+        val tempFile = File(directory, "$prefix-$stamp-$id.writing")
+        val file = File(directory, "$prefix-$stamp-$id.zip")
         val names = linkedSetOf<String>()
         val rows = JSONArray()
         for (key in listOf("samples", "manualAdaptationSamplesReference")) {
@@ -46,7 +48,7 @@ internal object VideoAdaptationExport {
             }
         }
         try {
-            ZipOutputStream(file.outputStream()).use { output ->
+            ZipOutputStream(tempFile.outputStream()).use { output ->
                 val manifest = JSONArray()
                 fun entry(name: String, bytes: ByteArray) {
                     output.putNextEntry(ZipEntry(name)); output.write(bytes); output.closeEntry()
@@ -86,9 +88,11 @@ internal object VideoAdaptationExport {
                 entry("missing-capture-files.json", missingFiles.toString(2).toByteArray(Charsets.UTF_8))
                 entry("bundle-manifest.json", manifest.toString(2).toByteArray(Charsets.UTF_8))
             }
+            check(tempFile.isFile && tempFile.length() > 0) { "Archive generation failed or is empty" }
+            check(tempFile.renameTo(file)) { "Archive atomic publication rename failed" }
             directory.listFiles()?.filter { it != file && (it.name.startsWith("video-adaptation-") || it.name.startsWith("decoder-diagnostics-") || it.name.startsWith("live-carplay-")) && it.extension == "zip" }
                 ?.sortedByDescending { it.lastModified() }?.drop(7)?.forEach { it.delete() }
             return file
-        } catch (e: Exception) { file.delete(); throw e }
+        } catch (e: Exception) { tempFile.delete(); file.delete(); throw e }
     }
 }

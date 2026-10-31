@@ -162,4 +162,39 @@ class VideoDecodeQueueTest {
         }
     }
 
+    @Test fun repeatedKeyframeRejectionDoesNotResetChainWithoutQueuing() {
+        val chain = VideoReferenceChain()
+        val idr = byteArrayOf(0, 0, 0, 1, 0x65, 1)
+        val predicted = byteArrayOf(0, 0, 0, 1, 0x41, 1)
+        assertTrue(chain.needsKeyFrame)
+        assertTrue(chain.accepts(idr, VideoCodec.H264))
+        // Not calling onQueued simulates queue capacity or acquire stall failure.
+        assertTrue(chain.needsKeyFrame)
+        assertFalse(chain.accepts(predicted, VideoCodec.H264))
+        chain.onQueued()
+        assertFalse(chain.needsKeyFrame)
+        assertTrue(chain.accepts(predicted, VideoCodec.H264))
+    }
+
+    @Test fun intermediatePredictedFramesDiscardedWhileAwaitingKeyframe() {
+        val chain = VideoReferenceChain()
+        val predicted1 = byteArrayOf(0, 0, 0, 1, 0x41, 1)
+        val predicted2 = byteArrayOf(0, 0, 0, 1, 0x41, 2)
+        val idr = byteArrayOf(0, 0, 0, 1, 0x65, 3)
+        assertFalse(chain.accepts(predicted1, VideoCodec.H264))
+        assertFalse(chain.accepts(predicted2, VideoCodec.H264))
+        assertTrue(chain.accepts(idr, VideoCodec.H264))
+    }
+
+    @Test fun controlJobDuringKeyframeWaitPreservesSubsequentFreshKeyframe() {
+        val queue = VideoDecodeQueue()
+        val config = VideoJob.Config(VideoCodec.H264, byteArrayOf(1, 2, 3))
+        val idr = VideoJob.Frame(byteArrayOf(0, 0, 0, 1, 0x65, 1))
+        queue.offer(VideoJob.Resync)
+        queue.offer(config)
+        queue.offer(idr)
+        assertSame(VideoJob.Resync, queue.poll(0))
+        assertSame(config, queue.poll(0))
+        assertSame(idr, queue.poll(0))
+    }
 }

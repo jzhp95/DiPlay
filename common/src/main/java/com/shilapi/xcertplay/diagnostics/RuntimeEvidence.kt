@@ -8,7 +8,7 @@ import java.util.ArrayDeque
 internal class RuntimeEvidenceLedger(private val capacity:Int=256) {
     private val events=ArrayDeque<String>()
     private var dropped=0L
-    private val allowed=setOf("phase","status","planId","decoder","software","generation","output","fallbackReason","format","elapsedMs","revision","operation","result","pending","coalescedMoves","staleDropped","overflow","queueWaitNs","sendNs","oldestAgeNs","lockWaitNs","writeNs","commandNs","operationId","written","accepted")
+    private val allowed=setOf("phase","status","planId","decoder","software","generation","output","fallbackReason","format","elapsedMs","revision","operation","result","pending","coalescedMoves","staleDropped","overflow","queueWaitNs","sendNs","oldestAgeNs","lockWaitNs","writeNs","writeAndFlushNs","commandNs","operationId","written","accepted","phoneAcknowledged","rejectReason")
     @Synchronized fun record(sessionId:String?,generation:Long?,event:String,
         fields:Map<String,Any?> = emptyMap(),runId:String? = null) {
         require(capacity>0)

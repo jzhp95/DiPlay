@@ -19,6 +19,22 @@ internal class SoftwareYuvRenderer(surface: Surface) : Closeable {
     private val vertices = ByteBuffer.allocateDirect(16 * 4).order(ByteOrder.nativeOrder()).asFloatBuffer().apply {
         put(floatArrayOf(-1f, -1f, 0f, 1f, 1f, -1f, 1f, 1f, -1f, 1f, 0f, 0f, 1f, 1f, 1f, 0f)); position(0)
     }
+
+    // Cached locations to prevent per-frame OpenGL shader state lookups
+    private var locPosition = -1
+    private var locCoordinate = -1
+    private val locPlanes = IntArray(3) { -1 }
+    private var locConversion = -1
+    private var locOffset = -1
+    private var locChromaOffset = -1
+    private var locChromaScale = -1
+
+    // Reusable buffers for EGL queries
+    private val queryW = IntArray(1)
+    private val queryH = IntArray(1)
+    private var cachedSurfaceW = 0
+    private var cachedSurfaceH = 0
+
     init {
         try {
             display = EGL14.eglGetDisplay(EGL14.EGL_DEFAULT_DISPLAY)
@@ -38,6 +54,18 @@ internal class SoftwareYuvRenderer(surface: Surface) : Closeable {
             window = EGL14.eglCreateWindowSurface(display, config, surface, intArrayOf(EGL14.EGL_NONE), 0)
             check(window != EGL14.EGL_NO_SURFACE && EGL14.eglMakeCurrent(display, window, window, context)) { "EGL window unavailable" }
             program = link(VERTEX, FRAGMENT)
+
+            // Cache attributes & uniforms
+            locPosition = GLES20.glGetAttribLocation(program, "position")
+            locCoordinate = GLES20.glGetAttribLocation(program, "coordinate")
+            for (i in 0..2) {
+                locPlanes[i] = GLES20.glGetUniformLocation(program, "plane$i")
+            }
+            locConversion = GLES20.glGetUniformLocation(program, "conversion")
+            locOffset = GLES20.glGetUniformLocation(program, "offset")
+            locChromaOffset = GLES20.glGetUniformLocation(program, "chromaOffset")
+            locChromaScale = GLES20.glGetUniformLocation(program, "chromaScale")
+
             GLES20.glGenTextures(3, textures, 0)
             for (texture in textures) {
                 GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, texture)
@@ -50,24 +78,78 @@ internal class SoftwareYuvRenderer(surface: Surface) : Closeable {
         } catch (error: Exception) { close(); throw error }
     }
 
+    @Volatile var latestRawSamples: List<Yuv420Frame.RawSample> = emptyList()
+        private set
+    @Volatile var diagnosticSamplePoints: List<Pair<Int, Int>>? = null
+    @Volatile var diagnosticPatchIndices: List<Int?> = emptyList()
+    @Volatile var diagnosticNominals: List<Int?> = emptyList()
+    @Volatile var diagnosticFrameId: String? = null
+    @Volatile var diagnosticInstanceId: String? = null
+
+    fun configureDiagnosticSampling(
+        points: List<Pair<Int, Int>>,
+        patchIndices: List<Int?> = emptyList(),
+        nominals: List<Int?> = emptyList(),
+        frameId: String? = null,
+        instanceId: String? = null,
+    ) {
+        diagnosticSamplePoints = points
+        diagnosticPatchIndices = patchIndices
+        diagnosticNominals = nominals
+        diagnosticFrameId = frameId
+        diagnosticInstanceId = instanceId
+    }
+
+    fun sampleCurrent(points: List<Pair<Int, Int>>): List<Yuv420Frame.RawSample> = frame.sample(points)
+
     fun draw(image: Image, color: YuvColorTransform): YuvDrawTiming {
         val start = System.nanoTime()
         frame.copy(image)
         val copied = System.nanoTime()
+        if (frame.width > 0 && frame.height > 0) {
+            val customPoints = diagnosticSamplePoints
+            if (customPoints != null && customPoints.isNotEmpty()) {
+                latestRawSamples = frame.sample(
+                    points = customPoints,
+                    patchIndices = diagnosticPatchIndices,
+                    nominals = diagnosticNominals,
+                    frameId = diagnosticFrameId,
+                    instanceId = diagnosticInstanceId,
+                )
+            } else {
+                latestRawSamples = frame.sample(listOf(
+                    Pair(frame.width / 2, frame.height / 2),
+                    Pair(frame.width / 4, frame.height / 4),
+                    Pair(3 * frame.width / 4, 3 * frame.height / 4)
+                ))
+            }
+        }
         check(EGL14.eglMakeCurrent(display, window, window, context)) { "EGL window lost" }
-        val w = IntArray(1); val h = IntArray(1)
-        check(EGL14.eglQuerySurface(display, window, EGL14.EGL_WIDTH, w, 0) &&
-            EGL14.eglQuerySurface(display, window, EGL14.EGL_HEIGHT, h, 0) && w[0] > 0 && h[0] > 0)
-        GLES20.glViewport(0, 0, w[0], h[0])
-        GLES20.glDisable(GLES20.GL_BLEND); GLES20.glDisable(GLES20.GL_DEPTH_TEST); GLES20.glDisable(GLES20.GL_DITHER)
+
+        check(EGL14.eglQuerySurface(display, window, EGL14.EGL_WIDTH, queryW, 0) &&
+            EGL14.eglQuerySurface(display, window, EGL14.EGL_HEIGHT, queryH, 0) && queryW[0] > 0 && queryH[0] > 0)
+        val sw = queryW[0]
+        val sh = queryH[0]
+        if (sw != cachedSurfaceW || sh != cachedSurfaceH) {
+            GLES20.glViewport(0, 0, sw, sh)
+            cachedSurfaceW = sw
+            cachedSurfaceH = sh
+        }
+
+        GLES20.glDisable(GLES20.GL_BLEND)
+        GLES20.glDisable(GLES20.GL_DEPTH_TEST)
+        GLES20.glDisable(GLES20.GL_DITHER)
         GLES20.glUseProgram(program)
-        val position = GLES20.glGetAttribLocation(program, "position")
-        val coordinate = GLES20.glGetAttribLocation(program, "coordinate")
-        vertices.position(0); GLES20.glEnableVertexAttribArray(position)
-        GLES20.glVertexAttribPointer(position, 2, GLES20.GL_FLOAT, false, 16, vertices)
-        vertices.position(2); GLES20.glEnableVertexAttribArray(coordinate)
-        GLES20.glVertexAttribPointer(coordinate, 2, GLES20.GL_FLOAT, false, 16, vertices)
+
+        vertices.position(0)
+        GLES20.glEnableVertexAttribArray(locPosition)
+        GLES20.glVertexAttribPointer(locPosition, 2, GLES20.GL_FLOAT, false, 16, vertices)
+        vertices.position(2)
+        GLES20.glEnableVertexAttribArray(locCoordinate)
+        GLES20.glVertexAttribPointer(locCoordinate, 2, GLES20.GL_FLOAT, false, 16, vertices)
         GLES20.glPixelStorei(GLES20.GL_UNPACK_ALIGNMENT, 1)
+
+        val beforeUpload = System.nanoTime()
         for (index in 0..2) {
             val width = if (index == 0) frame.width else frame.chromaWidth
             val height = if (index == 0) frame.height else frame.chromaHeight
@@ -79,16 +161,29 @@ internal class SoftwareYuvRenderer(surface: Surface) : Closeable {
                 sizes[index * 2] = width; sizes[index * 2 + 1] = height
             } else GLES20.glTexSubImage2D(GLES20.GL_TEXTURE_2D, 0, 0, 0, width, height,
                 GLES20.GL_LUMINANCE, GLES20.GL_UNSIGNED_BYTE, frame.plane(index))
-            GLES20.glUniform1i(GLES20.glGetUniformLocation(program, "plane$index"), index)
+            GLES20.glUniform1i(locPlanes[index], index)
         }
-        GLES20.glUniformMatrix3fv(GLES20.glGetUniformLocation(program, "conversion"), 1, false, color.coefficients, 0)
-        GLES20.glUniform3fv(GLES20.glGetUniformLocation(program, "offset"), 1, color.offset, 0)
-        GLES20.glUniform2fv(GLES20.glGetUniformLocation(program, "chromaOffset"), 1, frame.chromaOffset, 0)
-        GLES20.glUniform2fv(GLES20.glGetUniformLocation(program, "chromaScale"), 1, frame.chromaScale, 0)
+        val uploaded = System.nanoTime()
+
+        GLES20.glUniformMatrix3fv(locConversion, 1, false, color.coefficients, 0)
+        GLES20.glUniform3fv(locOffset, 1, color.offset, 0)
+        GLES20.glUniform2fv(locChromaOffset, 1, frame.chromaOffset, 0)
+        GLES20.glUniform2fv(locChromaScale, 1, frame.chromaScale, 0)
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
         checkGl()
+        val drawn = System.nanoTime()
+
         check(EGL14.eglSwapBuffers(display, window)) { "EGL swap failed" }
-        return YuvDrawTiming(copied - start, System.nanoTime() - copied)
+        val swapped = System.nanoTime()
+
+        val copyNanos = copied - start
+        val uploadNanos = uploaded - beforeUpload
+        val drawOnlyNanos = drawn - uploaded
+        val swapNanos = swapped - drawn
+        val drawNanos = swapped - copied
+        val totalNanos = swapped - start
+
+        return YuvDrawTiming(copyNanos, drawNanos, uploadNanos, drawOnlyNanos, swapNanos, totalNanos)
     }
 
     override fun close() {
@@ -121,39 +216,48 @@ internal class SoftwareYuvRenderer(surface: Surface) : Closeable {
         try {
             fragmentShader = shader(GLES20.GL_FRAGMENT_SHADER, fragment)
             linked = GLES20.glCreateProgram()
-            GLES20.glAttachShader(linked, vertexShader); GLES20.glAttachShader(linked, fragmentShader); GLES20.glLinkProgram(linked)
+            check(linked != 0) { "YUV program create failed" }
+            GLES20.glAttachShader(linked, vertexShader)
+            GLES20.glAttachShader(linked, fragmentShader)
+            GLES20.glLinkProgram(linked)
             val status = IntArray(1); GLES20.glGetProgramiv(linked, GLES20.GL_LINK_STATUS, status, 0)
-            check(status[0] != 0) { "YUV program: ${GLES20.glGetProgramInfoLog(linked)}" }
+            check(status[0] != 0) { "YUV program link: ${GLES20.glGetProgramInfoLog(linked)}" }
             return linked
-        } catch (error: Exception) { if (linked != 0) GLES20.glDeleteProgram(linked); throw error }
-        finally { GLES20.glDeleteShader(vertexShader); if (fragmentShader != 0) GLES20.glDeleteShader(fragmentShader) }
+        } finally {
+            if (vertexShader != 0) GLES20.glDeleteShader(vertexShader)
+            if (fragmentShader != 0) GLES20.glDeleteShader(fragmentShader)
+            if (linked == 0) close()
+        }
     }
 
-    companion object {
-        private const val VERTEX = """
-            attribute vec2 position;
+    private companion object {
+        const val VERTEX = """
+            attribute vec4 position;
             attribute vec2 coordinate;
-            varying vec2 uv;
-            void main() { gl_Position = vec4(position, 0.0, 1.0); uv = coordinate; }
+            varying vec2 textureCoordinate;
+            void main() {
+                gl_Position = position;
+                textureCoordinate = coordinate;
+            }
         """
-        private const val FRAGMENT = """
-            #ifdef GL_FRAGMENT_PRECISION_HIGH
-            precision highp float;
-            #else
+        const val FRAGMENT = """
             precision mediump float;
-            #endif
-            varying vec2 uv;
-            uniform mediump sampler2D plane0;
-            uniform mediump sampler2D plane1;
-            uniform mediump sampler2D plane2;
+            varying vec2 textureCoordinate;
+            uniform sampler2D plane0;
+            uniform sampler2D plane1;
+            uniform sampler2D plane2;
             uniform mat3 conversion;
             uniform vec3 offset;
             uniform vec2 chromaOffset;
             uniform vec2 chromaScale;
             void main() {
-                vec2 chroma = chromaOffset + uv * chromaScale;
-                vec3 yuv = vec3(texture2D(plane0, uv).r, texture2D(plane1, chroma).r, texture2D(plane2, chroma).r);
-                gl_FragColor = vec4(clamp(conversion * (yuv - offset), 0.0, 1.0), 1.0);
+                vec2 chroma = chromaOffset + textureCoordinate * chromaScale;
+                vec3 yuv = vec3(
+                    texture2D(plane0, textureCoordinate).r,
+                    texture2D(plane1, chroma).r,
+                    texture2D(plane2, chroma).r
+                ) - offset;
+                gl_FragColor = vec4(clamp(conversion * yuv, 0.0, 1.0), 1.0);
             }
         """
     }

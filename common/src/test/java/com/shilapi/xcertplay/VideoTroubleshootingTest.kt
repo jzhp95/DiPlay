@@ -72,4 +72,34 @@ class VideoTroubleshootingTest {
         for (r in listOf(a,b)) r.getJSONObject("begin").getJSONObject("requested").put("softwareYuv",false)
         assertEquals("conditions_matched",comparison(value(a,b)).getString("status"))
     }
+
+    @Test fun unsupportedExperimentTypeBlocksComparison() {
+        val data = value(row("A","H264",1), row("B","H265",2)).put("experimentType", "nonexistent_type")
+        val result = VideoTroubleshooting.report(data)
+        val comp = result.getJSONArray("comparison").getJSONObject(1)
+        assertEquals("blocked", comp.getString("status"))
+        assertTrue(comp.getJSONArray("missingOrDifferent").toString().contains("unsupported_experiment_type"))
+    }
+
+    @Test fun beforeAfterWithUnchangedRemediationStrategyIsBlocked() {
+        val a = row("A","H264",1)
+        val b = row("B","H264",2)
+        val data = value(a, b).put("experimentType", "before_after")
+        val result = VideoTroubleshooting.report(data)
+        val comp = result.getJSONArray("comparison").getJSONObject(1)
+        assertEquals("blocked", comp.getString("status"))
+        assertTrue(comp.getJSONArray("missingOrDifferent").toString().contains("remediation_strategy_not_changed"))
+    }
+
+    @Test fun beforeAfterWithRemediationStrategyChangedMatchesConditions() {
+        val a = row("A","H264",1)
+        val b = row("B","H264",2)
+        b.getJSONObject("begin").put("selected_decoder", "c2.android.avc.decoder")
+        b.getJSONObject("begin").put("selected_decoder_software", true)
+        b.getJSONObject("begin").put("remediation_strategy", "strict_software")
+        val data = value(a, b).put("experimentType", "before_after")
+        val result = VideoTroubleshooting.report(data)
+        val comp = result.getJSONArray("comparison").getJSONObject(1)
+        assertEquals("conditions_matched", comp.getString("status"))
+    }
 }

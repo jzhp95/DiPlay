@@ -20,6 +20,7 @@ class VideoTouchTimelineTest {
         assertEquals(1,result.getInt("acceptedByLocalQueue"))
         assertEquals(3.0,result.getJSONObject("dispatchLagMillis").getDouble("mean"),0.001)
         assertTrue(result.isNull("touchToPhotonMs"));assertEquals("unavailable",result.getString("causalFrameAssociation"))
+        assertEquals("unknown", result.getString("phoneAcknowledged"))
         assertEquals(0,recorder.drain().length())
     }
     @Test fun overflowIsBoundedAndEventsOutsideWindowAreExcluded() {

@@ -39,8 +39,10 @@ internal class VideoDecodeQueue(
     // Recovery observes sustained backlog; short delayed bursts keep their reference chain.
     private val maxFrames: Int = 60,
     private val maxBytes: Int = 8 * 1024 * 1024,
+    private val maxJobs: Int = 256,
 ) {
     private val jobs = LinkedBlockingQueue<VideoJob>()
+    private var closed = false
 
     data class Backlog(val pendingFrames: Int, val newestPendingReceivedNs: Long?)
 
@@ -56,7 +58,9 @@ internal class VideoDecodeQueue(
         return Backlog(frames, newest)
     }
 
-    @Synchronized fun offer(job: VideoJob) {
+    /** False requests decoder shutdown; never pretend a rejected detach has already completed. */
+    @Synchronized fun offer(job: VideoJob): Boolean {
+        if (closed) return false
         if (job is VideoJob.Frame) {
             val frames = jobs.filterIsInstance<VideoJob.Frame>()
             if (frames.size >= maxFrames || frames.sumOf { it.nalus.size.toLong() } + job.nalus.size > maxBytes) {
@@ -64,9 +68,24 @@ internal class VideoDecodeQueue(
                 jobs.offer(VideoJob.Resync)
             }
             // A single oversized frame is also a lost reference chain.
-            if (job.nalus.size > maxBytes) return
+            if (job.nalus.size > maxBytes) return true
         }
-        jobs.offer(job)
+        // Frames alone have a byte/count budget; configuration and surface requests also need a bound.
+        val configBytes = if (job is VideoJob.Config)
+            jobs.sumOf { (it as? VideoJob.Config)?.codecData?.size?.toLong() ?: 0L } + job.codecData.size
+        else 0L
+        if (jobs.size >= maxJobs || configBytes > maxBytes) {
+            closed = true
+            discardFrames()
+            return false
+        }
+        return jobs.offer(job)
+    }
+
+    /** Keep accepted detach requests for completion only after the codec has really been released. */
+    @Synchronized fun close() {
+        closed = true
+        discardFrames()
     }
 
     /** Drop only the invalidated chain; the next config/surface owns later frames. */
