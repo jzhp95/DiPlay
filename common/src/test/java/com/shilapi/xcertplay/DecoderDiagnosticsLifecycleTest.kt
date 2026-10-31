@@ -90,6 +90,114 @@ class DecoderDiagnosticsLifecycleTest {
         assertTrue(DecoderDiagnosticsRun.directory(service,r.getString("id")).isDirectory)
         controller.destroy()
     }
+    @Test fun caseErrorWithConfirmedCleanupRecordsGapAndAdvancesToNextCase() {
+        val controller=Robolectric.buildService(DecoderDiagnosticsService::class.java).create()
+        val service=controller.get()
+        val r=DecoderDiagnosticsRun.create(service,JSONObject())
+        val case1=JSONObject().put("caseId","case-1").put("asset","asset-1").put("warmupMs",100L).put("measureMs",100L)
+        val case2=JSONObject().put("caseId","case-2").put("asset","asset-2").put("warmupMs",100L).put("measureMs",100L)
+        r.put("plan",org.json.JSONArray().put(case1).put(case2)).put("position",0).put("status","standard")
+        adoptAfterRecovery(service,r)
+        val hashes=JSONObject().put("asset-1","hash-1").put("asset-2","hash-2")
+        ReflectionHelpers.setField(service,"sourceHashes",hashes)
+
+        val dispatched=mutableListOf<JSONObject>()
+        val replyMessenger=ReflectionHelpers.getField<android.os.Messenger>(service,"reply")
+        val workerHandler=android.os.Handler(android.os.Looper.getMainLooper()) { msg ->
+            val data=msg.data
+            val req=data.getString("request")?:""
+            val runId=data.getString("run")?:""
+            val spec=JSONObject(data.getString("spec")?:"{}")
+            dispatched.add(spec)
+            if (dispatched.size==1) {
+                val result=JSONObject().put("error","codec_fault").put("cleanupConfirmed",true)
+                replyMessenger.send(android.os.Message.obtain(null,DecoderDiagnosticsWorkerService.RESULT).apply {
+                    this.data=android.os.Bundle().apply {
+                        putString("run",runId);putString("request",req);putString("result",result.toString())
+                    }
+                })
+            }
+            true
+        }
+        ReflectionHelpers.setField(service,"worker",android.os.Messenger(workerHandler))
+        ReflectionHelpers.setField(service,"workerPid",1234)
+        ReflectionHelpers.setField(service,"bound",true)
+
+        ReflectionHelpers.callInstanceMethod<Void>(service,"nextCase")
+        val deadline=System.nanoTime()+5_000_000_000L
+        while (dispatched.size<2 && System.nanoTime()<deadline) {
+            org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+            Thread.sleep(5)
+        }
+
+        assertEquals(2,dispatched.size)
+        assertEquals("case-1",dispatched[0].getString("caseId"))
+        assertEquals("case-2",dispatched[1].getString("caseId"))
+        val snapshot=DecoderDiagnosticsRun.coordinator(service).snapshot()
+        val gaps=snapshot.getJSONArray("gaps")
+        assertTrue((0 until gaps.length()).any { gaps.getString(it).contains("case_error:case-1:codec_fault") })
+        assertFalse(ReflectionHelpers.getField<Boolean>(service,"closing"))
+        assertEquals(1,snapshot.getInt("position"))
+        controller.destroy()
+    }
+    @Test fun caseErrorWithUnconfirmedCleanupAbortsRun() {
+        val controller=Robolectric.buildService(DecoderDiagnosticsService::class.java).create()
+        val service=controller.get()
+        val r=DecoderDiagnosticsRun.create(service,JSONObject())
+        val case1=JSONObject().put("caseId","case-1").put("asset","asset-1").put("warmupMs",100L).put("measureMs",100L)
+        val case2=JSONObject().put("caseId","case-2").put("asset","asset-2").put("warmupMs",100L).put("measureMs",100L)
+        r.put("plan",org.json.JSONArray().put(case1).put(case2)).put("position",0).put("status","standard")
+        adoptAfterRecovery(service,r)
+        val hashes=JSONObject().put("asset-1","hash-1").put("asset-2","hash-2")
+        ReflectionHelpers.setField(service,"sourceHashes",hashes)
+
+        val dispatched=mutableListOf<JSONObject>()
+        val replyMessenger=ReflectionHelpers.getField<android.os.Messenger>(service,"reply")
+        val workerHandler=android.os.Handler(android.os.Looper.getMainLooper()) { msg ->
+            val data=msg.data
+            val req=data.getString("request")?:""
+            val runId=data.getString("run")?:""
+            val spec=JSONObject(data.getString("spec")?:"{}")
+            dispatched.add(spec)
+            val result=JSONObject().put("error","codec_hang").put("cleanupConfirmed",false)
+            replyMessenger.send(android.os.Message.obtain(null,DecoderDiagnosticsWorkerService.RESULT).apply {
+                this.data=android.os.Bundle().apply {
+                    putString("run",runId);putString("request",req);putString("result",result.toString())
+                }
+            })
+            true
+        }
+        ReflectionHelpers.setField(service,"worker",android.os.Messenger(workerHandler))
+        ReflectionHelpers.setField(service,"workerPid",1234)
+        ReflectionHelpers.setField(service,"bound",true)
+
+        ReflectionHelpers.callInstanceMethod<Void>(service,"nextCase")
+        val deadline=System.nanoTime()+5_000_000_000L
+        while (!ReflectionHelpers.getField<Boolean>(service,"closing") && System.nanoTime()<deadline) {
+            org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+            Thread.sleep(5)
+        }
+
+        assertEquals(1,dispatched.size)
+        assertEquals("case-1",dispatched[0].getString("caseId"))
+        assertTrue(ReflectionHelpers.getField<Boolean>(service,"closing"))
+        val snapshot=DecoderDiagnosticsRun.coordinator(service).snapshot()
+        assertEquals("codec_hang",snapshot.getString("reason"))
+        controller.destroy()
+    }
+    @Test fun activityMismatchedTicketFinishesActivityAndPreservesCurrentTicket() {
+        val reply=android.os.Messenger(android.os.Handler(android.os.Looper.getMainLooper()))
+        val ticket=DecoderDiagnosticsWorkerService.Ticket("expected-req","run-1",JSONObject().put("caseId","c1"),reply)
+        DecoderDiagnosticsWorkerService.ticket=ticket
+        try {
+            val intent=Intent(RuntimeEnvironment.getApplication(),DecoderDiagnosticsActivity::class.java).putExtra("request","wrong-req")
+            val activityController=Robolectric.buildActivity(DecoderDiagnosticsActivity::class.java,intent).create()
+            assertTrue(activityController.get().isFinishing)
+            assertSame(ticket,DecoderDiagnosticsWorkerService.ticket)
+        } finally {
+            DecoderDiagnosticsWorkerService.ticket=null
+        }
+    }
     private fun adoptAfterRecovery(service:DecoderDiagnosticsService,run:JSONObject){
         val coordinator=DecoderDiagnosticsRun.coordinator(service)
         var recovered=false

@@ -48,14 +48,15 @@ class DecoderDiagnosticsService : Service() {
         val callback=continuation;continuation=null;callback?.invoke(value);true
     })
     private val connection=object:ServiceConnection {
-        override fun onServiceConnected(name:ComponentName,binder:IBinder){
+        override fun onServiceConnected(name:ComponentName?,binder:IBinder?){
+            if(binder==null)return
             worker=Messenger(binder)
             send(DecoderDiagnosticsWorkerService.HELLO,JSONObject(),5000){value->
                 if(value.has("error")){if(closing)publicationFailed("worker_handshake_failed")else finishRun("worker_handshake_failed")}
                 else {val next=afterConnect;afterConnect=null;next?.invoke()}
             }
         }
-        override fun onServiceDisconnected(name:ComponentName){
+        override fun onServiceDisconnected(name:ComponentName?){
             worker=null;workerPid=0
             if(!closing && run.optString("status") in DecoderDiagnosticsRun.busyStates)finishRun("diagnostic_process_exited")
         }
@@ -99,7 +100,7 @@ class DecoderDiagnosticsService : Service() {
                 coordinator.adopt(fresh)
                 original=settings();run.put("originalSettings",original)
                 checkpoint { preflight() }
-                main.postDelayed({if(!closing && run.optString("status") in DecoderDiagnosticsRun.busyStates)finishRun("suite_deadline_15_minutes")},900_000)
+                main.postDelayed({if(!closing && run.optString("status") in DecoderDiagnosticsRun.busyStates)finishRun("suite_deadline_25_minutes")},1_500_000)
             }
         }
         return START_NOT_STICKY
@@ -236,8 +237,11 @@ class DecoderDiagnosticsService : Service() {
                     run.put("position",position+1)
                     checkpoint {
                         if(value.optBoolean("windowInterrupted") || result.optString("reason")=="window_covered_or_closed")finishRun("diagnostic_window_interrupted")
-                        else if(value.has("error") || !value.optBoolean("cleanupConfirmed"))finishRun(value.optString("error","diagnostic_release_unconfirmed"))
-                        else nextCase()
+                        else if(!value.optBoolean("cleanupConfirmed"))finishRun(value.optString("error","diagnostic_release_unconfirmed"))
+                        else {
+                            if(value.has("error"))gap("case_error:${spec.getString("caseId")}:${value.optString("error")}")
+                            nextCase()
+                        }
                     }
                 }
             }

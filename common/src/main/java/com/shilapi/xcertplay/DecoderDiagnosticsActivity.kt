@@ -34,7 +34,8 @@ class DecoderDiagnosticsActivity : Activity() {
     override fun onCreate(savedInstanceState:Bundle?) {
         super.onCreate(savedInstanceState)
         val current=DecoderDiagnosticsWorkerService.ticket
-        if(current==null || current.id!=intent.getStringExtra("request")){finish();return}
+        val requestId=intent.getStringExtra("request")
+        if(current==null || current.id!=requestId){finish();return}
         ticket=current
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         val root=FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
@@ -68,6 +69,18 @@ class DecoderDiagnosticsActivity : Activity() {
             setTextColor(Color.WHITE);setBackgroundColor(0x99000000.toInt());textSize=16f
         },FrameLayout.LayoutParams(-1,-2,Gravity.BOTTOM))
         setContentView(root)
+        main.postDelayed({
+            if(!started.get() && !completed && !isFinishing && !isDestroyed){
+                completed=true
+                DecoderDiagnosticsWorkerService.complete(ticket, JSONObject().put("caseId", spec.getString("caseId"))
+                    .put("windowInterrupted", true).put("cleanupConfirmed", true).put("error", "surface_creation_timeout_8s"))
+                finish()
+            }
+        }, 8000)
+    }
+    override fun onNewIntent(intent: android.content.Intent?) {
+        super.onNewIntent(intent)
+        setIntent(intent)
     }
     override fun onStop(){super.onStop();if(!completed){covered=true;running.set(false)}}
     override fun onDestroy(){running.set(false);super.onDestroy()}
