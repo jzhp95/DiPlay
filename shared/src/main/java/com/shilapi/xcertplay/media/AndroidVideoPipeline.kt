@@ -1653,6 +1653,7 @@ private class VideoDecoder(
                     continue
                 }
                 val newerOutputAvailable = i < count - 1
+                val hasPendingBacklog = queue.backlogAfterCurrent().pendingFrames > 0
                 val slot = queuedSlotOf(item.presentationTimeUs)
                 val now = System.nanoTime()
                 val receivedNs = if (slot >= 0 && queuedReceivedNs[slot] > 0) queuedReceivedNs[slot]
@@ -1672,6 +1673,7 @@ private class VideoDecoder(
                     firstFrame = firstFrame,
                     diagnostic = isDiagnostic,
                     explicitlyPaced = explicitlyPaced,
+                    hasPendingBacklog = hasPendingBacklog,
                 )
 
                 if (discard) {

@@ -53,6 +53,7 @@ internal class SoftwareYuvRenderer(surface: Surface) : Closeable {
             check(context != EGL14.EGL_NO_CONTEXT) { "EGL context unavailable" }
             window = EGL14.eglCreateWindowSurface(display, config, surface, intArrayOf(EGL14.EGL_NONE), 0)
             check(window != EGL14.EGL_NO_SURFACE && EGL14.eglMakeCurrent(display, window, window, context)) { "EGL window unavailable" }
+            EGL14.eglSwapInterval(display, 0)
             program = link(VERTEX, FRAGMENT)
 
             // Cache attributes & uniforms

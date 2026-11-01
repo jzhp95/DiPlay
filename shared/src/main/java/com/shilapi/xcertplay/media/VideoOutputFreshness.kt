@@ -13,12 +13,13 @@ object VideoOutputFreshness {
         firstFrame: Boolean,
         diagnostic: Boolean,
         explicitlyPaced: Boolean,
+        hasPendingBacklog: Boolean = false,
         maxAgeNs: Long = DEFAULT_MAX_OUTPUT_AGE_NS
     ): Boolean = when {
         firstFrame -> false
         diagnostic -> false
         explicitlyPaced -> false
-        !newerOutputAvailable -> false
+        !newerOutputAvailable && !hasPendingBacklog -> false
         ageNs > maxAgeNs -> true
         else -> false
     }

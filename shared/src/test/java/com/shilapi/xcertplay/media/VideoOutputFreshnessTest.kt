@@ -24,4 +24,23 @@ class VideoOutputFreshnessTest {
         // Fresh frame (under 100ms) -> KEEP
         assertFalse(VideoOutputFreshness.shouldDiscardDecodedOutput(50_000_000L, true, false, false, false))
     }
+
+    @Test
+    fun backlogAwareFreshnessContract() {
+        // Single frame in batch (newerOutputAvailable = false), but pending queue backlog exists:
+        // age > 100ms, backlog present -> DISCARD to catch up to real-time stream
+        assertTrue(VideoOutputFreshness.shouldDiscardDecodedOutput(150_000_000L, false, false, false, false, hasPendingBacklog = true))
+
+        // Fresh frame (under 100ms) with backlog -> KEEP
+        assertFalse(VideoOutputFreshness.shouldDiscardDecodedOutput(50_000_000L, false, false, false, false, hasPendingBacklog = true))
+
+        // First frame even with backlog -> KEEP
+        assertFalse(VideoOutputFreshness.shouldDiscardDecodedOutput(150_000_000L, false, true, false, false, hasPendingBacklog = true))
+
+        // Diagnostic mode even with backlog -> KEEP
+        assertFalse(VideoOutputFreshness.shouldDiscardDecodedOutput(150_000_000L, false, false, true, false, hasPendingBacklog = true))
+
+        // No newer output and NO backlog (e.g. static tail frame at red light) -> KEEP
+        assertFalse(VideoOutputFreshness.shouldDiscardDecodedOutput(150_000_000L, false, false, false, false, hasPendingBacklog = false))
+    }
 }
