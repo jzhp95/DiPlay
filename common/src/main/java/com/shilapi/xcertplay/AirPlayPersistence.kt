@@ -1577,4 +1577,33 @@ object AirPlayPersistence {
 
     private fun safeAreaKey(widthPixels: Int, heightPixels: Int): String =
         "$SAFE_AREA_KEY_PREFIX${widthPixels}x$heightPixels"
+
+    const val KEY_VIDEO_IMPLEMENTATION = "video_implementation"
+    const val KEY_VIDEO_IMPLEMENTATION_REVISION = "video_implementation_revision"
+
+    fun getVideoImplementation(context: Context): com.shilapi.xcertplay.media.video.VideoImplementation {
+        val raw = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getString(KEY_VIDEO_IMPLEMENTATION, null) ?: return com.shilapi.xcertplay.media.video.VideoImplementation.LEGACY
+        return try {
+            com.shilapi.xcertplay.media.video.VideoImplementation.valueOf(raw)
+        } catch (_: Throwable) {
+            com.shilapi.xcertplay.media.video.VideoImplementation.LEGACY
+        }
+    }
+
+    fun setVideoImplementation(
+        context: Context,
+        implementation: com.shilapi.xcertplay.media.video.VideoImplementation,
+        newRevision: Long
+    ): Boolean {
+        return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putString(KEY_VIDEO_IMPLEMENTATION, implementation.name)
+            .putLong(KEY_VIDEO_IMPLEMENTATION_REVISION, newRevision)
+            .commit()
+    }
+
+    fun getVideoImplementationRevision(context: Context): Long {
+        return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getLong(KEY_VIDEO_IMPLEMENTATION_REVISION, 0L)
+    }
 }

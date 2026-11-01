@@ -43,5 +43,9 @@ release-signing.properties
 # Local platform signing bundle (including its documentation)
 /AOSP-platform-signing/
 
+# Python cache
+__pycache__/
+*.pyc
+
 # User-provisioned CarPlay authentication input
 /offline-mfi/

@@ -25,6 +25,8 @@ internal data class SessionMediaOptions(
     val color:VideoColorOverride=VideoColorOverride(),val advancedChannels:Boolean=false,
     val navigationStreamType:Int=14,val pacingDelayMs:Int=0,val frameRate:Int=0,
     val microphone:Boolean=false,val captureDirectory:File?=null,val direct:Boolean=false,val hardwareAccelerated:Boolean?=null,
+    val implementation: com.shilapi.xcertplay.media.video.VideoImplementation = com.shilapi.xcertplay.media.video.VideoImplementation.LEGACY,
+    val independentPolicy: com.shilapi.xcertplay.media.video.VideoRuntimePolicy? = null
 )
 internal data class SessionStartRequest(val runtime:CarPlayRuntimeConfig,val airPlay:AirPlayConfig,
     val identity:AirPlayIdentity,val media:SessionMediaOptions,

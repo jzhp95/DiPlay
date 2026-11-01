@@ -3,6 +3,7 @@
 - 文档版本：1.0。
 - 日期：2026-10-31。
 - 状态：规格与实施任务已编写，待审阅；不代表功能已实现或验证通过。
+- 补充证据与强制验收约束：[灰阶截断实测记录](2026-10-31-carplay-grayscale-clipping-evidence.md)。明确区分已证实的灰阶截断、最新版回归线索与尚未定位的具体责任环节。
 - 关联任务：[详细实施任务](../plans/2026-10-31-carplay-video-color-latency-remediation-tasks.md)。
 - 代码基线：develop，8e604be81a5bab8176ade449428034913a56b5cb。
 - 适用产品：DiPlay mobile，吉利星瑞 2026 款昆仑，Flyme Auto，Android 9 / API 28，arm64-v8a。

@@ -1517,6 +1517,19 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         // Opt-in controls that can cost sound or video on some head units.
         filteredSection(content, SettingsSection.ADVANCED_MEDIA,
             getString(R.string.settings_advanced_media), R.drawable.ic_dp_advanced) { card ->
+            val currentImpl = AirPlayPersistence.getVideoImplementation(this)
+            val currentRev = AirPlayPersistence.getVideoImplementationRevision(this)
+            choice(card, getString(R.string.settings_video_pipeline), listOf(
+                getString(R.string.settings_video_pipeline_legacy),
+                getString(R.string.settings_video_pipeline_independent)
+            ), if (currentImpl == com.shilapi.xcertplay.media.video.VideoImplementation.INDEPENDENT) 1 else 0, reconnects = true) { index ->
+                val targetImpl = if (index == 1) com.shilapi.xcertplay.media.video.VideoImplementation.INDEPENDENT
+                                else com.shilapi.xcertplay.media.video.VideoImplementation.LEGACY
+                val switch = VideoImplementationSwitch(VideoImplementationPreferences(this))
+                switch.request(targetImpl, currentRev)
+                markReconnectNeeded()
+                render()
+            }
             val hardwareYuv = AirPlayPersistence.loadHardwareYuvEnabled(this)
             toggle(card, getString(R.string.settings_hardware_yuv_video),
                 getString(R.string.settings_hardware_yuv_description), hardwareYuv) { enabled ->

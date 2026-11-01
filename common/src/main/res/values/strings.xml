@@ -394,6 +394,10 @@
     <string name="settings_reconnect_pending">已保存。部分更改将在 CarPlay 重新连接后生效。</string>
     <string name="settings_reconnect_now">立即重新连接</string>
     <string name="settings_advanced_media">视频与音频</string>
+    <string name="settings_video_pipeline">视频管线实现</string>
+    <string name="settings_video_pipeline_description">选择视频接收、解码与呈现管线架构。切换后将在重新连接时生效。</string>
+    <string name="settings_video_pipeline_legacy">原有管线</string>
+    <string name="settings_video_pipeline_independent">独立新管线（实验性）</string>
     <string name="settings_wheel_keys">方向盘按键</string>
     <string name="settings_diagnostics_summary">排查连接问题时保存本地报告</string>
     <string name="settings_full_screen_description">在 Apple CarPlay 与 CarPlay 中隐藏状态栏及导航栏。</string>
