@@ -307,12 +307,8 @@ class DecoderDiagnosticsService : Service() {
                     run.put("status",if(run.optString("execution")=="completed")"completed"else"interrupted")
                     checkpoint {
                         coordinator.write("receipt.json",run.toString()) {
-                            if(run.optString("publication")=="public_verified" && Build.VERSION.SDK_INT<=28){
-                                val file=File(run.getString("publicPath"));val id=run.getString("id")
-                                Thread({val index=DiagnosticExportStore.registerCompletedDownload(this,file,"application/zip")
-                                    runCatching{DecoderDiagnosticsRun.json(File(DecoderDiagnosticsRun.directory(this,id),"download-index.json"),JSONObject().put("downloadId",index.first?:JSONObject.NULL).put("error",index.second?:JSONObject.NULL))}
-                                },"diagnostic-download-index").apply{isDaemon=true;start()}
-                            }
+                            // The disposable worker completed download registration and final readback
+                            // before reporting public_verified. Do not mutate publication after its receipt.
                             releaseWorker(kill=value.has("error"));stopForeground(STOP_FOREGROUND_REMOVE);stopSelf()
                         }
                     }

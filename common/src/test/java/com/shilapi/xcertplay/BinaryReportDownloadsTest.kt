@@ -27,6 +27,7 @@ class BinaryReportDownloadsTest {
     private lateinit var source: File
     @Before fun setup() {
         CompletedDownloadTestShadow.fail = false; CompletedDownloadTestShadow.path = null
+        CompletedDownloadTestShadow.truncateOnRegister = false
         shadowOf(context).denyPermissions(Manifest.permission.WRITE_EXTERNAL_STORAGE)
         val authority = "${context.packageName}.diagnostic-reports"
         val info = context.packageManager.resolveContentProvider(authority, PackageManager.GET_META_DATA)!!
@@ -125,10 +126,53 @@ class BinaryReportDownloadsTest {
         assertFalse(saved.savedInApp);assertFalse(provider.deleted)
         assertTrue(saved.savedPath!!.contains("未提供文件名"));assertTrue(provider.file.isFile)
     }
+    @Test fun truncatedPublicArchiveDuringRegistrationCannotReportSuccess() {
+        shadowOf(context).grantPermissions(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        val original = source.readBytes()
+        CompletedDownloadTestShadow.truncateOnRegister = true
+        val saved = DiagnosticExportStore.saveFileWithoutPicker(context, source, "application/zip")
+        assertTrue(saved.savedInApp)
+        assertArrayEquals(original, source.readBytes())
+        assertEquals(source.absolutePath, saved.savedPath)
+        assertEquals(original.size.toLong(), saved.verifiedBytes)
+        assertTrue(saved.publicFailure!!.contains("verification"))
+        assertFalse(File(CompletedDownloadTestShadow.path!!).exists())
+        context.contentResolver.openInputStream(saved.uri)!!.use { assertArrayEquals(original, it.readBytes()) }
+    }
+
+    @Test fun successfulReceiptContainsTheDeliveredBytesAndChecksum() {
+        shadowOf(context).grantPermissions(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        val saved = DiagnosticExportStore.saveFileWithoutPicker(context, source, "application/zip")
+        try {
+            assertFalse(saved.savedInApp)
+            val delivered = File(saved.savedPath!!)
+            assertEquals(delivered.length(), saved.verifiedBytes)
+            assertEquals(DecoderDiagnosticsRun.sha(delivered), saved.verifiedSha256)
+            context.contentResolver.openInputStream(saved.uri)!!.use {
+                assertArrayEquals(delivered.readBytes(), it.readBytes())
+            }
+        } finally { File(saved.savedPath!!).delete() }
+    }
+
+    @Test @Config(sdk = [29])
+    fun truncateDuringMediaStorePublicationFallsBackInsteadOfClaimingPublicSuccess() {
+        val provider = BinaryDownloads(File(context.cacheDir, "truncate-on-publish.zip")).apply {
+            truncateOnPublish = true
+        }
+        provider.attachInfo(context, ProviderInfo().apply { authority = "media" })
+        ShadowContentResolver.registerProviderInternal("media", provider)
+        val saved = DiagnosticExportStore.saveFileWithoutPicker(context, source, "application/zip")
+        assertTrue(saved.savedInApp)
+        assertTrue(provider.deleted)
+        assertTrue(source.length() > 0)
+        assertTrue(saved.publicFailure!!.contains("verification"))
+    }
+
     private class BinaryDownloads(val file: File) : ContentProvider() {
         var inserted: ContentValues? = null
         var published: ContentValues? = null
         var failPublish = false
+        var truncateOnPublish = false
         var deleted = false
         var corruptRead = false
         var actualName: String? = null
@@ -146,7 +190,9 @@ class BinaryReportDownloadsTest {
             return ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_CREATE or ParcelFileDescriptor.MODE_WRITE_ONLY or ParcelFileDescriptor.MODE_TRUNCATE)
         }
         override fun update(uri: Uri, values: ContentValues?, selection: String?, args: Array<out String>?): Int {
-            published = ContentValues(values); return if (failPublish) 0 else 1
+            published = ContentValues(values)
+            if (truncateOnPublish) file.writeBytes(byteArrayOf())
+            return if (failPublish) 0 else 1
         }
         override fun delete(uri: Uri, selection: String?, args: Array<out String>?): Int { deleted = true; file.delete(); return 1 }
         override fun getType(uri: Uri) = "application/zip"
@@ -162,13 +208,14 @@ class BinaryReportDownloadsTest {
 
 @org.robolectric.annotation.Implements(android.app.DownloadManager::class)
 class CompletedDownloadTestShadow {
-    companion object { var fail = false; var path: String? = null }
+    companion object { var fail = false; var path: String? = null; var truncateOnRegister = false }
     @org.robolectric.annotation.Implementation
     protected fun addCompletedDownload(title: String, description: String, scan: Boolean, mime: String,
         filePath: String, length: Long, notify: Boolean): Long {
         if (fail) throw IllegalStateException("downloads provider unavailable")
         check(mime == "application/zip" && java.io.File(filePath).length() == length)
         path = filePath
+        if (truncateOnRegister) java.io.File(filePath).writeBytes(byteArrayOf())
         return 77L
     }
 }

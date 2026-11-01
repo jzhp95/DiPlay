@@ -21,13 +21,18 @@ import org.robolectric.annotation.LooperMode
 import java.time.Duration
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [28], manifest = Config.NONE)
+@Config(sdk = [28], shadows = [FileProviderPathTestShadow::class])
 @LooperMode(LooperMode.Mode.PAUSED)
 class VideoAdaptationOverlayTest {
     private lateinit var activity: Activity
     private var overlay: VideoAdaptationOverlay? = null
     @Before fun setup() {
         activity = Robolectric.buildActivity(Activity::class.java).setup().get()
+        val authority = activity.packageName + ".diagnostic-reports"
+        val info = activity.packageManager.resolveContentProvider(
+            authority, android.content.pm.PackageManager.GET_META_DATA)!!
+        org.robolectric.shadows.ShadowContentResolver.registerProviderInternal(
+            authority, DiagnosticReportProvider().also { it.attachInfo(activity, info) })
         VideoAdaptationRegistry.current()?.let(VideoAdaptationRegistry::finish)
         VideoAdaptationStore.clear(activity)
     }
@@ -58,9 +63,16 @@ class VideoAdaptationOverlayTest {
         val deadline = System.nanoTime() + 5_000_000_000L
         while (VideoReportPublisher.busy() && System.nanoTime() < deadline) Thread.sleep(10)
         val state = VideoReportPublisher.latest(activity)
-        assertEquals("public", state.getString("status"))
+        assertEquals(state.toString(), "public", state.getString("status"))
+        val uri = android.net.Uri.parse(state.getString("uri"))
+        assertEquals("content", uri.scheme)
         val file = java.io.File(state.getString("path"))
         try {
+            assertEquals(file.length(), state.getLong("bytes"))
+            assertEquals(DecoderDiagnosticsRun.sha(file), state.getString("sha256"))
+            activity.contentResolver.openInputStream(uri)!!.use {
+                assertArrayEquals(file.readBytes(), it.readBytes())
+            }
             java.util.zip.ZipFile(file).use { zip ->
                 val data = JSONObject(zip.getInputStream(zip.getEntry("report.json")).bufferedReader().readText())
                 assertEquals(20.0, data.getJSONArray("samples").getJSONObject(0).getJSONObject("summary").getDouble("durationSeconds"), 0.001)

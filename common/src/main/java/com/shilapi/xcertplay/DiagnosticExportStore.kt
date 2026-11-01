@@ -26,6 +26,7 @@ internal object DiagnosticExportStore {
         val savedPath: String? = null,
         val publicFailure: String? = null,
         val downloadId: Long? = null, val downloadIndexFailure: String? = null,
+        val verifiedBytes: Long? = null, val verifiedSha256: String? = null,
     )
 
     fun saveWithoutPicker(context: Context, fileName: String, report: String): SavedReport {
@@ -60,6 +61,8 @@ internal object DiagnosticExportStore {
     /** Keep the private source as a shareable fallback; public files are never pruned. */
     fun saveFileWithoutPicker(context: Context, source: File, mime: String, indexDownload: Boolean = true): SavedReport {
         require(source.isFile && source.length() > 0) { "Report file is empty" }
+        val expectedBytes = source.length()
+        val expectedSha256 = DecoderDiagnosticsRun.sha(source)
         var publicFailure = if (needsStoragePermission(context)) "未获得存储权限" else "公共下载目录不可写"
         val fallback = { FileProvider.getUriForFile(context, "${context.packageName}.diagnostic-reports", source) }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -93,8 +96,12 @@ internal object DiagnosticExportStore {
                         }
                     }
                 }.getOrNull()
+                // Publication and provider metadata queries happen after the first copy check.
+                // Read the final published URI, not the private ZIP used to build the report.
+                verifyDeliveredArchive(context, uri, expectedBytes, expectedSha256)
                 return SavedReport(uri, savedPath = actualPath ?: "Download/Apple CarPlay（系统未提供文件名，请使用报告链接或下载列表）",
-                    publicFailure = if(actualPath==null)"文件已校验写入，系统未返回实际文件名"else null)
+                    publicFailure = if(actualPath==null)"文件已校验写入，系统未返回实际文件名"else null,
+                    verifiedBytes = expectedBytes, verifiedSha256 = expectedSha256)
             } catch (error: Exception) {
                 publicFailure = error.javaClass.simpleName + ": " + (error.message ?: "").take(160)
                 created?.let { runCatching { context.contentResolver.delete(it, null, null) } }
@@ -118,13 +125,42 @@ internal object DiagnosticExportStore {
                 val uri = runCatching { FileProvider.getUriForFile(context, "${context.packageName}.diagnostic-reports", published) }
                     .getOrElse { runCatching { fallback() }.getOrDefault(Uri.EMPTY) }
                 val index = if (indexDownload) registerCompletedDownload(context, published, mime) else (null to null)
-                return SavedReport(uri, savedPath = published.absolutePath, downloadId = index.first, downloadIndexFailure = index.second)
+                check(published.isFile && published.length() == expectedBytes &&
+                    DecoderDiagnosticsRun.sha(published) == expectedSha256) {
+                    "Final public archive verification failed after download registration"
+                }
+                verifyDeliveredArchive(context, uri, expectedBytes, expectedSha256)
+                return SavedReport(uri, savedPath = published.absolutePath, downloadId = index.first,
+                    downloadIndexFailure = index.second, verifiedBytes = expectedBytes, verifiedSha256 = expectedSha256)
             } catch (error: Exception) {
                 publicFailure = error.javaClass.simpleName + ": " + (error.message ?: "").take(160)
                 target?.delete()
             }
         }
-        return SavedReport(runCatching { fallback() }.getOrDefault(Uri.EMPTY), savedInApp = true, savedPath = source.absolutePath, publicFailure = publicFailure)
+        check(source.isFile && source.length() == expectedBytes &&
+            DecoderDiagnosticsRun.sha(source) == expectedSha256) { "Private report archive verification failed" }
+        val privateUri = fallback()
+        verifyDeliveredArchive(context, privateUri, expectedBytes, expectedSha256)
+        return SavedReport(privateUri, savedInApp = true, savedPath = source.absolutePath,
+            publicFailure = publicFailure, verifiedBytes = expectedBytes, verifiedSha256 = expectedSha256)
+    }
+
+    private fun verifyDeliveredArchive(context: Context, uri: Uri, expectedBytes: Long, expectedSha256: String) {
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+        var count = 0L
+        checkNotNull(context.contentResolver.openInputStream(uri)) { "Report URI is not readable" }.use { input ->
+            val bytes = ByteArray(65536)
+            while (true) {
+                val n = input.read(bytes)
+                if (n < 0) break
+                digest.update(bytes, 0, n)
+                count += n
+            }
+        }
+        val actualSha256 = digest.digest().joinToString("") { "%02x".format(it.toInt() and 255) }
+        check(count == expectedBytes && count > 0 && actualSha256 == expectedSha256) {
+            "Final report URI readback verification failed"
+        }
     }
 
     @Suppress("DEPRECATION")
