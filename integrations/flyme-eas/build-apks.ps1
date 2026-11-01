@@ -33,7 +33,7 @@ $signingDir = $env:DIPLAY_PLATFORM_SIGNING_DIR
 if (-not $signingDir) { $signingDir = Join-Path $repoRoot 'AOSP-platform-signing' }
 $buildTools = Join-Path $androidSdk 'build-tools\36.1.0'
 $apkOutputDir = Join-Path $repoRoot 'build\car-test-apks'
-$versionName = '0.2.26'
+$versionName = '0.3.0'
 $buildGradle = Get-Content -LiteralPath (Join-Path $repoRoot 'mobile\build.gradle.kts') -Raw
 $versionMatch = [regex]::Match($buildGradle, 'versionName\s*=\s*"([^"]+)"')
 if ($versionMatch.Success) { $versionName = $versionMatch.Groups[1].Value }

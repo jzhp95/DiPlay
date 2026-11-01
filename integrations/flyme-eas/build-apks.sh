@@ -12,7 +12,7 @@ tools="$ANDROID_HOME/build-tools/36.1.0"
 output="$repo/build/car-test-apks"
 # Extract version name and name APKs with the version tag.
 version_name=$(sed -n 's/^[[:space:]]*versionName = "\(.*\)"/\1/p' "$repo/mobile/build.gradle.kts")
-version_tag="v${version_name:-0.2.26}"
+version_tag="v${version_name:-0.3.0}"
 normal_apk="Apple-CarPlay-${version_tag}-normal.apk"
 normal_r8_apk="Apple-CarPlay-${version_tag}-normal-r8.apk"
 system_apk="Apple-CarPlay-${version_tag}-system.apk"

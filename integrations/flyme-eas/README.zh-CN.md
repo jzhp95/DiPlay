@@ -81,7 +81,7 @@ common/FlymeWheelIntegration.kt
 
 ## 构建及签名
 
-本分支默认输出普通包，支持通过 `-PflymeSystem=true` 切换 Flyme 车机系统包。当前基本版本为 0.2.26／45；debug 显示为 0.2.26。
+本分支默认输出普通包，支持通过 `-PflymeSystem=true` 切换 Flyme 车机系统包。当前基本版本为 0.3.0／46；debug 显示为 0.3.0。
 
 | 类型 | applicationId | 说明 |
 | --- | --- | --- |
