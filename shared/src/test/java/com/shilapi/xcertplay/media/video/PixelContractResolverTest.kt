@@ -68,7 +68,7 @@ class PixelContractResolverTest {
         assertTrue(decision is ColorDecision.Unverified)
         val unverified = decision as ColorDecision.Unverified
         assertTrue(unverified.reason.contains("Range conflict"))
-        assertEquals(ColorRange.LIMITED, unverified.fallbackContract.effectiveRange)
+        assertEquals(ColorRange.FULL, unverified.fallbackContract.effectiveRange)
         assertEquals(Confidence.LOW, unverified.fallbackContract.confidence)
     }
 

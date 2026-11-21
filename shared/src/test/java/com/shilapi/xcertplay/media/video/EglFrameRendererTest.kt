@@ -18,6 +18,7 @@ class EglFrameRendererTest {
 
     private class FakeEglDriver : EglDriver {
         var initialized = false
+        var initResult = true
         var windowSurfaceCreated = false
         var madeCurrent = false
         var swapInterval: Int? = null
@@ -38,7 +39,7 @@ class EglFrameRendererTest {
 
         override fun initEgl(): Boolean {
             initialized = true
-            return true
+            return initResult
         }
 
         override fun createWindowSurface(surface: Surface): Boolean {
@@ -238,5 +239,28 @@ class EglFrameRendererTest {
         assertTrue(fakeDriver.programDeleted)
         assertTrue(fakeDriver.surfaceDestroyed)
         assertTrue(fakeDriver.terminated)
+    }
+
+    @Test
+    fun endpointReleasesPartiallyInitializedRendererWhenEglInitializationFails() {
+        val fakeDriver = FakeEglDriver().apply { initResult = false }
+        val endpoint = IndependentVideoEndpoint(
+            backendFactory = { _, _, _ -> object : VideoBackend {
+                override fun capabilities() = BackendCapabilities(BackendKind.PLATFORM_YUV, setOf(CodecType.H264), true, false)
+                override fun configure(config: VideoStreamConfig, target: OutputTarget, options: BackendOptions) = ConfigureResult.Success("fake-yuv", capabilities())
+                override fun trySubmit(unit: EncodedAccessUnit) = OfferResult.REJECTED
+                override fun pollOutput(deadlineNs: Long) = BackendOutput.NoOutput
+                override fun requestStop() {}
+                override fun awaitReleased(deadlineNs: Long) = ReleaseState.RELEASED
+            } }, rendererFactory = { EglFrameRenderer { fakeDriver } })
+        val texture = android.graphics.SurfaceTexture(1)
+        val surface = Surface(texture)
+        try {
+            endpoint.attachSurface(surface)
+            endpoint.onConfig(byteArrayOf(0,0,0,1,0x67,66,0,31))
+            assertTrue(endpoint.awaitReleased(3000))
+            assertTrue(endpoint.snapshot().lastError!!.contains("egl_init_failed"))
+            assertTrue("partial EGL initialization must remain owned until terminated", fakeDriver.terminated)
+        } finally { endpoint.close(); surface.release(); texture.release() }
     }
 }

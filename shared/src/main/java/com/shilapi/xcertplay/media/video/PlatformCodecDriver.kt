@@ -215,9 +215,8 @@ class AndroidMediaCodecDriver(
         ): AndroidMediaCodecDriver {
             if (preference != DecoderPreference.AUTO) {
                 val candidate = findCodec(mimeType, preference == DecoderPreference.SOFTWARE)
-                if (candidate != null) {
-                    return AndroidMediaCodecDriver(MediaCodec.createByCodecName(candidate), candidate)
-                }
+                    ?: error("requested_decoder_unavailable:$preference:$mimeType")
+                return AndroidMediaCodecDriver(MediaCodec.createByCodecName(candidate), candidate)
             }
             val codec = MediaCodec.createDecoderByType(mimeType)
             return AndroidMediaCodecDriver(codec, codec.name)

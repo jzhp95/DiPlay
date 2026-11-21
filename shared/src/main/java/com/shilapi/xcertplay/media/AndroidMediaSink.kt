@@ -22,6 +22,7 @@ import com.shilapi.xcertplay.airplay.MediaSink
 import com.shilapi.xcertplay.airplay.MicrophoneConfig
 import com.shilapi.xcertplay.airplay.VideoCodec
 import com.shilapi.xcertplay.airplay.toHexString
+import com.shilapi.xcertplay.media.video.*
 import com.shilapi.xcertplay.media.AudioFocusRequestHandle
 import java.io.Closeable
 import java.nio.ByteBuffer
@@ -84,8 +85,21 @@ class AndroidMediaSink(
     val experimentalAudio: ExperimentalAudioConfig = ExperimentalAudioConfig(),
     val videoPipelinePlan:VideoPipelinePlan?=null,
     onVideoObservation:(VideoOutputObservation)->Unit={},
+    val videoImplementation:VideoImplementation=VideoImplementation.LEGACY,
+    independentPolicy:VideoRuntimePolicy=VideoRuntimePolicy(),
+    videoSessionId:String="independent-session",
+    private val onVideoRuntimeDiagnostic:(String)->Unit={},
+    independentEndpointFactory:((VideoRuntimePolicy)->IndependentVideoEndpoint)?=null,
 ) : MediaSink {
     private val closed=AtomicBoolean(false)
+    private val independent=if(videoImplementation==VideoImplementation.INDEPENDENT)
+        independentEndpointFactory?.invoke(independentPolicy) ?: IndependentVideoEndpoint(sessionId=videoSessionId,
+            policy=independentPolicy,diagnostic={message->onVideoRuntimeDiagnostic(message);independentDiagnostic?.invoke(message)}) else null
+    @Volatile private var independentDiagnostic:((String)->Unit)?=null
+    @Volatile private var screenListener=onScreenStreamActiveChanged
+    init { if(surface!=null)independent?.attachSurface(surface) }
+    private fun independentMain(type:Int)=type==110 && independent!=null
+    fun videoRuntimeSnapshot()=independent?.snapshot()
     internal val video=AndroidVideoPipeline(surface,videoWidth,videoHeight,preferSoftwareHevcDecoder,videoPacingDelayMillis,
         mainVideoFrameRate,vendorLowLatencyDecoder,mtkDecoderTuningEnabled,videoColorOverride,forceSoftwareVideoDecoder,
         mainScreenSoftwareDecoder,mainScreenSoftwareYuv,mainScreenHardwareYuv,onScreenStreamActiveChanged,videoPipelinePlan,onVideoObservation)
@@ -93,9 +107,9 @@ class AndroidMediaSink(
         mediaChannel,navigationChannel,navigationAttenuationDb,navigationStreamType,mediaBufferMillis,onAudioDiagnostic,
         onMediaAudioChanged,callEchoCancellation,callVoiceFilter,callSpeakerphone,nativeHfpCalls,experimentalAudio)
     val mainScreenSoftwareDecoder get()=video.mainScreenSoftwareDecoder
-    val videoPacingEnabled get()=video.videoPacingEnabled
-    val mainVideoLowLatencyEnabled get()=video.mainVideoLowLatencyEnabled
-    val mainVideoMtkTuningEnabled get()=video.mainVideoMtkTuningEnabled
+    val videoPacingEnabled get()=independent==null && video.videoPacingEnabled
+    val mainVideoLowLatencyEnabled get()=independent==null && video.mainVideoLowLatencyEnabled
+    val mainVideoMtkTuningEnabled get()=independent==null && video.mainVideoMtkTuningEnabled
     internal var detachTimeoutNanos:Long
         get()=video.detachTimeoutNanos
         set(value){video.detachTimeoutNanos=value}
@@ -105,11 +119,20 @@ class AndroidMediaSink(
     var diagnosticCapture:VideoDiagnosticCapture?
         get()=video.diagnosticCapture
         set(value){video.diagnosticCapture=value}
-    fun resourceOwnershipCounts():Map<String,Int> = video.resourceCounts()+audio.resourceCounts()
-    fun videoOutputObservation(type:Int=110)=video.videoOutputObservation(type)
-    fun videoColorOutput(type:Int=110)=video.videoColorOutput(type)
-    fun videoColorEvidence(type:Int=110)=video.videoColorEvidence(type)
-    fun videoCadenceSnapshot(type: Int = 110): Map<String, Any?> = video.videoCadenceSnapshot(type)
+    fun resourceOwnershipCounts():Map<String,Int> = video.resourceCounts()+audio.resourceCounts()+mapOf(
+        "independentVideoRuntimes" to if(independent!=null && independent.snapshot().releaseState!=ReleaseState.RELEASED)1 else 0)
+    fun videoOutputObservation(type:Int=110)=if(independentMain(type)) {
+        val actual=independent?.outputDescription()
+        VideoOutputObservation(null,actual?.actualComponent,null,emptyMap(),independent?.snapshot()?.decoderGeneration,
+            output=independent?.snapshot()?.actualBackend?.name)
+    } else video.videoOutputObservation(type)
+    fun videoColorOutput(type:Int=110)=if(independentMain(type))null else video.videoColorOutput(type)
+    fun videoColorEvidence(type:Int=110)=if(independentMain(type))null else video.videoColorEvidence(type)
+    fun videoCadenceSnapshot(type: Int = 110): Map<String, Any?> = if(independentMain(type)) independent!!.snapshot().let {
+        mapOf("requestedImplementation" to it.requestedImplementation.name,"actualImplementation" to it.actualImplementation.name,
+            "actualBackend" to it.actualBackend?.name,"lastError" to it.lastError,"inputQueueDepth" to it.inputQueueDepth,
+            "physicalTouchLatency" to "unknown","colorVerified" to false)
+    } else video.videoCadenceSnapshot(type)
     fun recentBacklogEpisodes(type: Int = 110): List<BacklogEpisode> = video.recentBacklogEpisodes(type)
     fun latestRawYuvSamples(type: Int = 110): List<Yuv420Frame.RawSample> = video.latestRawYuvSamples(type)
     fun configureDiagnosticSampling(
@@ -119,42 +142,59 @@ class AndroidMediaSink(
         frameId: String? = null,
         instanceId: String? = null,
     ) = video.configureDiagnosticSampling(110, points, patchIndices, nominals, frameId, instanceId)
-    fun setSurface(type:Int,surface:Surface)=video.setSurface(type,surface)
-    fun clearSurface(type:Int,surface:Surface)=video.clearSurface(type,surface)
-    class SurfaceDetach internal constructor(private val delegate:AndroidVideoPipeline.SurfaceDetach){
+    fun setSurface(type:Int,surface:Surface){if(independentMain(type))independent?.attachSurface(surface) else video.setSurface(type,surface)}
+    fun clearSurface(type:Int,surface:Surface){if(independentMain(type))independent?.detachSurface(surface) else video.clearSurface(type,surface)}
+    class SurfaceDetach internal constructor(private val delegate:AndroidVideoPipeline.SurfaceDetach,private val independent:ReleaseTicket?=null){
         internal val requests get()=delegate.requests
-        fun await()=delegate.await()
+        fun await():Boolean {
+            val legacy=delegate.await()
+            val main=independent?.awaitUntil(System.nanoTime()+2_000_000_000L)?.let{it==ReleaseState.RELEASED} ?: true
+            return legacy && main
+        }
     }
-    fun beginSurfaceDetach(surface:Surface,parkMain:Boolean)=SurfaceDetach(video.beginSurfaceDetach(surface,parkMain))
-    fun awaitVideoReleased(timeoutMillis:Long)=video.awaitVideoReleased(timeoutMillis)
-    fun whenVideoReleased(onReleased:()->Unit)=video.whenVideoReleased(onReleased)
+    fun beginSurfaceDetach(surface:Surface,parkMain:Boolean)=SurfaceDetach(video.beginSurfaceDetach(surface,parkMain),independent?.detachSurface(surface))
+    fun awaitVideoReleased(timeoutMillis:Long):Boolean {
+        val deadline=System.nanoTime()+timeoutMillis*1_000_000L
+        val legacy=video.awaitVideoReleased(timeoutMillis)
+        return (independent?.awaitReleased(((deadline-System.nanoTime())/1_000_000L).coerceAtLeast(0)) ?: true) && legacy
+    }
+    fun whenVideoReleased(onReleased:()->Unit){video.whenVideoReleased{if(independent==null)onReleased()else independent.whenReleased(onReleased)}}
     fun liveVideoCounters()=video.liveVideoCounters()
-    fun refreshPicture(type:Int)=video.refreshPicture(type)
+    fun refreshPicture(type:Int){if(independentMain(type))independent?.refreshPicture()else video.refreshPicture(type)}
     fun setMirrorSurface(type:Int,key:String,surface:Surface?,color:VideoColorOverride=VideoColorOverride(),diagnostic:((String)->Unit)?=null)=
-        video.setMirrorSurface(type,key,surface,color,diagnostic)
+        if(independentMain(type)){diagnostic?.invoke("Independent main-screen mirrors unavailable")}else video.setMirrorSurface(type,key,surface,color,diagnostic)
     fun detachMirrorAndAwait(type:Int,key:String,timeoutMillis:Long)=video.detachMirrorAndAwait(type,key,timeoutMillis)
-    fun setScreenStreamActiveChangedListener(listener:((Int,Boolean)->Unit)?)=video.setScreenStreamActiveChangedListener(listener)
-    fun suspendVideoForDiagnostics(owner:String,cancelled:()->Boolean={false})=video.suspendVideoForDiagnostics(owner,cancelled)
+    fun setScreenStreamActiveChangedListener(listener:((Int,Boolean)->Unit)?){screenListener=listener;video.setScreenStreamActiveChangedListener(listener)}
+    fun suspendVideoForDiagnostics(owner:String,cancelled:()->Boolean={false})=if(independent!=null)false else video.suspendVideoForDiagnostics(owner,cancelled)
     fun resumeVideoAfterDiagnostics(owner:String)=video.resumeVideoAfterDiagnostics(owner)
     fun diagnosticLeaseReleased(owner:String)=video.diagnosticLeaseReleased(owner)
     fun diagnosticsVideoSuspended()=video.diagnosticsVideoSuspended()
-    fun requestDiagnosticKeyFrame()=video.requestDiagnosticKeyFrame()
-    fun finishInputForDiagnostics()=video.finishInputForDiagnostics()
-    fun freezeFirstOutputForDiagnostics()=video.freezeFirstOutputForDiagnostics()
+    fun requestDiagnosticKeyFrame(){if(independent!=null)independent.refreshPicture()else video.requestDiagnosticKeyFrame()}
+    fun finishInputForDiagnostics(){check(independent==null){"Independent runtime diagnostic input is unavailable"};video.finishInputForDiagnostics()}
+    fun freezeFirstOutputForDiagnostics(){check(independent==null){"Independent runtime diagnostic capture is unavailable"};video.freezeFirstOutputForDiagnostics()}
     fun audioReleased():Boolean=audio.released()
     fun onMediaAudioFocusChanged(change:Int)=audio.onMediaAudioFocusChanged(change)
     fun setNavigationAttenuationDb(db:Int)=audio.setNavigationAttenuationDb(db)
-    override fun setVideoRecoveryHandler(type:Int,handler:()->Unit)=video.setVideoRecoveryHandler(type,handler)
-    override fun setVideoDiagnosticHandler(type:Int,handler:(String)->Unit)=video.setVideoDiagnosticHandler(type,handler)
-    override fun onVideoCodec(type:Int,codec:VideoCodec)=video.onVideoCodec(type,codec)
-    override fun onVideoConfig(type:Int,codecData:ByteArray)=video.onVideoConfig(type,codecData)
-    override fun onVideoFrame(type:Int,naluBytes:ByteArray)=video.onVideoFrame(type,naluBytes)
-    override fun onVideoFrame(type:Int,naluBytes:ByteArray,senderNanos:Long,arrivalNanos:Long)=video.onVideoFrame(type,naluBytes,senderNanos,arrivalNanos)
-    override fun onScreenStreamActive(type:Int,active:Boolean)=video.onScreenStreamActive(type,active)
+    override fun setVideoRecoveryHandler(type:Int,handler:()->Unit){if(independentMain(type))independent?.setRecoveryHandler(handler)else video.setVideoRecoveryHandler(type,handler)}
+    override fun setVideoDiagnosticHandler(type:Int,handler:(String)->Unit){if(independentMain(type))independentDiagnostic=handler else video.setVideoDiagnosticHandler(type,handler)}
+    override fun onVideoCodec(type:Int,codec:VideoCodec){if(independentMain(type))independent?.onCodec(codec.ordinal)else video.onVideoCodec(type,codec)}
+    override fun onVideoConfig(type:Int,codecData:ByteArray){if(independentMain(type))independent?.onConfig(codecData)else video.onVideoConfig(type,codecData)}
+    override fun onVideoFrame(type:Int,naluBytes:ByteArray)=onVideoFrame(type,naluBytes,0L,System.nanoTime())
+    override fun onVideoFrame(type:Int,naluBytes:ByteArray,senderNanos:Long,arrivalNanos:Long){
+        if(independentMain(type))independent?.onFrame(naluBytes,senderNanos/1000L)else video.onVideoFrame(type,naluBytes,senderNanos,arrivalNanos)
+    }
+    override fun onScreenStreamActive(type:Int,active:Boolean){
+        if(closed.get())return
+        if(independentMain(type)){
+            independent?.onStreamActive(active)
+            if(!active)independentDiagnostic=null
+            screenListener?.invoke(type,active)
+        }else video.onScreenStreamActive(type,active)
+    }
     override fun onAudioStarted(id:AudioStreamId,format:AudioFormat,firstSample:Int){if(!closed.get())audio.onAudioStarted(id,format,firstSample)}
     override fun onAudioRtp(id:AudioStreamId,format:AudioFormat,rtp:ByteArray,sample:Int){if(!closed.get())audio.onAudioRtp(id,format,rtp,sample)}
     override fun onAudioStopped(id:AudioStreamId)=audio.onAudioStopped(id)
     override fun onMicrophoneStarted(id:AudioStreamId,config:MicrophoneConfig){if(!closed.get())audio.onMicrophoneStarted(id,config)}
     override fun onMicrophoneStopped(id:AudioStreamId)=audio.onMicrophoneStopped(id)
-    fun close(){if(closed.compareAndSet(false,true)){audio.prepareClose();try{video.close()}finally{audio.close()}}}
+    fun close(){if(closed.compareAndSet(false,true)){audio.prepareClose();try{independent?.close();video.close()}finally{audio.close()}}}
 }

@@ -129,13 +129,13 @@ object VideoConfigParser {
         while (i + 3 <= data.size) {
             if (data[i] == 0.toByte() && data[i + 1] == 0.toByte() && data[i + 2] == 1.toByte()) {
                 if (start >= 0) {
-                    list.add(data.copyOfRange(start, i))
+                    list.add(normalizeNal(data.copyOfRange(start, i)))
                 }
                 start = i
                 i += 3
             } else if (i + 4 <= data.size && data[i] == 0.toByte() && data[i + 1] == 0.toByte() && data[i + 2] == 0.toByte() && data[i + 3] == 1.toByte()) {
                 if (start >= 0) {
-                    list.add(data.copyOfRange(start, i))
+                    list.add(normalizeNal(data.copyOfRange(start, i)))
                 }
                 start = i
                 i += 4
@@ -144,10 +144,12 @@ object VideoConfigParser {
             }
         }
         if (start >= 0 && start < data.size) {
-            list.add(data.copyOfRange(start, data.size))
+            list.add(normalizeNal(data.copyOfRange(start, data.size)))
         }
         return if (list.isNotEmpty()) list else listOf(data.clone())
     }
+
+    private fun normalizeNal(data: ByteArray): ByteArray = if (data.size >= 3 && data[2] == 1.toByte()) START_CODE + data.copyOfRange(3, data.size) else data
 
     private fun parseAvcSps(data: ByteArray, startOffset: Int): SpsResult {
         return try {
@@ -428,7 +430,7 @@ object VideoConfigParser {
         }
 
         fun readFlag(): Boolean {
-            if (byteIndex >= bytes.size) return false
+            require(byteIndex < bytes.size) { "truncated_parameter_set" }
             val bit = (bytes[byteIndex].toInt() shr (7 - bitOffset)) and 1
             bitOffset++
             if (bitOffset == 8) {
@@ -454,7 +456,8 @@ object VideoConfigParser {
     }
 
     private fun ByteArray.startsWithStartCode(): Boolean =
-        size >= 4 && this[0] == 0.toByte() && this[1] == 0.toByte() && this[2] == 0.toByte() && this[3] == 1.toByte()
+        size >= 3 && this[0] == 0.toByte() && this[1] == 0.toByte() &&
+            (this[2] == 1.toByte() || (size >= 4 && this[2] == 0.toByte() && this[3] == 1.toByte()))
 
     private fun readU16Be(source: ByteArray, offset: Int): Int =
         ((source[offset].toInt() and 0xff) shl 8) or (source[offset + 1].toInt() and 0xff)

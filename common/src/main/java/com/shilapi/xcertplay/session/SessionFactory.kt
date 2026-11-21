@@ -49,21 +49,39 @@ internal class SessionFactory(context:Context):SessionConnectionFactory {
         val options=request.media
         val microphone=options.microphone && app.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)==android.content.pm.PackageManager.PERMISSION_GRANTED
         val airPlay=request.airPlay.copy(microphone=request.airPlay.microphone && microphone)
-        val plan=com.shilapi.xcertplay.media.VideoPlanResolver.resolve(com.shilapi.xcertplay.media.VideoPipelineRequest(
+        val plan=if(options.implementation==com.shilapi.xcertplay.media.video.VideoImplementation.LEGACY)
+            com.shilapi.xcertplay.media.VideoPlanResolver.resolve(com.shilapi.xcertplay.media.VideoPipelineRequest(
             codec=if(airPlay.hevc)com.shilapi.xcertplay.airplay.VideoCodec.H265 else com.shilapi.xcertplay.airplay.VideoCodec.H264,
             width=options.width,height=options.height,fps=options.frameRate,smooth=options.pacingDelayMs>0,
             direct=options.direct,softwareDirect=options.softwareDirect,
             forceSoftware=options.forceSoftware,softwareYuv=options.softwareYuv,hardwareYuv=options.hardwareYuv,
             color=options.color,pacingDelayMs=options.pacingDelayMs),
-            com.shilapi.xcertplay.media.VideoCapabilities(hardwareAccelerated=options.hardwareAccelerated))
+            com.shilapi.xcertplay.media.VideoCapabilities(hardwareAccelerated=options.hardwareAccelerated)) else null
         val evidenceIdentity=com.shilapi.xcertplay.DiPlaySessionService.liveRuntime?.snapshot()?.identity
-        val sink=AndroidMediaSink(videoPipelinePlan=plan,onVideoObservation={observation->
+        val independentPolicy=options.independentPolicy ?: com.shilapi.xcertplay.media.video.VideoRuntimePolicy(
+            requestedImplementation=options.implementation,
+            decoderPreference=if(options.forceSoftware || options.softwareDirect || options.softwareYuv!=null || (airPlay.hevc && options.hevcSoftware && !options.hardwareYuv))
+                com.shilapi.xcertplay.media.video.DecoderPreference.SOFTWARE else if(options.hardwareYuv)
+                com.shilapi.xcertplay.media.video.DecoderPreference.HARDWARE else com.shilapi.xcertplay.media.video.DecoderPreference.AUTO,
+            preferredBackend=if(options.softwareYuv!=null || options.hardwareYuv)com.shilapi.xcertplay.media.video.BackendKind.PLATFORM_YUV
+                else com.shilapi.xcertplay.media.video.BackendKind.PLATFORM_SURFACE,
+            colorPolicy=when(options.softwareYuv?.range){1->com.shilapi.xcertplay.media.video.ColorPolicy.FORCE_FULL;2->com.shilapi.xcertplay.media.video.ColorPolicy.FORCE_LIMITED
+                else->com.shilapi.xcertplay.media.video.ColorPolicy.FOLLOW_CONTRACT},
+            targetFps=options.frameRate,
+            renderMatrix=when(options.softwareYuv?.matrix){1->com.shilapi.xcertplay.media.video.ColorMatrix.BT601;2->com.shilapi.xcertplay.media.video.ColorMatrix.BT709
+                else->com.shilapi.xcertplay.media.video.ColorMatrix.UNKNOWN})
+        val sink=AndroidMediaSink(videoPipelinePlan=plan,videoImplementation=options.implementation,independentPolicy=independentPolicy,
+            videoSessionId=evidenceIdentity?.id ?: java.util.UUID.randomUUID().toString(),onVideoRuntimeDiagnostic={message->
+                com.shilapi.xcertplay.DetailedDebugLog.record("video",message)
+                com.shilapi.xcertplay.diagnostics.RuntimeEvidence.video.record(evidenceIdentity?.id,evidenceIdentity?.generation,
+                    "video_runtime",mapOf("message" to message))
+            },onVideoObservation={observation->
             com.shilapi.xcertplay.diagnostics.RuntimeEvidence.video.record(evidenceIdentity?.id,evidenceIdentity?.generation,
                 "decoder_observation",observation.report())
         },surface=null,videoWidth=options.width,videoHeight=options.height,
             preferSoftwareHevcDecoder=options.hevcSoftware && !options.hardwareYuv,
-            forceSoftwareVideoDecoder=options.forceSoftware,mainScreenSoftwareDecoder=plan.softwareDirect,
-            mainScreenSoftwareYuv=plan.softwareYuv,mainScreenHardwareYuv=plan.hardwareYuv,
+            forceSoftwareVideoDecoder=options.forceSoftware,mainScreenSoftwareDecoder=plan?.softwareDirect ?: options.softwareDirect,
+            mainScreenSoftwareYuv=plan?.softwareYuv ?: options.softwareYuv,mainScreenHardwareYuv=plan?.hardwareYuv ?: options.hardwareYuv,
             videoColorOverride=options.color,advancedAudioChannelMapping=options.advancedChannels,
             nativeHfpCalls=AirPlayPersistence.loadNativeHfpCalls(app),
             audioFocusEnabled=AirPlayPersistence.loadAudioFocusEnabled(app),

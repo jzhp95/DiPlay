@@ -25,7 +25,8 @@ data class VideoRuntimePolicy(
     val colorPolicy: ColorPolicy = ColorPolicy.FOLLOW_CONTRACT,
     val pacingDelayMs: Int = 0,
     val maxBufferBudgetBytes: Long = 64L * 1024 * 1024,
-    val targetFps: Int = 0
+    val targetFps: Int = 0,
+    val renderMatrix: ColorMatrix = ColorMatrix.UNKNOWN,
 )
 
 /**

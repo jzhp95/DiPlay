@@ -52,16 +52,18 @@ class EglFrameRenderer(
             val surface = target.surface ?: return
 
             val d = driver ?: driverFactory().also {
-                it.initEgl()
-                driver = it
+                driver = it // own partial initialization so failure cleanup can terminate EGL
+                check(it.initEgl()) { "egl_init_failed" }
             }
 
             d.destroySurface()
-            if (d.createWindowSurface(surface)) {
-                d.makeCurrent()
+            check(d.createWindowSurface(surface)) { "egl_surface_failed" }
+            run {
+                check(d.makeCurrent()) { "egl_make_current_failed" }
                 // 请求 eglSwapInterval(0)，记录请求但不假定零等待
                 d.setSwapInterval(0)
                 initGles(d)
+                check(program != 0 && textures != null) { "gles_init_failed" }
                 isRunning.set(true)
             }
         }
@@ -131,15 +133,15 @@ class EglFrameRenderer(
             )
 
             // 上传 Y 平面
-            d.bindTexture(0x0DE1 /* GL_TEXTURE_2D */, tex[0])
+            d.bindTextureUnit(0, 0x0DE1 /* GL_TEXTURE_2D */, tex[0])
             d.texImage2D(0x0DE1, 0, 0x1909 /* GL_LUMINANCE */, uploadPlan.width, uploadPlan.height, 0, 0x1909, 0x1401 /* GL_UNSIGNED_BYTE */, uploadPlan.yBuffer)
 
             // 上传 U 平面
-            d.bindTexture(0x0DE1, tex[1])
+            d.bindTextureUnit(1, 0x0DE1, tex[1])
             d.texImage2D(0x0DE1, 0, 0x1909, uploadPlan.width / 2, uploadPlan.height / 2, 0, 0x1909, 0x1401, uploadPlan.uBuffer)
 
             // 上传 V 平面
-            d.bindTexture(0x0DE1, tex[2])
+            d.bindTextureUnit(2, 0x0DE1, tex[2])
             d.texImage2D(0x0DE1, 0, 0x1909, uploadPlan.width / 2, uploadPlan.height / 2, 0, 0x1909, 0x1401, uploadPlan.vBuffer)
 
             val uploadNs = System.nanoTime() - startUpload
@@ -200,8 +202,10 @@ class EglFrameRenderer(
                     try { d.deleteProgram(program) } catch (_: Throwable) {}
                     program = 0
                 }
-                try { d.destroySurface() } catch (_: Throwable) {}
-                try { d.terminateEgl() } catch (_: Throwable) {}
+                if (!runCatching { d.terminateEgl() }.getOrDefault(false)) {
+                    ticket.complete(ReleaseState.BLOCKED)
+                    return ticket
+                }
             }
             driver = null
             currentTarget = null

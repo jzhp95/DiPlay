@@ -1,6 +1,7 @@
 package com.shilapi.xcertplay
 
 import android.view.Surface
+import android.graphics.Matrix
 import android.view.SurfaceView
 import android.view.TextureView
 import android.view.View
@@ -76,6 +77,49 @@ class CarPlayHostVideoSurfaceTest {
     private fun observe(activity: CarPlayHostActivity, texture: TextureView) {
         activity.javaClass.getDeclaredMethod("observeVideoWindow", TextureView::class.java)
             .apply { isAccessible = true }.invoke(activity, texture)
+    }
+
+    @Test fun reconnectedSessionReplacesTheOldRotationTransformWithoutAnotherWindowResize() {
+        for ((oldWidth, oldHeight) in listOf(2800 to 1260, 1260 to 2800)) {
+            val width = oldHeight; val height = oldWidth
+            val activity = Robolectric.buildActivity(CarPlayHostActivity::class.java).get()
+            val texture = AttachedTexture(activity, true).apply { layout(0, 0, width, height) }
+            set(activity, "videoView", texture)
+            set(activity, "sessionDisplay", CarPlaySessionDisplay(oldWidth, oldHeight, 0, true, true, oldWidth, oldHeight))
+            updateLayout(activity, width, height)
+            assertFalse("old canvas must reproduce the stale letterbox transform", texture.getTransform(Matrix()).isIdentity)
+            try {
+                BackgroundSessionFixture.store(org.mockito.Mockito.mock(com.shilapi.xcertplay.orchestration.CarPlayController::class.java),
+                    org.mockito.Mockito.mock(com.shilapi.xcertplay.media.AndroidMediaSink::class.java), width, height, activity,
+                    CarPlaySessionDisplay(width, height, 0, true, true, width, height)) { it() }
+                assertTrue("new session must fill the already resized window", texture.getTransform(Matrix()).isIdentity)
+            } finally { BackgroundSessionFixture.clear() }
+        }
+    }
+
+    @Test fun reconnectedSessionAlsoReplacesFallbackSurfaceBoundsWithoutAnotherResize() {
+        val activity = Robolectric.buildActivity(CarPlayHostActivity::class.java).get()
+        val viewport = FrameLayout(activity).apply { layout(0, 0, 1260, 2800) }
+        val fallback = SurfaceView(activity)
+        viewport.addView(fallback, FrameLayout.LayoutParams(-1, -1))
+        set(activity, "videoView", viewport)
+        set(activity, "fallbackVideoView", fallback)
+        set(activity, "sessionDisplay", CarPlaySessionDisplay(2800, 1260, 0, true, true, 2800, 1260))
+        updateLayout(activity, 1260, 2800)
+        assertTrue((fallback.layoutParams as FrameLayout.LayoutParams).topMargin > 0)
+        try {
+            BackgroundSessionFixture.store(org.mockito.Mockito.mock(com.shilapi.xcertplay.orchestration.CarPlayController::class.java),
+                org.mockito.Mockito.mock(com.shilapi.xcertplay.media.AndroidMediaSink::class.java), 1260, 2800, activity,
+                CarPlaySessionDisplay(1260, 2800, 0, true, true, 1260, 2800)) { it() }
+            val params = fallback.layoutParams as FrameLayout.LayoutParams
+            assertEquals(1260, params.width); assertEquals(2800, params.height)
+            assertEquals(0, params.leftMargin); assertEquals(0, params.topMargin)
+        } finally { BackgroundSessionFixture.clear() }
+    }
+
+    private fun updateLayout(activity: CarPlayHostActivity, width: Int, height: Int) {
+        activity.javaClass.getDeclaredMethod("updateVideoLayout", Int::class.javaPrimitiveType, Int::class.javaPrimitiveType)
+            .apply { isAccessible = true }.invoke(activity, width, height)
     }
 
     private fun field(activity: CarPlayHostActivity, name: String): Any? =

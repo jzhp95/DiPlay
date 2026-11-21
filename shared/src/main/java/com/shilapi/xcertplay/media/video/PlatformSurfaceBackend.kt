@@ -15,9 +15,10 @@ import kotlin.concurrent.withLock
  */
 class PlatformSurfaceBackend(
     val identity: RuntimeIdentity,
+    private val decoderPreference: DecoderPreference = DecoderPreference.AUTO,
     private val driverFactory: (String) -> PlatformCodecDriver = { mime ->
-        AndroidMediaCodecDriver.createDecoderByType(mime)
-    }
+        AndroidMediaCodecDriver.createDecoder(mime, decoderPreference)
+    },
 ) : VideoBackend {
 
     private val lock = ReentrantLock()
@@ -27,6 +28,7 @@ class PlatformSurfaceBackend(
     private val isRunning = AtomicBoolean(false)
     private val isReleased = AtomicBoolean(false)
     private val outputFrameSequence = AtomicLong(0L)
+    private var observedOutput = DecoderOutputDescription(planeLayout = "OPAQUE_SURFACE")
 
     override fun capabilities(): BackendCapabilities = BackendCapabilities(
         kind = BackendKind.PLATFORM_SURFACE,
@@ -69,10 +71,12 @@ class PlatformSurfaceBackend(
                 }
 
                 val driver = driverFactory(mime)
+                driverRef.set(driver) // cleanup also owns a partially configured codec
                 val format = MediaFormat.createVideoFormat(mime, config.width, config.height)
 
                 // 填入 CSD 参数集
-                config.csd.forEachIndexed { idx, bytes ->
+                val csd = if (config.codec == CodecType.HEVC) listOf(config.csd.fold(ByteArray(0)) { all, bytes -> all + bytes }) else config.csd
+                csd.forEachIndexed { idx, bytes ->
                     format.setByteBuffer("csd-$idx", ByteBuffer.wrap(bytes.clone()))
                 }
 
@@ -114,15 +118,13 @@ class PlatformSurfaceBackend(
             return OfferResult.BACKPRESSURE
         }
 
-        val inputBuffer = driver.getInputBuffer(inputIndex)
-        if (inputBuffer == null) {
-            return OfferResult.REJECTED
-        }
+        val inputBuffer = checkNotNull(driver.getInputBuffer(inputIndex)) { "missing_codec_input_buffer" }
 
         inputBuffer.clear()
         val unitBuffer = unit.lease.buffer
         unitBuffer.rewind()
-        val toCopy = Math.min(inputBuffer.remaining(), unitBuffer.remaining())
+        check(inputBuffer.remaining() >= unitBuffer.remaining()) { "access_unit_exceeds_codec_input" }
+        val toCopy = unitBuffer.remaining()
         val oldLimit = unitBuffer.limit()
         unitBuffer.limit(unitBuffer.position() + toCopy)
         inputBuffer.put(unitBuffer)
@@ -150,13 +152,7 @@ class PlatformSurfaceBackend(
                     accessUnitId = outputFrameSequence.incrementAndGet(),
                     codecPtsUs = output.presentationTimeUs
                 )
-                val description = DecoderOutputDescription(
-                    reportedRange = activeConfig.get()?.colorDeclaration?.range ?: ColorRange.UNKNOWN,
-                    reportedStandard = activeConfig.get()?.colorDeclaration?.matrix ?: ColorMatrix.UNKNOWN,
-                    planeLayout = "OPAQUE_SURFACE",
-                    actualComponent = driver.componentName,
-                    reportAvailability = true
-                )
+                val description = observedOutput.copy(actualComponent = driver.componentName)
 
                 val lease = MediaCodecDecodedFrameLease(
                     key = frameKey,
@@ -169,13 +165,8 @@ class PlatformSurfaceBackend(
                 BackendOutput.Frame(lease)
             }
             is CodecDriverOutput.OutputFormatChanged -> {
-                val desc = DecoderOutputDescription(
-                    reportedRange = ColorRange.UNKNOWN,
-                    reportedStandard = ColorMatrix.UNKNOWN,
-                    planeLayout = "OPAQUE_SURFACE",
-                    actualComponent = driver.componentName,
-                    reportAvailability = true
-                )
+                val desc = decoderFormatDescription(output.format, driver.componentName, "OPAQUE_SURFACE")
+                observedOutput = desc
                 BackendOutput.FormatChanged(desc)
             }
             is CodecDriverOutput.TryAgainLater -> BackendOutput.NoOutput
@@ -193,16 +184,16 @@ class PlatformSurfaceBackend(
 
     override fun awaitReleased(deadlineNs: Long): ReleaseState {
         lock.withLock {
-            if (isReleased.compareAndSet(false, true)) {
+            if (!isReleased.get()) {
                 isRunning.set(false)
-                driverRef.getAndSet(null)?.let { driver ->
+                driverRef.get()?.let { driver ->
                     try {
                         driver.stop()
                     } catch (_: Throwable) {}
-                    try {
-                        driver.close()
-                    } catch (_: Throwable) {}
+                    try { driver.close() } catch (_: Throwable) { return ReleaseState.BLOCKED }
+                    driverRef.set(null)
                 }
+                isReleased.set(true)
             }
             return if (isReleased.get()) ReleaseState.RELEASED else ReleaseState.BLOCKED
         }

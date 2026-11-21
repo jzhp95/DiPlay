@@ -16,10 +16,20 @@ class VideoRuntimeIsolationTest {
 
     @Test
     fun independentEndpointOperatesSuccessfullyEvenIfLegacyFactoryFails() {
+        val configured = java.util.concurrent.CountDownLatch(1)
         // Router with main endpoint using INDEPENDENT pipeline
         val mainEndpoint = IndependentVideoEndpoint(
             streamRole = 110,
-            sessionId = "iso-session-1"
+            sessionId = "iso-session-1",
+            backendFactory = { _, _, _ -> object : VideoBackend {
+                override fun capabilities() = BackendCapabilities(BackendKind.PLATFORM_SURFACE, setOf(CodecType.H264), false, true)
+                override fun configure(config: VideoStreamConfig, target: OutputTarget, options: BackendOptions) = ConfigureResult.Success("fake", capabilities())
+                override fun trySubmit(unit: EncodedAccessUnit): OfferResult { unit.lease.close(); return OfferResult.ACCEPTED }
+                override fun pollOutput(deadlineNs: Long) = BackendOutput.NoOutput
+                override fun requestStop() {}
+                override fun awaitReleased(deadlineNs: Long) = ReleaseState.RELEASED
+            } },
+            diagnostic = { if(it.contains("backend=PLATFORM_SURFACE generation="))configured.countDown() }
         )
 
         val router = SessionVideoRouter(mainEndpoint) {
@@ -33,14 +43,17 @@ class VideoRuntimeIsolationTest {
 
         val surface = Surface(SurfaceTexture(1))
         router.attachSurface(110, surface)
+        assertTrue(configured.await(3, java.util.concurrent.TimeUnit.SECONDS))
 
         val snap = mainEndpoint.snapshot()
         assertEquals(VideoImplementation.INDEPENDENT, snap.actualImplementation)
         assertNotNull(snap.actualBackend)
 
         val detachTicket = router.detachSurface(110)
-        assertTrue(detachTicket.state() != ReleaseState.BLOCKED)
+        assertEquals(ReleaseState.RELEASED, detachTicket.awaitUntil(System.nanoTime()+3_000_000_000L))
 
         router.close()
+        assertTrue(mainEndpoint.awaitReleased(3000))
+        surface.release()
     }
 }

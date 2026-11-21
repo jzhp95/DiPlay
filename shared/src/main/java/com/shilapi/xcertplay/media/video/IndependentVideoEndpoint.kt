@@ -1,126 +1,248 @@
 package com.shilapi.xcertplay.media.video
 
 import android.view.Surface
-import java.nio.ByteBuffer
+import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
-/**
- * 全新独立视频运行管线端点 (IndependentVideoEndpoint)。
- * 自包含 Ingress 解析、有界排队、协调器状态机与解码后端，杜绝调用旧模块。
- */
+/** One worker owns the codec, frame leases and EGL context. Ingress never waits for decoding. */
 class IndependentVideoEndpoint(
     override val streamRole: Int = 110,
     val sessionId: String = "independent-session",
     val policy: VideoRuntimePolicy = VideoRuntimePolicy(),
-    val backendFactory: (VideoStreamConfig, OutputTarget, BackendOptions) -> VideoBackend = { config, target, options ->
-        if (target.surface != null && options.allowHardware) {
-            PlatformSurfaceBackend(
-                RuntimeIdentity(SessionVideoId(sessionId, streamRole), 1L, 1L, 1L, "platform-surface-auto")
-            )
-        } else {
-            PlatformYuvBackend(
-                RuntimeIdentity(SessionVideoId(sessionId, streamRole), 1L, 1L, 1L, "platform-yuv-auto")
-            )
-        }
-    }
+    val backendFactory: ((VideoStreamConfig, OutputTarget, BackendOptions) -> VideoBackend)? = null,
+    private val rendererFactory: () -> EglFrameRenderer = { EglFrameRenderer() },
+    private val diagnostic: (String) -> Unit = {},
 ) : SessionVideoEndpoint {
+    override val implementation = VideoImplementation.INDEPENDENT
+    private val ingressLock = Any()
+    private val closed = AtomicBoolean(false)
+    private val sequence = AtomicLong()
+    private val queue = EncodedQueue()
+    private val commands = LinkedBlockingQueue<() -> Unit>()
+    private val release = SettableReleaseTicket()
+    private val detachTickets = java.util.concurrent.ConcurrentLinkedQueue<SettableReleaseTicket>()
+    private var codec = CodecType.H264
+    private var configGeneration = 0L
+    private var surfaceGeneration = 0L
+    private var declaredConfig: VideoStreamConfig? = null
+    private var desiredSurface: Surface? = null
+    @Volatile private var recovery: (() -> Unit)? = null
+    @Volatile private var description: DecoderOutputDescription? = null
+    @Volatile private var state = RuntimeSnapshot(sessionId, streamRole,
+        requestedImplementation = VideoImplementation.INDEPENDENT)
+    // Worker-owned state.
+    private var config: VideoStreamConfig? = null
+    private var target: OutputTarget? = null
+    private var backend: VideoBackend? = null
+    private var renderer: EglFrameRenderer? = null
+    private var pending: EncodedAccessUnit? = null
+    private var waitingForKey = true
+    private var decoderGeneration = 0L
+    private val worker = Thread(::run, "independent-video-$streamRole").apply { isDaemon = true; start() }
 
-    private class DirectBufferLease(override val buffer: ByteBuffer) : BufferLease {
-        override val sizeBytes: Int = buffer.capacity()
-        override fun close() {}
+    fun setRecoveryHandler(handler: () -> Unit) { recovery = handler }
+    fun onStreamActive(active: Boolean) = synchronized(ingressLock) {
+        if (closed.get() || active) return
+        declaredConfig = null
+        codec = CodecType.H264
+        recovery = null
+        val generation = ++configGeneration
+        queue.resetForConfig(generation).forEach { it.lease.close() }
+        commands.offer {
+            retireBackend()
+            config = null
+            state = state.copy(configGeneration = generation)
+            report("state=stream_stopped")
+        }
+        Unit
+    }
+    fun outputDescription() = description
+    fun sourceDescription() = synchronized(ingressLock) { declaredConfig }
+    private fun report(message: String) { runCatching { diagnostic("Video runtime: requested=INDEPENDENT actual=INDEPENDENT role=$streamRole session=$sessionId $message") } }
+
+    override fun onCodec(codec: Int) = synchronized(ingressLock) {
+        if (!closed.get()) this.codec = when (codec) { 0 -> CodecType.H264; 1 -> CodecType.HEVC; else -> CodecType.UNKNOWN }
     }
 
-    override val implementation: VideoImplementation = VideoImplementation.INDEPENDENT
-
-    private val isClosed = AtomicBoolean(false)
-    private val clock = MonotonicClock { System.nanoTime() }
-    private val frameSequence = AtomicLong(0L)
-    private val queue = EncodedQueue(8, 8L * 1024 * 1024, clock)
-    private var activeConfig: VideoStreamConfig? = null
-    private var activeSurface: Surface? = null
-    private var activeBackend: VideoBackend? = null
-
-    override fun onConfig(configBytes: ByteArray) {
-        if (isClosed.get()) return
-        val parsed = VideoConfigParser.parse(
-            codec = CodecType.H264,
-            codecData = configBytes,
-            streamId = SessionVideoId(sessionId, streamRole)
-        )
-        activeConfig = parsed
-        queue.resetForConfig(parsed.streamId.streamGeneration)
+    override fun onConfig(configBytes: ByteArray) = synchronized(ingressLock) {
+        if (closed.get()) return
+        val parsed = VideoConfigParser.parse(codec, configBytes, SessionVideoId(sessionId, streamRole))
+        if (parsed == declaredConfig) return
+        declaredConfig = parsed
+        val generation = ++configGeneration
+        queue.resetForConfig(generation).forEach { it.lease.close() }
+        commands.offer {
+            retireBackend()
+            config = parsed
+            state = state.copy(configGeneration = generation)
+            configureBackend()
+        }
+        Unit
     }
 
-    override fun onCodec(codec: Int) {
-        // 编码格式类型标记
-    }
-
-    override fun onFrame(frameBytes: ByteArray, ptsUs: Long, isKey: Boolean) {
-        if (isClosed.get()) return
-        val buf = ByteBuffer.allocate(frameBytes.size)
-        buf.put(frameBytes)
-        buf.flip()
-        val lease = DirectBufferLease(buf)
-
-        val unit = EncodedAccessUnit(
-            accessUnitId = frameSequence.incrementAndGet(),
-            streamId = SessionVideoId(sessionId, streamRole),
-            configGeneration = activeConfig?.streamId?.streamGeneration ?: 1L,
-            lease = lease,
-            sourcePtsUs = if (ptsUs > 0) ptsUs else null,
-            arrivalMonoNs = clock.nowNs(),
-            isKeyFrame = isKey,
-            randomAccessType = if (isKey) RandomAccessType.IDR else RandomAccessType.NONE
-        )
-        val offer = queue.offer(unit)
-        if (offer != OfferResult.ACCEPTED) {
-            lease.close()
+    override fun onFrame(frameBytes: ByteArray, ptsUs: Long, isKey: Boolean) = synchronized(ingressLock) {
+        if (closed.get() || declaredConfig == null) return
+        val unit = AccessUnitNormalizer.normalize(frameBytes, codec, SessionVideoId(sessionId, streamRole),
+            configGeneration, sequence.incrementAndGet(), System.nanoTime(), senderNanos = ptsUs * 1000L) ?: return
+        if (queue.offer(unit) != OfferResult.ACCEPTED) {
+            unit.lease.close()
+            queue.resetForConfig(configGeneration).forEach { it.lease.close() }
+            commands.offer { pending?.lease?.close(); pending = null; waitingForKey = true; recovery?.invoke() }
         }
     }
 
-    override fun attachSurface(surface: Surface) {
-        activeSurface = surface
-        activeConfig?.let { cfg ->
-            val backend = backendFactory(cfg, OutputTarget(surface), BackendOptions())
-            backend.configure(cfg, OutputTarget(surface), BackendOptions())
-            activeBackend = backend
+    override fun attachSurface(surface: Surface) = synchronized(ingressLock) {
+        if (closed.get() || desiredSurface === surface) return
+        desiredSurface = surface
+        val generation = ++surfaceGeneration
+        commands.offer {
+            retireBackend()
+            target = OutputTarget(surface, streamRole, generation)
+            state = state.copy(surfaceGeneration = generation)
+            configureBackend()
         }
+        Unit
     }
 
-    override fun detachSurface(): ReleaseTicket {
-        activeSurface = null
-        val b = activeBackend
-        activeBackend = null
-        if (b != null) {
-            b.requestStop()
-            val state = b.awaitReleased(System.nanoTime() + 500_000_000L)
-            val ticket = SettableReleaseTicket(state)
-            if (state != ReleaseState.PENDING) ticket.complete(state)
+    /** A stale wrapper must never detach a replacement surface. */
+    fun detachSurface(surface: Surface): ReleaseTicket = synchronized(ingressLock) {
+        if (closed.get()) return release
+        if (desiredSurface !== surface) {
+            // An earlier attach command may still be releasing this wrapper: acknowledge after that barrier.
+            val ticket = SettableReleaseTicket()
+            detachTickets.add(ticket)
+            commands.offer { ticket.complete(ReleaseState.RELEASED); detachTickets.remove(ticket) }
             return ticket
         }
-        val ticket = SettableReleaseTicket(ReleaseState.RELEASED)
-        ticket.complete(ReleaseState.RELEASED)
-        return ticket
+        detachSurface()
+    }
+
+    override fun detachSurface(): ReleaseTicket = synchronized(ingressLock) {
+        if (closed.get()) return release
+        desiredSurface = null
+        val ticket = SettableReleaseTicket()
+        detachTickets.add(ticket)
+        commands.offer {
+            retireBackend()
+            target = null
+            ticket.complete(ReleaseState.RELEASED)
+            detachTickets.remove(ticket)
+        }
+        ticket
+    }
+
+    fun awaitReleased(timeoutMillis: Long): Boolean =
+        release.awaitUntil(System.nanoTime() + timeoutMillis * 1_000_000L) == ReleaseState.RELEASED
+    fun whenReleased(callback: () -> Unit) { release.onComplete { if (it == ReleaseState.RELEASED) callback() } }
+    fun refreshPicture() { if (!closed.get()) commands.offer { recovery?.invoke() } }
+
+    private fun configureBackend() {
+        val cfg = config ?: return
+        val output = target ?: return
+        val options = BackendOptions(allowHardware = policy.decoderPreference != DecoderPreference.SOFTWARE,
+            decoderPreference = policy.decoderPreference)
+        val kind = policy.preferredBackend ?: BackendKind.PLATFORM_SURFACE
+        val identity = RuntimeIdentity(cfg.streamId, state.configGeneration, ++decoderGeneration,
+            output.surfaceGeneration, "$sessionId-$streamRole-$decoderGeneration")
+        val created = backendFactory?.invoke(cfg, output, options) ?: when (kind) {
+            BackendKind.PLATFORM_SURFACE -> PlatformSurfaceBackend(identity, decoderPreference = policy.decoderPreference)
+            BackendKind.PLATFORM_YUV -> PlatformYuvBackend(identity)
+            BackendKind.NATIVE_YUV -> error("native_yuv_unavailable")
+        }
+        backend = created // own the backend even when configure fails
+        when (val result = created.configure(cfg, output, options)) {
+            is ConfigureResult.Success -> {
+                if (!result.actualCapabilities.supportsDirectSurface) {
+                    renderer = rendererFactory()
+                    renderer!!.attach(output)
+                }
+                waitingForKey = true
+                state = state.copy(actualBackend = result.actualCapabilities.kind, decoderGeneration = decoderGeneration, lastError = null)
+                report("backend=${state.actualBackend} generation=$decoderGeneration source=${cfg.colorDeclaration} fallback=none colorVerified=false")
+                recovery?.invoke()
+            }
+            is ConfigureResult.Rejected -> error(result.reason)
+            is ConfigureResult.Failed -> throw result.cause
+        }
+    }
+
+    private fun retireBackend() {
+        pending?.lease?.close(); pending = null
+        val old = backend
+        val codecReleased = if (old == null) true else {
+            old.requestStop()
+            old.awaitReleased(System.nanoTime() + 500_000_000L) == ReleaseState.RELEASED
+        }
+        val eglReleased = renderer?.stop()?.state() != ReleaseState.BLOCKED
+        check(codecReleased && eglReleased) { "backend_release_unconfirmed" }
+        backend = null
+        renderer = null
+        description = null
+        state = state.copy(actualBackend = null)
+    }
+
+    private fun pump() {
+        val b = backend ?: return
+        if (pending == null) pending = queue.poll()
+        pending?.let { unit ->
+            if (unit.configGeneration != state.configGeneration || (waitingForKey && !unit.isKeyFrame)) {
+                unit.lease.close(); pending = null
+            } else when (b.trySubmit(unit)) {
+                OfferResult.ACCEPTED -> { pending = null; waitingForKey = false }
+                OfferResult.REJECTED -> { unit.lease.close(); pending = null; waitingForKey = true; recovery?.invoke() }
+                OfferResult.BACKPRESSURE -> Unit
+            }
+        }
+        when (val output = b.pollOutput(System.nanoTime())) {
+            is BackendOutput.Frame -> {
+                try {
+                    val observed = (output.lease as? AbstractDecodedFrameLease)?.outputDescription
+                    if (observed != null && observed != description) {
+                        description = observed
+                        report("backend=${state.actualBackend} decoderOutput=$observed fallback=none colorVerified=false")
+                    }
+                    renderer?.let { r ->
+                        val source = config!!.colorDeclaration.let { if (policy.renderMatrix == ColorMatrix.UNKNOWN) it else it.copy(matrix = policy.renderMatrix) }
+                        val decision = PixelContractResolver.resolve(source,
+                            observed ?: DecoderOutputDescription(), RenderTargetDescription(), policy)
+                        val receipt = r.render(output.lease, decision)
+                        check(receipt.success) { "render_failed:${receipt.errorStage}" }
+                    }
+                } finally { output.lease.releaseOnce() }
+            }
+            is BackendOutput.FormatChanged -> { description = output.description; report("decoderOutput=${output.description} colorVerified=false") }
+            is BackendOutput.Failure -> throw output.cause
+            BackendOutput.NoOutput -> Unit
+        }
+    }
+
+    private fun run() {
+        try {
+            report("state=created fallback=none")
+            while (!closed.get()) {
+                commands.poll(2, TimeUnit.MILLISECONDS)?.invoke()
+                while (true) (commands.poll() ?: break).invoke()
+                pump()
+            }
+        } catch (error: Throwable) {
+            state = state.copy(lastError = "${error.javaClass.simpleName}:${error.message}")
+            report("state=failed error=${state.lastError} fallback=none")
+        } finally {
+            synchronized(ingressLock) { closed.set(true); queue.close().forEach { it.lease.close() } }
+            val released = runCatching { retireBackend() }.isSuccess
+            state = state.copy(releaseState = if (released) ReleaseState.RELEASED else ReleaseState.BLOCKED)
+            detachTickets.forEach { it.complete(state.releaseState) }
+            commands.clear()
+            release.complete(state.releaseState)
+            report("state=stopped release=${state.releaseState}")
+        }
     }
 
     override fun snapshot(): RuntimeSnapshot {
-        return RuntimeSnapshot(
-            sessionId = sessionId,
-            streamRole = streamRole,
-            requestedImplementation = VideoImplementation.INDEPENDENT,
-            actualImplementation = VideoImplementation.INDEPENDENT,
-            actualBackend = activeBackend?.capabilities()?.kind,
-            releaseState = if (isClosed.get()) ReleaseState.RELEASED else ReleaseState.PENDING
-        )
+        val q = queue.snapshot()
+        return state.copy(inputQueueDepth = q.depth, appOwnedBytes = q.bytes)
     }
-
-    override fun close() {
-        if (isClosed.compareAndSet(false, true)) {
-            queue.close()
-            activeBackend?.requestStop()
-            activeBackend?.awaitReleased(System.nanoTime() + 500_000_000L)
-            activeBackend = null
-        }
-    }
+    override fun close() { synchronized(ingressLock) { closed.set(true) } }
 }

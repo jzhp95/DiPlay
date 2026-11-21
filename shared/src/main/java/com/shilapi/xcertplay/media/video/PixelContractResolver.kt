@@ -110,7 +110,7 @@ object PixelContractResolver {
 
         if (conflicts.isNotEmpty()) {
             val fallback = ResolvedPixelContract(
-                effectiveRange = ColorRange.LIMITED,
+                effectiveRange = if (source.range != ColorRange.UNKNOWN) source.range else output.reportedRange,
                 effectiveMatrix = if (source.matrix != ColorMatrix.UNKNOWN) source.matrix else ColorMatrix.BT601,
                 effectiveTransfer = ColorTransfer.SRGB,
                 effectivePrimaries = ColorPrimaries.BT709,

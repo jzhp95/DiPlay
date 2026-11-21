@@ -4103,7 +4103,7 @@ class CarPlayHostActivity : ComponentActivity() {
                 }
                 if(state.identity!=null && outputSessionIdentity!=state.identity && owner.currentConnection!=null){
                     outputSessionIdentity=state.identity
-                    sessionDisplay=owner.currentRequest?.display
+                    adoptSessionDisplay(owner.currentRequest?.display)
                     activeAirPlaySession=controller?.currentAirPlaySession()
                     sessionDisplay?.let{display->activeDisplaySize=DisplaySize(display.windowWidth,display.windowHeight)}
                     currentSurface?.let(::attachSurface)
@@ -4134,7 +4134,7 @@ class CarPlayHostActivity : ComponentActivity() {
         val owner=DiPlaySessionService.liveRuntime ?: return false
         if(owner.currentConnection==null)return false
         if(sessionRuntime!==owner || sessionSubscription==null)bindSessionRuntime(owner)
-        sessionDisplay=owner.currentRequest?.display
+        adoptSessionDisplay(owner.currentRequest?.display)
         return true
     }
 
@@ -4156,7 +4156,8 @@ class CarPlayHostActivity : ComponentActivity() {
                 color=colorMainProbe?.color?:com.shilapi.xcertplay.media.VideoColorOverride(),advancedChannels=advancedAudioChannelMapping,
                 navigationStreamType=navigationStreamType,pacingDelayMs=if(smoothVideo)smoothVideoDelayMillis(fps)else 0,
                 frameRate=fps,microphone=microphoneAvailable,captureDirectory=audioCaptureDirectory(),
-                direct=directVideoOutput,hardwareAccelerated=videoView?.isHardwareAccelerated),display)
+                direct=directVideoOutput,hardwareAccelerated=videoView?.isHardwareAccelerated,
+                implementation=AirPlayPersistence.getVideoImplementation(this)),display)
     }
     private fun startCarPlay(size:DisplaySize) {
         if(shuttingDown.get() || menuOpen || controller!=null)return
@@ -4422,6 +4423,15 @@ class CarPlayHostActivity : ComponentActivity() {
             }
         }
         return false
+    }
+
+    /** A reconnect can replace the canvas after the window has already delivered its resize callback. */
+    private fun adoptSessionDisplay(display: CarPlaySessionDisplay?) {
+        sessionDisplay = display
+        videoView?.let { view ->
+            updateVideoLayout(view.width, view.height)
+            appendLog("Video geometry: canvas=${display?.width}x${display?.height} window=${view.width}x${view.height}")
+        }
     }
 
     private fun contentRect(viewWidth: Int, viewHeight: Int): CarPlayVideoLayout {

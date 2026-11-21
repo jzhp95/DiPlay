@@ -29,6 +29,7 @@ interface EglDriver : AutoCloseable {
     fun deleteTextures(textures: IntArray)
     fun deleteProgram(program: Int)
     fun bindTexture(target: Int, texture: Int)
+    fun bindTextureUnit(unit: Int, target: Int, texture: Int) = bindTexture(target, texture)
     fun texImage2D(target: Int, level: Int, internalformat: Int, width: Int, height: Int, border: Int, format: Int, type: Int, pixels: Buffer?)
     fun uniform1i(location: Int, x: Int)
     fun uniform1f(location: Int, x: Float)
@@ -46,6 +47,10 @@ class AndroidEglDriver : EglDriver {
     private var eglContext: EGLContext = EGL14.EGL_NO_CONTEXT
     private var eglSurface: EGLSurface = EGL14.EGL_NO_SURFACE
     private var eglConfig: EGLConfig? = null
+    private var activeProgram = 0
+    private val vertices = java.nio.ByteBuffer.allocateDirect(16 * 4).order(java.nio.ByteOrder.nativeOrder()).asFloatBuffer().apply {
+        put(floatArrayOf(-1f,-1f,0f,1f, 1f,-1f,1f,1f, -1f,1f,0f,0f, 1f,1f,1f,0f)); position(0)
+    }
 
     override fun initEgl(): Boolean {
         eglDisplay = EGL14.eglGetDisplay(EGL14.EGL_DEFAULT_DISPLAY)
@@ -161,7 +166,7 @@ class AndroidEglDriver : EglDriver {
         return shader
     }
 
-    override fun useProgram(program: Int) = GLES20.glUseProgram(program)
+    override fun useProgram(program: Int) { activeProgram = program; GLES20.glUseProgram(program) }
     override fun getUniformLocation(program: Int, name: String): Int = GLES20.glGetUniformLocation(program, name)
     override fun getAttribLocation(program: Int, name: String): Int = GLES20.glGetAttribLocation(program, name)
 
@@ -174,6 +179,15 @@ class AndroidEglDriver : EglDriver {
     override fun deleteTextures(textures: IntArray) = GLES20.glDeleteTextures(textures.size, textures, 0)
     override fun deleteProgram(program: Int) = GLES20.glDeleteProgram(program)
     override fun bindTexture(target: Int, texture: Int) = GLES20.glBindTexture(target, texture)
+    override fun bindTextureUnit(unit: Int, target: Int, texture: Int) {
+        GLES20.glActiveTexture(GLES20.GL_TEXTURE0 + unit)
+        bindTexture(target, texture)
+        GLES20.glPixelStorei(GLES20.GL_UNPACK_ALIGNMENT, 1)
+        GLES20.glTexParameteri(target, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR)
+        GLES20.glTexParameteri(target, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR)
+        GLES20.glTexParameteri(target, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE)
+        GLES20.glTexParameteri(target, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE)
+    }
 
     override fun texImage2D(
         target: Int, level: Int, internalformat: Int,
@@ -186,8 +200,26 @@ class AndroidEglDriver : EglDriver {
     override fun uniformMatrix3fv(location: Int, count: Int, transpose: Boolean, value: FloatArray, offset: Int) =
         GLES20.glUniformMatrix3fv(location, count, transpose, value, offset)
 
-    override fun viewport(x: Int, y: Int, width: Int, height: Int) = GLES20.glViewport(x, y, width, height)
-    override fun drawArrays(mode: Int, first: Int, count: Int) = GLES20.glDrawArrays(mode, first, count)
+    override fun viewport(x: Int, y: Int, width: Int, height: Int) {
+        val w = IntArray(1); val h = IntArray(1)
+        EGL14.eglQuerySurface(eglDisplay, eglSurface, EGL14.EGL_WIDTH, w, 0)
+        EGL14.eglQuerySurface(eglDisplay, eglSurface, EGL14.EGL_HEIGHT, h, 0)
+        GLES20.glViewport(x, y, w[0].takeIf { it > 0 } ?: width, h[0].takeIf { it > 0 } ?: height)
+    }
+    override fun drawArrays(mode: Int, first: Int, count: Int) {
+        val position = getAttribLocation(activeProgram, "aPosition")
+        val texCoord = getAttribLocation(activeProgram, "aTexCoord")
+        check(position >= 0 && texCoord >= 0) { "missing_shader_attributes" }
+        vertices.position(0)
+        GLES20.glVertexAttribPointer(position, 2, GLES20.GL_FLOAT, false, 16, vertices)
+        GLES20.glEnableVertexAttribArray(position)
+        vertices.position(2)
+        GLES20.glVertexAttribPointer(texCoord, 2, GLES20.GL_FLOAT, false, 16, vertices)
+        GLES20.glEnableVertexAttribArray(texCoord)
+        GLES20.glDrawArrays(mode, first, count)
+        GLES20.glDisableVertexAttribArray(position)
+        GLES20.glDisableVertexAttribArray(texCoord)
+    }
 
     override fun close() {
         terminateEgl()
